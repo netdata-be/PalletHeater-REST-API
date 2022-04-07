@@ -1,7 +1,7 @@
 #ifndef OTA_H
 #define OTA_H
 #include <ArduinoOTA.h>
-
+#include <constants.h>
 
 void enableOTA(){
     ArduinoOTA.setHostname("Pelletheater");
@@ -13,6 +13,7 @@ void enableOTA(){
     }).onEnd([](){
         Serial.println("\nEnd");
     }).onProgress([](unsigned int progress, unsigned int total){
+        esp_task_wdt_reset();
         Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
     }).onError([](ota_error_t error){
         Serial.printf("Error[%u]: ", error);

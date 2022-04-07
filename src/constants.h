@@ -5,9 +5,12 @@
 #include <WiFiUdp.h>
 #include "EasyLed.h"
 #include <EasyButton.h>
+#include "time.h"
+
 
 #ifdef ESP32
 #include <FS.h>
+#include "ESPTelnet.h" 
 #include <HardwareSerial.h>
 #include <SPIFFS.h>
 #include "esp_log.h"
@@ -23,8 +26,19 @@
 #define WDT_TIMEOUT 3
 #endif
 
+const char* ntpServer = "nl.pool.ntp.org";
+const char * defaultTimezone = "CET-1CEST,M3.5.0/2,M10.5.0/3";
+
+tm timeinfo;
+struct tm tm = {0};
+time_t now;
+time_t stoveTime;
+long unsigned lastNTPtime;
+unsigned long lastEntryTime;
+
 WiFiUDP udp;
 WiFiClient espClient;
+ESPTelnet telnet;
 EasyButton resetButton(RESET_PIN);
 
 EasyLed led(LED, EasyLed::ActiveLevel::High);
@@ -78,9 +92,15 @@ uint8_t fumesTemp = 0;
 int flamePower = 0;
 int roomFanSpeed = 0;
 float ambTemp = 0;
+float ambTempStove = 0;
+float ambTempRemoteControl = 0;
 float setPointTemp = 0;
 float waterPres = 0;
 
 char resp[2];
 
+char storedRam[256];
+char storedEeprom[256];
+
 #endif
+
