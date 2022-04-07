@@ -1,6 +1,3 @@
-![pcb](Fritzing/pcb-aisler.png)
-
-
 RAM (0x00)
 
 | ADDR (HEX) | ADDR (DEC) | Formula   | Unit   | Description                                 | Example or default value | Range      |
