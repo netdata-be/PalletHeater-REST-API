@@ -16,10 +16,7 @@
 #include "esp_log.h"
 #include <esp_task_wdt.h>
 #include <HardwareSerial.h>
-#define SERIAL_MODE SERIAL_8N2 // 8 data bits, parity none, 2 stop bits
 #define RESET_PIN 13
-#define RX_PIN 16
-#define TX_PIN 17
 #define ENABLE_RX 18
 #define ONBOARD_LED 2
 #define LED 14
@@ -44,8 +41,6 @@ EasyButton resetButton(RESET_PIN);
 EasyLed led(LED, EasyLed::ActiveLevel::High);
 
 EasyLed onboardLED(ONBOARD_LED, EasyLed::ActiveLevel::High);
-
-HardwareSerial StoveSerial(2);
 
 WiFiManager wm;
 WiFiManagerParameter custom_hydro_mode("hydro", "hydro_mode", "0", 2);
