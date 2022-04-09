@@ -52,6 +52,7 @@ RAM (0x00)
 | 0x80       | 128        | x         | year   | Current year                                | 22                       |   0 -  99  |
 | 0x81       | 129        |           |        | Counter up                                  |                          |            |
 | 0x82       | 130        |           |        | Unknown counts up really slow ?             |                          |            |
+| 0x89       | 137        | x         | Min    | Countdown till low pallet alerm starts      | 20                       |  20 -   0  |
 | 0x8F       | 143        | x/2       | °C     | Remote control temp                         |                          |            |
 | 0x96       | 150        |           |        | Unkown 84 - 89                              |                          |            |
 | 0xAB       | 171        |           |        | Looks random                                |                          |            |
