@@ -1,7 +1,5 @@
-#ifndef OTA_H
-#define OTA_H
 #include <ArduinoOTA.h>
-#include <constants.h>
+#include "constants.h"
 
 void enableOTA(){
     ArduinoOTA.setHostname("Pelletheater");
@@ -40,5 +38,3 @@ void enableOTA(){
 
     ArduinoOTA.begin();
 }
-
-#endif

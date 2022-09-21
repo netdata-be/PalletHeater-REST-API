@@ -8,58 +8,57 @@ bool isConnected()
 
 void getStoveState() // Get detailed stove state
 {
-    stoveState = readFromStove(ram, stoveStateAddr);
+    stoveState = stove.read(ram, stoveStateAddr);
 
     switch (stoveState)
     {
-    case 0:
+    case OFF:
         StoveStateStr = "Off";
         StoveIsOn = false;
         break;
-    case 1:
+    case STARTING:
         StoveStateStr = "Starting";
         StoveIsOn = true;
         break;
-    case 2:
+    case PALLET_LOADING:
         StoveStateStr = "Pellet loading"; // Phase I
         StoveIsOn = true;
         break;
-    case 3:
+    case IGNITION:
         StoveStateStr = "Ignition"; // Phase II
         StoveIsOn = true;
         break;
-    case 4:
+    case WORKING:
         StoveStateStr = "Working";
         StoveIsOn = true;
         break;
-    case 5:
+    case BRAZIER_CLEANING:
         StoveStateStr = "Brazier cleaning";
         break;
-    case 6:
+    case FINAL_CLEANING:
         StoveStateStr = "Final cleaning"; // Shut Down
         StoveIsOn = false;
         break;
-    case 7:
+    case STANDBY:
         StoveStateStr = "Standby";
         StoveIsOn = false;
         break;
-    case 8:
+    case ALARM:
         StoveStateStr = "Alarm State";
         break;
-    case 9:
+    case IGNITION_FAILURE:
         StoveStateStr = "Ignition failure";
         StoveIsOn = false;
         break;
-    case 10:
+    case ALARM_STATE:
         StoveStateStr = "Alarm";
         StoveIsOn = false;
         break;
-    case -1:
+    case UNKNOWN:
         StoveStateStr = "Unkown [RS232 Serial Error]";
         StoveIsOn = false;
         break;
     }
-    Serial.printf("Stove %s : %s\n", StoveIsOn ? "ON" : "OFF", StoveStateStr.c_str());
 }
 
 String getErrorCode(int error)

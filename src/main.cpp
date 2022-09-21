@@ -8,11 +8,11 @@
 #include <WiFiManager.h>
 #include <WiFiUdp.h>
 #include <metrics.h>
-#include <stoveSerial.h>
+
 #include <helperFunctions.h>
+#include "Stove.h"
 
 #define FORMAT_SPIFFS_IF_FAILED true
-
 
 
 bool getNTPtime(int sec)
@@ -43,7 +43,7 @@ bool getNTPtime(int sec)
 
 void getAmbTemp() // Get room temperature
 {
-    ambTemp = readFromStove(ram, ambTempAddr);
+    ambTemp = stove.read(ram, ambTempAddr);
     if (ambTemp >= 0)
     {
         ambTemp = (float)ambTemp / 2;
@@ -58,7 +58,7 @@ void getAmbTemp() // Get room temperature
 
 int getFumeFanRPM()
 {
-    int rpm = readFromStove(ram, 0x37);
+    int rpm = stove.read(ram, 0x37);
     if (rpm > 0)
     {
         rpm = (rpm + 25) * 10;
@@ -68,7 +68,7 @@ int getFumeFanRPM()
 
 int getRemoteControlLastSeen()
 {
-    int ttl = readFromStove(ram, 0x2e);
+    int ttl = stove.read(ram, 0x2e);
     if (ttl > 0)
     {
         ttl = 240 - ttl;
@@ -82,7 +82,7 @@ int getRemoteControlLastSeen()
 
 void getAmbTempStove() // Get room temperature from stove sensor
 {
-    ambTempStove = readFromStove(ram, 0x44);
+    ambTempStove = stove.read(ram, 0x44);
     if (ambTempStove >= 0)
     {
         ambTempStove = (float)ambTempStove / 2;
@@ -97,7 +97,7 @@ void getAmbTempStove() // Get room temperature from stove sensor
 
 void getAmbTempRemoteControl() // Get room temperature from stove sensor
 {
-    ambTempRemoteControl = readFromStove(ram, 0x8f);
+    ambTempRemoteControl = stove.read(ram, 0x8f);
     if (ambTempRemoteControl >= 0)
     {
         ambTempRemoteControl = (float)ambTempRemoteControl / 2;
@@ -112,12 +112,12 @@ void getAmbTempRemoteControl() // Get room temperature from stove sensor
 
 int numberOfStarts()
 {
-    return readFromStove(eeprom, 0xee);
+    return stove.read(eeprom, 0xee);
 }
 
 bool stoveBeepIsEnabled() // Get room temperature
 {
-    ambTemp = readFromStove(eeprom, 0x4b);
+    ambTemp = stove.read(eeprom, 0x4b);
     if (ambTemp == 0)
     {
         return false;
@@ -130,10 +130,16 @@ bool stoveBeepIsEnabled() // Get room temperature
 
 int arePalletsLow()
 {
-    int val = readFromStove(ram, 0xa4);
+    int val = stove.read(ram, 0xa4);
     if (val == 5)
     {
-        return 1;
+        val = stove.read(ram, 0x89);
+        if (val <= 1) {
+            return 1;
+        }
+        else {
+            return 0;
+        }
     }
     else
     {
@@ -143,14 +149,14 @@ int arePalletsLow()
 
 void getTempSetpoint()
 {
-    setPointTemp = (float)readFromStove(eeprom, TempSetpointAddr);
+    setPointTemp = (float)stove.read(eeprom, TempSetpointAddr);
     Serial.print("T. setpoint. ");
     Serial.println(setPointTemp);
 }
 
 void getFumeTemp() // Get flue gas temperature
 {
-    fumesTemp = readFromStove(ram, fumesTempAddr);
+    fumesTemp = stove.read(ram, fumesTempAddr);
     Serial.printf("T. fumes %d\n", fumesTemp);
 }
 
@@ -169,7 +175,7 @@ void writeDatepartToStove(char format[3], byte address)
 
     value = mostSigDigit * 0x10 + leastSigDigit;
 
-    writeToStove(eeprom, address, value);
+    stove.write(eeprom, address, value);
 }
 
 void setStoveDateTime()
@@ -185,13 +191,13 @@ void setStoveDateTime()
 
 void getRoomFanSpeed()
 {
-    roomFanSpeed = readFromStove(eeprom, 0x81);
+    roomFanSpeed = stove.read(eeprom, 0x81);
     Serial.printf("Fan speed: %d\n", roomFanSpeed);
 }
 
 void getFlamePower() // Get the flame power (0, 1, 2, 3, 4, 5)
 {
-    flamePower = readFromStove(eeprom, 0x7f);
+    flamePower = stove.read(eeprom, 0x7f);
 }
 
 void getStates() // Calls all the get…() functions
@@ -228,8 +234,8 @@ void setRoomFanSpeed(int speed)
 {
     if ((speed >= 0) & (speed <= 3))
     {
-        writeToStove(eeprom, 0x81, speed); // Write to EEPROM, this triggers the fan adjustment
-        writeToStove(ram, 0x19, speed);    // Write to RAM, as a status update ???
+        stove.write(eeprom, 0x81, speed); // Write to EEPROM, this triggers the fan adjustment
+        stove.write(ram, 0x19, speed);    // Write to RAM, as a status update ???
     }
     else
     {
@@ -239,7 +245,7 @@ void setRoomFanSpeed(int speed)
 
 void setCombustionQuality(int speed)
 {
-    writeToStove(eeprom, 0xc0, speed);
+    stove.write(eeprom, 0xc0, speed);
 }
 
 int readErrorMemory(int pos)
@@ -248,9 +254,10 @@ int readErrorMemory(int pos)
     {
     case 0 ... 4:
         pos = 0xe0 + pos;
-        return readFromStove(eeprom, byte(pos));
+        return stove.read(eeprom, byte(pos));
         break;
     }
+    return -1;
 }
 
 int getErrorMemory(int pos)
@@ -260,7 +267,7 @@ int getErrorMemory(int pos)
     {
     case 0 ... 4:
         pos = 0xe0 + pos;
-        error = readFromStove(eeprom, byte(pos));
+        error = stove.read(eeprom, byte(pos));
         break;
     }
     return error;
@@ -270,7 +277,7 @@ void setFlamePower(int power)
 {
     if ((power >= 1) & (power <= 4))
     {
-        writeToStove(eeprom, 0x7f, power);
+        stove.write(eeprom, 0x7f, power);
     }
     else
     {
@@ -281,7 +288,7 @@ void setFlamePower(int power)
 void setError(int pos, int error)
 {
     int address = 0xe0 + pos;
-    writeToStove(eeprom, address, error);
+    stove.write(eeprom, address, error);
 }
 
 void handleRouteCQ()
@@ -306,12 +313,12 @@ void handleRouteCQ()
 
 void getStoveDateTime()
 {
-    int cur_min = readFromStove(ram, 0x7d);
-    int cur_hour = readFromStove(ram, 0x7c);
-    int cur_sec = readFromStove(ram, 0x7a);
-    int cur_day = readFromStove(ram, 0x7e);
-    int cur_month = readFromStove(ram, 0x7f);
-    int cur_year = readFromStove(ram, 0x80);
+    int cur_min = stove.read(ram, 0x7d);
+    int cur_hour = stove.read(ram, 0x7c);
+    int cur_sec = stove.read(ram, 0x7a);
+    int cur_day = stove.read(ram, 0x7e);
+    int cur_month = stove.read(ram, 0x7f);
+    int cur_year = stove.read(ram, 0x80);
 
     sprintf(buffer, "20%i-%02d-%02d %02d:%02d:%02d", cur_year, cur_month, cur_day, cur_hour, cur_min, cur_sec);
 
@@ -494,20 +501,9 @@ void setStoveOn()
     StaticJsonDocument<250> json;
     json.clear();
     getStoveState();
-    if (stoveState > 5)
+    if (stoveState == 0)
     {
-        if (writeToStove(ram, stoveStateAddr, 1))
-        {
-            message = "Powered on sended";
-        }
-        else
-        {
-            message = "FAILED to send Power on";
-        }
-    }
-    else if (stoveState == 0)
-    {
-        if (writeToStove(ram, stoveStateAddr, 1))
+        if (stove.write(ram, stoveStateAddr, 1))
         {
             message = "Powered on sended";
         }
@@ -522,25 +518,38 @@ void setStoveOn()
         Serial.print("Stove already on\n");
     }
 
-    json["state"] = message;
+    json["result"] = message;
+
+    delay(50);
+    getStoveState();
+    JsonObject obj_stove = json.createNestedObject("stoveState");
+    obj_stove["stoveState"] = stoveState;
+    obj_stove["state"] = StoveStateStr;
+    obj_stove["poweredOn"] = StoveIsOn;
+
     serializeJson(json, buffer);
     getStoveState();
     wm.server->send(200, "application/json", buffer);
 }
+
 
 void setStoveOff()
 {
     String message;
     getStoveState();
     Serial.printf("  StoveState == %i\n", stoveState);
-
+ 
     switch (stoveState)
     {
-    case 0:
+    case OFF:
+    case ALARM_STATE:
+    case IGNITION_FAILURE:
+    case STANDBY:
         message = "Stove already off";
         break;
-    case 1:
-        if (writeToStove(ram, stoveStateAddr, 0))
+    case STARTING:
+    case PALLET_LOADING:
+        if (stove.write(ram, stoveStateAddr, 0))
         {
             message = "Powered off sended - 0";
         }
@@ -549,18 +558,10 @@ void setStoveOff()
             message = "FAILED to send Power off - 0";
         }
         break;
-    case 2:
-        if (writeToStove(ram, stoveStateAddr, 0))
-        {
-            message = "Powered off sended - 0";
-        }
-        else
-        {
-            message = "FAILED to send Power off - 0";
-        }
-        break;
-    case 3:
-        if (writeToStove(ram, stoveStateAddr, 6))
+    case IGNITION:
+    case WORKING:
+    case ALARM:
+        if (stove.write(ram, stoveStateAddr, 6))
         {
             message = "Powered off sended - 6";
         }
@@ -569,42 +570,13 @@ void setStoveOff()
             message = "FAILED to send Power off - 6";
         }
         break;
-    case 4:
-        if (writeToStove(ram, stoveStateAddr, 6))
-        {
-            message = "Powered off sended - 6";
-        }
-        else
-        {
-            message = "FAILED to send Power off - 6";
-        }
-        break;
-    case 5:
+    case BRAZIER_CLEANING:
         message = "Stove already shutting down - Brazier cleaning";
         break;
-    case 6:
+    case FINAL_CLEANING:
         message = "Stove already shutting down - Final cleaning";
         break;
-    case 7:
-        message = "Stove already off";
-        break;
-    case 8:
-        if (writeToStove(ram, stoveStateAddr, 6))
-        {
-            message = "Powered off sended - 6";
-        }
-        else
-        {
-            message = "FAILED to send Power off - 6";
-        }
-        break;
-    case 9:
-        message = "Stove already off";
-        break;
-    case 10:
-        message = "Stove already off";
-        break;
-    case -1:
+    case UNKNOWN:
         StoveStateStr = "Unkown [RS232 Serial Error]";
         break;
     }
@@ -612,7 +584,14 @@ void setStoveOff()
     StaticJsonDocument<250> json;
     json.clear();
 
-    json["state"] = message;
+    json["result"] = message;
+    delay(50);
+    getStoveState();
+    JsonObject obj_stove = json.createNestedObject("stoveState");
+    obj_stove["stoveState"] = stoveState;
+    obj_stove["state"] = StoveStateStr;
+    obj_stove["poweredOn"] = StoveIsOn;
+
     serializeJson(json, buffer);
     getStoveState();
     wm.server->send(200, "application/json", buffer);
@@ -624,10 +603,10 @@ void storeAllRamValues()
     for (int i = 0; i <= 255; i++)
     {
         esp_task_wdt_reset();
-        char value = readFromStove(ram, byte(i));
+        char value = stove.read(ram, byte(i));
         if (value >= 0)
         {
-            // telnet.print(".");
+             telnet.print(".");
             if (storedRam[265] == 1)
             {
                 if (value != storedRam[byte(i)])
@@ -683,7 +662,7 @@ void getParams()
     sprintf(buffer, "0x%02X", data[1]);
     JsonObject address = type.createNestedObject(buffer);
 
-    char value = readFromStove(data[0], data[1]);
+    char value = stove.read(data[0], data[1]);
     if (value >= 0)
     {
         address["Address_int"] = int(data[1]);
@@ -837,7 +816,6 @@ void setup()
     digitalWrite(ENABLE_RX, HIGH); // The led of the optocoupler is off
 
     Serial.begin(115200);
-    setupStoveSerial();
     
     if (SPIFFS.begin()) // Mount SPIFFS
     {
@@ -907,10 +885,6 @@ void setup()
 void loop()
 {
     telnet.loop();
-    if (Serial.available())
-    {
-        telnet.print(Serial.read());
-    }
     esp_task_wdt_reset();
     wm.process();
     resetButton.read();

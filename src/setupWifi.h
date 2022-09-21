@@ -16,6 +16,7 @@ void setup_wifi() // Setup WiFiManager and connect to WiFi
     wm.setDarkMode(true);
     wm.addParameter(&custom_hydro_mode);
     wm.setSaveConfigCallback(saveConfigCallback); // Saves the settings in SPIFFS
+    //wm.setConfigPortalTimeout(180);
     wm.setConnectTimeout(30);
     if (wm.autoConnect("Pellet heater controller"))
     {
