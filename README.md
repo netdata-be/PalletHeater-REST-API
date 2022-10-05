@@ -1,10 +1,10 @@
-# THis project Provides a REST API towards the micronova paletstoves
+# This project Provides a REST API towards the micronova paletstoves
 
 | URL         | METHOD | Parameter      | Description                                            | Response  |
 |-------------|--------|----------------|--------------------------------------------------------|-------------------|
 | /api/state  | GET    |                | Get a general overview of the state of the palletstove |                   |
 | /api/power  | GET    |                | Get powerstatus of the palletstove back                | <pre lang="json">{<br>  "stoveState": 0,<br>  "state": "Off",<br>  "poweredOn": false<br>}</pre> |
-| /api/power  | POST   | state=[on|off] | Set powerstatus of the stove on or off                 | <pre lang="json">{<br>  "result": "Powered on sended",<br>  "stoveState": 1,<br>  "state": "Starting",<br>  "poweredOn": true<br>}</pre>               |
+| /api/power  | POST   | state=[on/off] | Set powerstatus of the stove on or off                 | <pre lang="json">{<br>  "result": "Powered on sended",<br>  "stoveState": 1,<br>  "state": "Starting",<br>  "poweredOn": true<br>}</pre>               |
 | /api/fan    | GET    |                | Get the fanspeed, 0 == disabled                        | <pre lang="json">{<br>  "speed": 1<br>}</pre> |
 | /api/fan    | POST   | speed=[0-3]    | Set the fanspeed, 0 == disabled                        | <pre lang="json">{<br>  "result": "success",  "speed": 1<br>}</pre> | 
 | /api/flame  | GET    |                | Get the flamepower 1 till 4                            | <pre lang="json">{<br>  "power": 1<br>}</pre> |
