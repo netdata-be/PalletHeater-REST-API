@@ -1,3 +1,27 @@
+# THis project Provides a REST API towards the micronova paletstoves
+
+| URL         | METHOD | Parameter      | Description                                            | Response  |
+|-------------|--------|----------------|--------------------------------------------------------|-------------------|
+| /api/state  | GET    |                | Get a general overview of the state of the palletstove |                   |
+| /api/power  | GET    |                | Get powerstatus of the palletstove back                | <pre lang="json">{<br>  "stoveState": 0,<br>  "state": "Off",<br>  "poweredOn": false<br>}</pre> |
+| /api/power  | POST   | state=[on|off] | Set powerstatus of the stove on or off                 | <pre lang="json">{<br>  "result": "Powered on sended",<br>  "stoveState": 1,<br>  "state": "Starting",<br>  "poweredOn": true<br>}</pre>               |
+| /api/fan    | GET    |                | Get the fanspeed, 0 == disabled                        | <pre lang="json">{<br>  "speed": 1<br>}</pre> |
+| /api/fan    | POST   | speed=[0-3]    | Set the fanspeed, 0 == disabled                        | <pre lang="json">{<br>  "result": "success",  "speed": 1<br>}</pre> | 
+| /api/flame  | GET    |                | Get the flamepower 1 till 4                            | <pre lang="json">{<br>  "power": 1<br>}</pre> |
+| /api/flame  | POST   | power=[1-4]    | Get the flamepower 1 till 4                            | <pre lang="json">{<br>  "result": "success",<br>  "power": 1<br>}</pre> |
+| /api/health | GET    |                | Returns a HTTP 200 if communication with stove is OK   | |
+| /api/time   | GET    |                | Get the current stove time and the NTP time            | <pre lang="json">{<br>  "time": {<br>    "stove": "2022-10-05 15:59:53",<br>    "ntp": "2022-10-05 16:00:00",<br>    "delta": 7<br>  }<br>}</pre>  |
+| /api/time   | PATCH  |                | Set the current stove time to the NTP time             | |
+| /api/erorrs | GET    |                | Get a list of all previeous errors logged on the stove | <pre lang="json">{<br>  "MemoryPos_1": {<br>    "id": 0,<br>    "error": "---",<br>    "desc": "No Error"<br>  },<br>  "MemoryPos_2": {<br>    "id": 0,<br>    "error": "---",<br>    "desc": "No Error"<br>  },<br>  "MemoryPos_3": {<br>    "id": 0,<br>    "error": "---",<br>    "desc": "No Error"<br>  },<br>  "MemoryPos_4": {<br>    "id": 0,<br>    "error": "---",<br>    "desc": "No Error"<br>  },<br>  "MemoryPos_5": {<br>    "id": 0,<br>    "error": "---",<br>    "desc": "No Error"<br>  }<br>}</pre>          |
+
+ 
+
+
+
+
+# Discovered Values
+
+
 RAM (0x00)
 
 | ADDR (HEX) | ADDR (DEC) | Formula   | Unit   | Description                                 | Example or default value | Range      |
