@@ -52,6 +52,7 @@ unsigned long debounceDelay = 50;
 String hydro_mode;
 int int_hydro_mode;
 
+// Init the Serial Stove with Hardware UART 2
 Stove stove(2);
 
 char buffer[9000];

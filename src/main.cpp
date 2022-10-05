@@ -230,16 +230,20 @@ void buttonPressed()
     Serial.println("Button has been pressed");
 }
 
-void setRoomFanSpeed(int speed)
+bool setRoomFanSpeed(int speed)
 {
     if ((speed >= 0) & (speed <= 3))
     {
-        stove.write(eeprom, 0x81, speed); // Write to EEPROM, this triggers the fan adjustment
-        stove.write(ram, 0x19, speed);    // Write to RAM, as a status update ???
+        if (stove.write(eeprom, 0x81, speed) ) {
+            return stove.write(ram, 0x19, speed);
+        } else {
+            return false;
+        }
     }
     else
     {
         log_e("Speed not in range, it should be between 0-3\n");
+        return false;
     }
 }
 
@@ -273,15 +277,16 @@ int getErrorMemory(int pos)
     return error;
 }
 
-void setFlamePower(int power)
+bool setFlamePower(int power)
 {
     if ((power >= 1) & (power <= 4))
     {
-        stove.write(eeprom, 0x7f, power);
+        return stove.write(eeprom, 0x7f, power);
     }
     else
     {
         log_e("Flamepower not in range, it should be between 0-3\n");
+        return false;
     }
 }
 
@@ -329,95 +334,172 @@ void getStoveDateTime()
     stoveTime = mktime(&tm);
 }
 
-void handleRouteSyncTime()
-{
-    StaticJsonDocument<350> json;
-    char time_output[30];
-
-    json.clear();
-
-    JsonObject time = json.createNestedObject("time");
-
-    strftime(time_output, 30, "%F %T", localtime(&now));
-    time["ntp"] = time_output;
-    setStoveDateTime();
-
-    json["success"] = true;
-
-    serializeJson(json, buffer);
-    wm.server->send(200, "application/json", buffer);
-}
-
-void handleRouteNtpTime()
-{
-    StaticJsonDocument<350> json;
-    char time_output[30];
-
-    json.clear();
-
-    getNTPtime(2);
-    JsonObject time = json.createNestedObject("time");
-
-    strftime(time_output, 30, "%F %T", localtime(&now));
-    time["ntp"] = time_output;
-    json["success"] = true;
-
-    serializeJson(json, buffer);
-    wm.server->send(200, "application/json", buffer);
-}
-
-void handleRouteStoveTime()
-{
-    StaticJsonDocument<350> json;
-    char time_output[30];
-
-    json.clear();
-
-    JsonObject time = json.createNestedObject("time");
-    getStoveDateTime();
-    strftime(time_output, 30, "%F %T", localtime(&stoveTime));
-    time["stove"] = time_output;
-    json["success"] = true;
-
-    serializeJson(json, buffer);
-    wm.server->send(200, "application/json", buffer);
-}
 
 void handleRouteTime()
 {
     StaticJsonDocument<350> json;
     char time_output[30];
+    int http_code;
+    http_code=200;
 
     json.clear();
 
-    JsonObject time = json.createNestedObject("time");
-    getStoveDateTime();
-    strftime(time_output, 30, "%F %T", localtime(&stoveTime));
-    time["stove"] = time_output;
-    getNTPtime(2);
-    strftime(time_output, 30, "%F %T", localtime(&now));
-    time["ntp"] = time_output;
-    json["success"] = true;
+    if (wm.server->method() == HTTP_PATCH) 
+    {
+        setStoveDateTime();
+        json["result"] = "success Synced NTP time to stove";
+        delay(100);
+    }
+    
+    if (wm.server->method() == HTTP_GET || wm.server->method() == HTTP_PATCH )
+    {
+        JsonObject time = json.createNestedObject("time");
+        getStoveDateTime();
+        strftime(time_output, 30, "%F %T", localtime(&stoveTime));
+        time["stove"] = time_output;
+
+        strftime(time_output, 30, "%F %T", localtime(&now));
+        time["ntp"] = time_output;
+
+        time["delta"] = now - stoveTime;
+    } else
+    {
+        http_code=405;
+    }
+
 
     serializeJson(json, buffer);
-    wm.server->send(200, "application/json", buffer);
+    wm.server->send(http_code, "application/json", buffer);
 }
 
 void handleRouteFanspeed()
 {
     StaticJsonDocument<350> json;
+    int http_code;
+    http_code=200;
     json.clear();
 
-    for (uint8_t i = 0; i < wm.server->args(); i++)
+    if (wm.server->method() == HTTP_POST)
     {
-        if (wm.server->argName(i) == "s")
+        for (uint8_t i = 0; i < wm.server->args(); i++)
         {
-            int speed = wm.server->arg(i).toInt();
-            setRoomFanSpeed(speed);
+            if (wm.server->argName(i) == "speed")
+            {
+                if (  wm.server->arg(i) == "0" ||  wm.server->arg(i) == "1" ||  wm.server->arg(i) == "2" ||  wm.server->arg(i) == "3") 
+                {
+                    int speed = wm.server->arg(i).toInt();
+                    if ( setRoomFanSpeed(speed) )
+                    {
+                        json["result"] = "success";
+                    } else 
+                    {
+                        json["result"] = "Failed - RS2232 error...";
+                        http_code=500;
+                    }
+                    delay(50);
+                } else 
+                {
+                    json["result"] = "failed - Speed is out of range: Should be between 0 and 3";
+                    http_code=400;
+                }
+            }
         }
     }
+    
+    if (wm.server->method() == HTTP_GET || wm.server->method() == HTTP_POST)
+    {
+        getRoomFanSpeed();
+        json["speed"] = roomFanSpeed;
+    } else {
+        wm.server->send(405);
+    }
 
-    json["action"] = "ok";
+    serializeJson(json, buffer);
+    wm.server->send(http_code, "application/json", buffer);
+}
+
+void handleRouteErrors()
+{
+    StaticJsonDocument<450> json;
+    json.clear();
+
+    if (wm.server->method() == HTTP_POST)
+    {
+        for (uint8_t i = 0; i < wm.server->args(); i++)
+        {
+            if (wm.server->argName(i) == "MemoryPos_1")
+            {
+                int error = wm.server->arg(i).toInt();
+                setError(0, error);
+                json["action"] = "MemoryPos_1 set";
+                delay(50);
+            }
+            if (wm.server->argName(i) == "MemoryPos_2")
+            {
+                int error = wm.server->arg(i).toInt();
+                setError(1, error);
+                json["action"] = "MemoryPos_2 set";
+                delay(50);
+            }
+            if (wm.server->argName(i) == "MemoryPos_3")
+            {
+                int error = wm.server->arg(i).toInt();
+                setError(2, error);
+                json["action"] = "MemoryPos_3 set";
+                delay(50);
+            }
+            if (wm.server->argName(i) == "MemoryPos_4")
+            {
+                int error = wm.server->arg(i).toInt();
+                setError(3, error);
+                json["action"] = "MemoryPos_4 set";
+                delay(50);
+            }
+            if (wm.server->argName(i) == "MemoryPos_5")
+            {
+                int error = wm.server->arg(i).toInt();
+                setError(4, error);
+                json["action"] = "MemoryPos_5 set";
+                delay(50);
+            }
+        }
+    }
+    
+    if (wm.server->method() == HTTP_GET || wm.server->method() == HTTP_POST)
+    {
+        JsonObject errorbank1 = json.createNestedObject("MemoryPos_1");
+        int error = getErrorMemory(0);
+        errorbank1["id"] = error;
+        errorbank1["error"] = getErrorCode(error);
+        errorbank1["desc"] = getErrorDesc(error);
+
+        JsonObject errorbank2 = json.createNestedObject("MemoryPos_2");
+        error = getErrorMemory(1);
+        errorbank2["id"] = error;
+        errorbank2["error"] = getErrorCode(error);
+        errorbank2["desc"] = getErrorDesc(error);
+
+        JsonObject errorbank3 = json.createNestedObject("MemoryPos_3");
+        error = getErrorMemory(2);
+        errorbank3["id"] = error;
+        errorbank3["error"] = getErrorCode(error);
+        errorbank3["desc"] = getErrorDesc(error);
+
+        JsonObject errorbank4 = json.createNestedObject("MemoryPos_4");
+        error = getErrorMemory(3);
+        errorbank4["id"] = error;
+        errorbank4["error"] = getErrorCode(error);
+        errorbank4["desc"] = getErrorDesc(error);
+
+        JsonObject errorbank5 = json.createNestedObject("MemoryPos_5");
+        error = getErrorMemory(4);
+        errorbank5["id"] = error;
+        errorbank5["error"] = getErrorCode(error);
+        errorbank5["desc"] = getErrorDesc(error);
+    } else
+    {
+        wm.server->send(405);
+    }
 
     serializeJson(json, buffer);
     wm.server->send(200, "application/json", buffer);
@@ -463,41 +545,188 @@ void handleRouteSetError()
     wm.server->send(200, "application/json", buffer);
 }
 
+void handleRouteHealth()
+{
+    StaticJsonDocument<350> json;
+    json.clear();
+    int http_code;
+    if (wm.server->method() == HTTP_GET)
+    {
+        if (stove.read(ram, ambTempAddr)) 
+        {
+            json["health"] = "Healthy";
+            http_code=200;
+
+        } else 
+        {
+            json["health"] = "Faild to talk to Stove";
+            http_code=500;
+        }
+    } else {
+        wm.server->send(405);
+    }
+
+    serializeJson(json, buffer);
+    wm.server->send(http_code, "application/json", buffer);
+}
+
 void handleRouteFlamePower()
 {
     StaticJsonDocument<350> json;
     json.clear();
 
-    if (wm.server->method() == HTTP_GET)
-    {
-        getFlamePower();
-        json["power"] = flamePower;
-    }
 
     if (wm.server->method() == HTTP_POST)
     {
-        if (wm.server->hasArg("plain") == false)
+        for (uint8_t i = 0; i < wm.server->args(); i++)
         {
-            // handle error here
+            if (wm.server->argName(i) == "power")
+            {
+                if (  wm.server->arg(i) == "1" ||  wm.server->arg(i) == "2" ||  wm.server->arg(i) == "3" ||  wm.server->arg(i) == "4") 
+                {
+                    int power = wm.server->arg(i).toInt();
+                    if (setFlamePower(power))
+                    {
+                        json["result"] = "success";
+                    } else
+                    {
+                        json["result"] = "Failed - RS2232 error...";
+                    } 
+                    delay(50);
+                } else 
+                {
+                    json["result"] = "failed - power is out of range: Should be between 1 and 4";
+                }
+            }
         }
-        StaticJsonDocument<350> jsonDocument;
-        String body = wm.server->arg("plain");
-        deserializeJson(jsonDocument, body);
-
-        int power = jsonDocument["power"];
-        setFlamePower(power);
+    }
+    
+    if (wm.server->method() == HTTP_GET || wm.server->method() == HTTP_POST)
+    {
         getFlamePower();
-
         json["power"] = flamePower;
+    } else
+    {
+        wm.server->send(405);
     }
 
     serializeJson(json, buffer);
     wm.server->send(200, "application/json", buffer);
 }
 
+void handleRoutePower()
+{
+    StaticJsonDocument<350> json;
+    json.clear();
+    int http_code;
+    http_code=200;
+
+    getStoveState();
+    
+
+    if (wm.server->method() == HTTP_POST)
+    {
+        for (uint8_t i = 0; i < wm.server->args(); i++)
+        {
+            if (wm.server->argName(i) == "state")
+            {
+                if (  wm.server->arg(i) == "off" ) 
+                {
+                    String message;
+                    switch (stoveState)
+                    {
+                        case OFF:
+                        case ALARM_STATE:
+                        case IGNITION_FAILURE:
+                        case STANDBY:
+                            message = "Stove already off";
+                            http_code=202;
+                        break;
+                        case STARTING:
+                        case PALLET_LOADING:
+                            if (stove.write(ram, stoveStateAddr, 0))
+                            {
+                                message = "Powered off sended - 0";
+                            }
+                            else
+                            {
+                                message = "FAILED to send Power off - 0";
+                                http_code=500;
+                            }
+                        break;
+                        case IGNITION:
+                        case WORKING:
+                        case ALARM:
+                            if (stove.write(ram, stoveStateAddr, 6))
+                            {
+                                message = "Powered off sended - 6";
+                            }
+                            else
+                            {
+                                message = "FAILED to send Power off - 6";
+                                http_code=500;
+                            }
+                        break;
+                        case BRAZIER_CLEANING:
+                            message = "Stove already shutting down - Brazier cleaning";
+                            http_code=202;
+                        break;
+                        case FINAL_CLEANING:
+                            message = "Stove already shutting down - Final cleaning";
+                            http_code=202;
+                        break;
+                        case UNKNOWN:
+                            StoveStateStr = "Unkown [RS232 Serial Error]";
+                            http_code=500;
+                        break;
+
+                    }
+                    json["result"] = message;
+                } else if (wm.server->arg(i) == "on")
+                {
+                    String message;
+                    if (stoveState == 0)
+                    {
+                        if (stove.write(ram, stoveStateAddr, 1))
+                        {
+                            message = "Powered on sended";
+                        } 
+                        else
+                        {
+                            message = "FAILED to send Power on";
+                            http_code=500;
+                        }
+                    } 
+                    else
+                    {
+                        message = "Stove already on";
+                        Serial.print("Stove already on\n");
+                        http_code=202;
+                    }
+                    json["result"] = message;
+                } else 
+                {
+                    json["result"] = "Unknown state argument";
+                    http_code=400;
+                }
+            }
+        }
+    }
+    delay(50);
+    getStoveState();
+    json["stoveState"] = stoveState;
+    json["state"] = StoveStateStr;
+    json["poweredOn"] = StoveIsOn;
+
+    serializeJson(json, buffer);
+    wm.server->send(http_code, "application/json", buffer);
+}
+
 void setStoveOn()
 {
     String message;
+    int http_code;
+    http_code=200;
     StaticJsonDocument<250> json;
     json.clear();
     getStoveState();
@@ -510,11 +739,13 @@ void setStoveOn()
         else
         {
             message = "FAILED to send Power on";
+            http_code = 500;
         }
     }
     else
     {
         message = "Stove already on";
+        http_code = 202;
         Serial.print("Stove already on\n");
     }
 
@@ -529,7 +760,7 @@ void setStoveOn()
 
     serializeJson(json, buffer);
     getStoveState();
-    wm.server->send(200, "application/json", buffer);
+    wm.server->send(http_code, "application/json", buffer);
 }
 
 
@@ -683,6 +914,8 @@ void getParams()
 
 void getStatus()
 {
+    if (wm.server->method() == HTTP_GET)
+    {
     telnet.println("Get status called");
     getStates();
 
@@ -767,9 +1000,11 @@ void getStatus()
     time["stove"] = time_output;
 
     time["delta"] = now - stoveTime;
-
     serializeJson(json, buffer);
     wm.server->send(200, "application/json", buffer);
+    } else{
+        wm.server->send(405);
+    }
 }
 
 void onTelnetConnect(String ip)
@@ -855,23 +1090,24 @@ void setup()
     onboardLED.on();
 
     wm.server->on("/on", setStoveOn);
+    wm.server->on("/off", setStoveOff);
+    
     wm.server->on("/fan", handleRouteFanspeed);
-
-    wm.server->on("/time/sync", handleRouteSyncTime);
-    wm.server->on("/time/ntp", handleRouteNtpTime);
-    wm.server->on("/time/stove", handleRouteStoveTime);
-    wm.server->on("/time", handleRouteTime);
-
     wm.server->on("/error", handleRouteSetError);
 
     wm.server->on("/cq", handleRouteCQ);
     wm.server->on("/flame", handleRouteFlamePower);
-    wm.server->on("/off", setStoveOff);
+
     wm.server->on("/state", getStatus);
     wm.server->on("/get", getParams);
 
-    wm.server->on("/stove/flame", handleRouteFlamePower);
-    wm.server->on("/stove/fan", handleRouteFanspeed);
+    wm.server->on("/api/flame", handleRouteFlamePower);
+    wm.server->on("/api/fan", handleRouteFanspeed);
+    wm.server->on("/api/power", handleRoutePower);
+    wm.server->on("/api/errors", handleRouteErrors);
+    wm.server->on("/api/state", getStatus);
+    wm.server->on("/api/health", handleRouteHealth);
+    wm.server->on("/api/time", handleRouteTime);
 
     configTzTime(defaultTimezone, ntpServer); // sets TZ and starts NTP sync
     getNTPtime(2);
