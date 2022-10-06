@@ -334,6 +334,13 @@ void getStoveDateTime()
     stoveTime = mktime(&tm);
 }
 
+void handleRouteSwaggerUI() { 
+    wm.server->send(200, "text/html", swaggerUI);
+}
+
+void handleRouteSwaggerJSON() { 
+    wm.server->send(200, "application/json", swaggerJSON);
+}
 
 void handleRouteTime()
 {
@@ -573,6 +580,8 @@ void handleRouteHealth()
 void handleRouteFlamePower()
 {
     StaticJsonDocument<350> json;
+    int http_code;
+    http_code=200;
     json.clear();
 
 
@@ -588,14 +597,17 @@ void handleRouteFlamePower()
                     if (setFlamePower(power))
                     {
                         json["result"] = "success";
+                        http_code=200;
                     } else
                     {
                         json["result"] = "Failed - RS2232 error...";
+                        http_code=500;
                     } 
                     delay(50);
                 } else 
                 {
                     json["result"] = "failed - power is out of range: Should be between 1 and 4";
+                    http_code=400;
                 }
             }
         }
@@ -611,7 +623,7 @@ void handleRouteFlamePower()
     }
 
     serializeJson(json, buffer);
-    wm.server->send(200, "application/json", buffer);
+    wm.server->send(http_code, "application/json", buffer);
 }
 
 void handleRoutePower()
@@ -1108,6 +1120,8 @@ void setup()
     wm.server->on("/api/state", getStatus);
     wm.server->on("/api/health", handleRouteHealth);
     wm.server->on("/api/time", handleRouteTime);
+    wm.server->on("/api", handleRouteSwaggerUI);    
+    wm.server->on("/api-specs.json", handleRouteSwaggerJSON);   
 
     configTzTime(defaultTimezone, ntpServer); // sets TZ and starts NTP sync
     getNTPtime(2);

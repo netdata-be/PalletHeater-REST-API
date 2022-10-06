@@ -15,7 +15,19 @@ void setup_wifi() // Setup WiFiManager and connect to WiFi
     WiFi.mode(WIFI_STA);
     wm.setDarkMode(true);
     wm.addParameter(&custom_hydro_mode);
+    wm.addParameter(&custom_TimeZone);
+    wm.addParameter(&custom_ntp_server);
     wm.setSaveConfigCallback(saveConfigCallback); // Saves the settings in SPIFFS
+
+    // set custom html menu content, inside menu item custom
+    const char* menuhtml = "<h3>Swagger UI Docs</h3><br/><form action='/api' method='get'><button>API docs</button></form><br/>\n";
+    wm.setCustomMenuHTML(menuhtml);
+
+    wm.setHostname("palletheater");
+    wm.setTitle("Palletheater REST API");
+    wm.setWiFiAutoReconnect(true);
+    std::vector<const char *> menu = {"wifi","wifinoscan","info","param","sep", "custom","sep","restart","erase"};
+    wm.setMenu(menu);
     //wm.setConfigPortalTimeout(180);
     wm.setConnectTimeout(30);
     if (wm.autoConnect("Pellet heater controller"))
