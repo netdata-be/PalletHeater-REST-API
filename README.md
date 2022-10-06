@@ -1,18 +1,21 @@
-# This project Provides a REST API towards the micronova paletstoves
+# REST API towards Micronova Stoves
 
-| URL         | METHOD | Parameter      | Description                                            | Response  |
-|-------------|--------|----------------|--------------------------------------------------------|-------------------|
-| /api/state  | GET    |                | Get a general overview of the state of the palletstove |                   |
-| /api/power  | GET    |                | Get powerstatus of the palletstove back                | <pre lang="json">{"stoveState":0,"state":"Off","poweredOn":false}</pre> |
-| /api/power  | POST   | state=[on/off] | Set powerstatus of the stove on or off                 | <pre lang="json">{"result":"Powered on sended","stoveState":1,"state":"Starting","poweredOn":true}</pre>               |
-| /api/fan    | GET    |                | Get the fanspeed, 0 == disabled                        | <pre lang="json">{"speed":1}</pre> |
-| /api/fan    | POST   | speed=[0-3]    | Set the fanspeed, 0 == disabled                        | <pre lang="json">{"result":"success","speed":1}</pre> | 
-| /api/flame  | GET    |                | Get the flamepower 1 till 4                            | <pre lang="json">{"power":1}</pre> |
-| /api/flame  | POST   | power=[1-4]    | Get the flamepower 1 till 4                            | <pre lang="json">{"result":"success","power":1}</pre> |
-| /api/health | GET    |                | Returns a HTTP 200 if communication with stove is OK   | |
-| /api/time   | GET    |                | Get the current stove time and the NTP time            | <pre lang="json">{"time":{"stove":"2022-10-05 16:10:07","ntp":"2022-10-05 16:10:32","delta":25}}<br>}</pre>  |
-| /api/time   | PATCH  |                | Set the current stove time to the NTP time             | |
-| /api/erorrs | GET    |                | Get a list of all previeous errors logged on the stove | <pre lang="json">{"MemoryPos_1":{"id":0,"error":"---","desc":"No Error"},"MemoryPos_2":{"id":0,"error":"---","desc":"No Error"},"MemoryPos_3":{"id":0,"error":"---","desc":"No Error"},"MemoryPos_4":{"id":0,"error":"---","desc":"No Error"},"MemoryPos_5":{"id":0,"error":"---","desc":"No Error"}}</pre>          |
+The captive portal has a menu item containing the API documentation
+
+<img src="/img/settings.png" width="200">
+
+# Hardware
+
+I'm using a ESP32 dev board on a custom PCB:
+
+<img src="/img/pcb.png" width="200">
+
+It's using N-Channel MOSFETs to convert the 3.3v TTL towards the 5V TTL the stove understands.
+Micronova uses RS232 but TX and RX are coupled together.
+
+This means whathever the ESP is transmittig is also received.
+In software we remove the same bits from the received bits in order to have what we need.
+
 
  
 
