@@ -230,6 +230,12 @@ void buttonPressed()
     Serial.println("Button has been pressed");
 }
 
+bool setDisplay(int menu)
+{
+    stove.write(ram, 0x1a, menu);
+    return true;
+}
+
 bool setRoomFanSpeed(int speed)
 {
     if ((speed >= 0) & (speed <= 3))
@@ -307,6 +313,26 @@ void handleRouteCQ()
         {
             int speed = wm.server->arg(i).toInt();
             setCombustionQuality(speed);
+        }
+    }
+
+    json["action"] = "ok";
+
+    serializeJson(json, buffer);
+    wm.server->send(200, "application/json", buffer);
+}
+
+void handleRouteDisplay()
+{
+    StaticJsonDocument<350> json;
+    json.clear();
+
+    for (uint8_t i = 0; i < wm.server->args(); i++)
+    {
+        if (wm.server->argName(i) == "menu")
+        {
+            int menu = wm.server->arg(i).toInt();
+            setDisplay(menu);
         }
     }
 
@@ -1108,10 +1134,12 @@ void setup()
     wm.server->on("/error", handleRouteSetError);
 
     wm.server->on("/cq", handleRouteCQ);
+    wm.server->on("/display", handleRouteDisplay);
     wm.server->on("/flame", handleRouteFlamePower);
 
     wm.server->on("/state", getStatus);
     wm.server->on("/get", getParams);
+    wm.server->on("/set", getParams);
 
     wm.server->on("/api/flame", handleRouteFlamePower);
     wm.server->on("/api/fan", handleRouteFanspeed);
@@ -1159,7 +1187,7 @@ void loop()
             getNTPtime(2);
             onboardLED.on();
         }
-        // getStates();
+        getStates();
         previousMillis = currentMillis;
     }
 }
