@@ -19,7 +19,7 @@
 #define ENABLE_RX 18
 #define ONBOARD_LED 2
 #define LED 14
-#define WDT_TIMEOUT 3
+#define WDT_TIMEOUT 5
 #endif
 
 const char* ntpServer = "nl.pool.ntp.org";
