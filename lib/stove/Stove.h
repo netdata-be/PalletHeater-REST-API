@@ -6,8 +6,13 @@
 #ifndef Stove_h
 #define Stove_h
 
+#ifdef ESP32
+#include "esp_log.h"
+#include <esp_task_wdt.h>
+#endif
 #include "Arduino.h"
 #include <HardwareSerial.h>
+
 
 class Stove
 {
