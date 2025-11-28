@@ -112,7 +112,7 @@ void getAmbTempRemoteControl() // Get room temperature from stove sensor
 
 int numberOfStarts()
 {
-    return stove.read(eeprom, 0xee);
+    return ( stove.read(eeprom, 0xef) << 8 ) + stove.read(eeprom, 0xee);
 }
 
 bool stoveBeepIsEnabled() // Get room temperature
