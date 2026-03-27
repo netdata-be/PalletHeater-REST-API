@@ -97,6 +97,8 @@ EEPROM (0x20)
 | 0x7D       | 125        | x       | °C     | Setpoint Room Temperature              | 23                       |            |
 | 0x7F       | 127        | x       | amount | Flame power level                      |                          | 1 - 4      |
 | 0x81       | 129        | x       | speed  | Room fan speed                         | 0                        | 0 - 3      |
+| 0x90       | 144        | x       | °C     | Energy saving Stop offset              |                          | 0 - 3      |
+| 0x91       | 145        | x * -1  | °C     | Energy saving START negative offset    |                          | 0 - 3      |
 | 0xC0       | 192        | x       | id     | Combustion Quality, see lookup         | 76                       |            |
 | 0xC6       | 198        | x       | bool   | Low pallets monitoring                 | 1                        | 0 - 1      |
 | 0xC4       | 196        | x       | bool   | Pallet contact N.O. = 0 / N.C. = 1     | 0                        | 0 - 1      |

@@ -200,6 +200,13 @@ void getFlamePower() // Get the flame power (0, 1, 2, 3, 4, 5)
     flamePower = stove.read(eeprom, 0x7f);
 }
 
+void getEnergySaving() 
+{
+    energySavingStart = stove.read(eeprom, 0x91)*-1;
+    energySavingStop = stove.read(eeprom, 0x90);
+}
+
+
 void getStates() // Calls all the get…() functions
 {
     getStoveState();
@@ -210,6 +217,7 @@ void getStates() // Calls all the get…() functions
     getFlamePower();
     getRoomFanSpeed();
     getTempSetpoint();
+    getEnergySaving();
 }
 
 void fullReset()
@@ -983,6 +991,10 @@ void getStatus()
     obj_temperatures["remoteControl"] = ambTempRemoteControl;
     obj_temperatures["setPoint"] = setPointTemp;
     obj_temperatures["fume"] = fumesTemp;
+
+    JsonObject obj_energysaving = json.createNestedObject("energySaving");
+    obj_energysaving["start"] = energySavingStart;
+    obj_energysaving["stop"] = energySavingStop;
 
     json["RoomFanSpeed"] = roomFanSpeed;
 

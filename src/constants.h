@@ -104,6 +104,8 @@ float ambTempStove = 0;
 float ambTempRemoteControl = 0;
 float setPointTemp = 0;
 float waterPres = 0;
+int energySavingStart = 0;
+int energySavingStop = 0;
 
 char resp[2];
 
