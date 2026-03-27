@@ -24,17 +24,21 @@ bool getNTPtime(int sec)
         {
             time(&now);
             localtime_r(&now, &timeinfo);
+#if SENSOR_DEBUG
             Serial.print(".");
+#endif
             delay(10);
         } while (((millis() - start) <= (1000 * sec)) && (timeinfo.tm_year < (2016 - 1900)));
         if (timeinfo.tm_year <= (2016 - 1900))
             return false; // the NTP call was not successful
+#if SENSOR_DEBUG
         Serial.print("now ");
         Serial.println(now);
         char time_output[30];
         strftime(time_output, 30, "%a  %d-%m-%y %T", localtime(&now));
         Serial.println(time_output);
         Serial.println();
+#endif
     }
     return true;
 }
@@ -52,8 +56,10 @@ void getAmbTemp() // Get room temperature
     {
         log_e("Failed to get value");
     }
+#if SENSOR_DEBUG
     Serial.print("T. amb. ");
     Serial.println(ambTemp);
+#endif
 }
 
 int getFumeFanRPM()
@@ -91,8 +97,10 @@ void getAmbTempStove() // Get room temperature from stove sensor
     {
         log_e("Failed to get value");
     }
+#if SENSOR_DEBUG
     Serial.print("T. amb. stove : ");
     Serial.println(ambTempStove);
+#endif
 }
 
 void getAmbTempRemoteControl() // Get room temperature from stove sensor
@@ -106,8 +114,10 @@ void getAmbTempRemoteControl() // Get room temperature from stove sensor
     {
         log_e("Failed to get value");
     }
+#if SENSOR_DEBUG
     Serial.print("T. amb. remote control : ");
     Serial.println(ambTempRemoteControl);
+#endif
 }
 
 int numberOfStarts()
@@ -150,14 +160,18 @@ int arePalletsLow()
 void getTempSetpoint()
 {
     setPointTemp = (float)stove.read(eeprom, TempSetpointAddr);
+#if SENSOR_DEBUG
     Serial.print("T. setpoint. ");
     Serial.println(setPointTemp);
+#endif
 }
 
 void getFumeTemp() // Get flue gas temperature
 {
     fumesTemp = stove.read(ram, fumesTempAddr);
+#if SENSOR_DEBUG
     Serial.printf("T. fumes %d\n", fumesTemp);
+#endif
 }
 
 void writeDatepartToStove(char format[3], byte address)
@@ -192,7 +206,9 @@ void setStoveDateTime()
 void getRoomFanSpeed()
 {
     roomFanSpeed = stove.read(eeprom, 0x81);
+#if SENSOR_DEBUG
     Serial.printf("Fan speed: %d\n", roomFanSpeed);
+#endif
 }
 
 void getFlamePower() // Get the flame power (0, 1, 2, 3, 4, 5)

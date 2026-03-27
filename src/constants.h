@@ -79,6 +79,8 @@ int buttonState;
 int deepSleep = 0;
 long previousMillis;
 
+#define SENSOR_DEBUG 0  // Set to 1 to enable verbose sensor read logging
+
 #define stoveStateAddr 0x21
 #define ram 0x00
 #define eeprom 0x20
