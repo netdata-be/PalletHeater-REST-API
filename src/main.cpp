@@ -923,15 +923,63 @@ void handleRouteFlamePower()
     wm.server->send(http_code, "application/json", buffer);
 }
 
+// Core power helpers — return the result message and set http_code by reference.
+// Caller must have called getStoveState() beforehand.
+
+String doStoveOff(int &http_code)
+{
+    http_code = 200;
+    switch (stoveState)
+    {
+    case OFF:
+    case ALARM_STATE:
+    case IGNITION_FAILURE:
+    case STANDBY:
+        http_code = 202;
+        return "Stove already off";
+    case STARTING:
+    case PALLET_LOADING:
+        if (stove.write(ram, stoveStateAddr, 0)) return "Powered off sended - 0";
+        http_code = 500;
+        return "FAILED to send Power off - 0";
+    case IGNITION:
+    case WORKING:
+    case ALARM:
+        if (stove.write(ram, stoveStateAddr, 6)) return "Powered off sended - 6";
+        http_code = 500;
+        return "FAILED to send Power off - 6";
+    case BRAZIER_CLEANING:
+        http_code = 202;
+        return "Stove already shutting down - Brazier cleaning";
+    case FINAL_CLEANING:
+        http_code = 202;
+        return "Stove already shutting down - Final cleaning";
+    default:
+        http_code = 500;
+        return "Unknown state [RS232 Serial Error]";
+    }
+}
+
+String doStoveOn(int &http_code)
+{
+    http_code = 200;
+    if (stoveState == OFF)
+    {
+        if (stove.write(ram, stoveStateAddr, 1)) return "Powered on sended";
+        http_code = 500;
+        return "FAILED to send Power on";
+    }
+    http_code = 202;
+    return "Stove already on";
+}
+
 void handleRoutePower()
 {
     StaticJsonDocument<350> json;
     json.clear();
-    int http_code;
-    http_code=200;
+    int http_code = 200;
 
     getStoveState();
-    
 
     if (wm.server->method() == HTTP_POST)
     {
@@ -939,85 +987,21 @@ void handleRoutePower()
         {
             if (wm.server->argName(i) == "state")
             {
-                if (  wm.server->arg(i) == "off" ) 
+                String message;
+                if (wm.server->arg(i) == "off")
                 {
-                    String message;
-                    switch (stoveState)
-                    {
-                        case OFF:
-                        case ALARM_STATE:
-                        case IGNITION_FAILURE:
-                        case STANDBY:
-                            message = "Stove already off";
-                            http_code=202;
-                        break;
-                        case STARTING:
-                        case PALLET_LOADING:
-                            if (stove.write(ram, stoveStateAddr, 0))
-                            {
-                                message = "Powered off sended - 0";
-                            }
-                            else
-                            {
-                                message = "FAILED to send Power off - 0";
-                                http_code=500;
-                            }
-                        break;
-                        case IGNITION:
-                        case WORKING:
-                        case ALARM:
-                            if (stove.write(ram, stoveStateAddr, 6))
-                            {
-                                message = "Powered off sended - 6";
-                            }
-                            else
-                            {
-                                message = "FAILED to send Power off - 6";
-                                http_code=500;
-                            }
-                        break;
-                        case BRAZIER_CLEANING:
-                            message = "Stove already shutting down - Brazier cleaning";
-                            http_code=202;
-                        break;
-                        case FINAL_CLEANING:
-                            message = "Stove already shutting down - Final cleaning";
-                            http_code=202;
-                        break;
-                        case UNKNOWN:
-                            StoveStateStr = "Unkown [RS232 Serial Error]";
-                            http_code=500;
-                        break;
-
-                    }
-                    json["result"] = message;
-                } else if (wm.server->arg(i) == "on")
-                {
-                    String message;
-                    if (stoveState == 0)
-                    {
-                        if (stove.write(ram, stoveStateAddr, 1))
-                        {
-                            message = "Powered on sended";
-                        } 
-                        else
-                        {
-                            message = "FAILED to send Power on";
-                            http_code=500;
-                        }
-                    } 
-                    else
-                    {
-                        message = "Stove already on";
-                        Serial.print("Stove already on\n");
-                        http_code=202;
-                    }
-                    json["result"] = message;
-                } else 
-                {
-                    json["result"] = "Unknown state argument";
-                    http_code=400;
+                    message = doStoveOff(http_code);
                 }
+                else if (wm.server->arg(i) == "on")
+                {
+                    message = doStoveOn(http_code);
+                }
+                else
+                {
+                    message = "Unknown state argument";
+                    http_code = 400;
+                }
+                json["result"] = message;
             }
         }
     }
@@ -1032,32 +1016,12 @@ void handleRoutePower()
 
 void setStoveOn()
 {
-    String message;
-    int http_code;
-    http_code=200;
+    int http_code = 200;
     StaticJsonDocument<250> json;
     json.clear();
     getStoveState();
-    if (stoveState == 0)
-    {
-        if (stove.write(ram, stoveStateAddr, 1))
-        {
-            message = "Powered on sended";
-        }
-        else
-        {
-            message = "FAILED to send Power on";
-            http_code = 500;
-        }
-    }
-    else
-    {
-        message = "Stove already on";
-        http_code = 202;
-        Serial.print("Stove already on\n");
-    }
 
-    json["result"] = message;
+    json["result"] = doStoveOn(http_code);
 
     getStoveState();
     JsonObject obj_stove = json.createNestedObject("stoveState");
@@ -1069,59 +1033,15 @@ void setStoveOn()
     wm.server->send(http_code, "application/json", buffer);
 }
 
-
 void setStoveOff()
 {
-    String message;
-    getStoveState();
-    Serial.printf("  StoveState == %i\n", stoveState);
- 
-    switch (stoveState)
-    {
-    case OFF:
-    case ALARM_STATE:
-    case IGNITION_FAILURE:
-    case STANDBY:
-        message = "Stove already off";
-        break;
-    case STARTING:
-    case PALLET_LOADING:
-        if (stove.write(ram, stoveStateAddr, 0))
-        {
-            message = "Powered off sended - 0";
-        }
-        else
-        {
-            message = "FAILED to send Power off - 0";
-        }
-        break;
-    case IGNITION:
-    case WORKING:
-    case ALARM:
-        if (stove.write(ram, stoveStateAddr, 6))
-        {
-            message = "Powered off sended - 6";
-        }
-        else
-        {
-            message = "FAILED to send Power off - 6";
-        }
-        break;
-    case BRAZIER_CLEANING:
-        message = "Stove already shutting down - Brazier cleaning";
-        break;
-    case FINAL_CLEANING:
-        message = "Stove already shutting down - Final cleaning";
-        break;
-    case UNKNOWN:
-        StoveStateStr = "Unkown [RS232 Serial Error]";
-        break;
-    }
-
+    int http_code = 200;
     StaticJsonDocument<250> json;
     json.clear();
+    getStoveState();
 
-    json["result"] = message;
+    json["result"] = doStoveOff(http_code);
+
     getStoveState();
     JsonObject obj_stove = json.createNestedObject("stoveState");
     obj_stove["stoveState"] = stoveState;
@@ -1129,7 +1049,7 @@ void setStoveOff()
     obj_stove["poweredOn"] = StoveIsOn;
 
     serializeJson(json, buffer);
-    wm.server->send(200, "application/json", buffer);
+    wm.server->send(http_code, "application/json", buffer);
 }
 
 void storeAllRamValues()
@@ -1146,7 +1066,7 @@ void storeAllRamValues()
             {
                 if (value != storedRam[byte(i)])
                 {
-                    sprintf(buffer, "0x%02X   - 0x%02X\n       + 0x%02X", byte(i), storedRam[byte(i)], value);
+                    snprintf(buffer, sizeof(buffer), "0x%02X   - 0x%02X\n       + 0x%02X", byte(i), storedRam[byte(i)], value);
                     telnet.print(buffer);
                 }
             }
@@ -1191,10 +1111,10 @@ void getParams()
     // Serial.printf("send[0] = 0x%02X\n", data[0]);
     // Serial.printf("send[1] = 0x%02X\n", data[1]);
 
-    sprintf(buffer, "0x%02X", data[0]);
+    snprintf(buffer, sizeof(buffer), "0x%02X", data[0]);
     JsonObject type = json.createNestedObject(buffer);
 
-    sprintf(buffer, "0x%02X", data[1]);
+    snprintf(buffer, sizeof(buffer), "0x%02X", data[1]);
     JsonObject address = type.createNestedObject(buffer);
 
     char value = stove.read(data[0], data[1]);
@@ -1203,7 +1123,7 @@ void getParams()
         address["Address_int"] = int(data[1]);
         address["Value_int"] = int(value);
         address["Value_txt"] = String(value);
-        sprintf(buffer, "0x%02X", value);
+        snprintf(buffer, sizeof(buffer), "0x%02X", value);
         address["Value_hex"] = buffer;
     }
     else

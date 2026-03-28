@@ -80,7 +80,7 @@ bool Stove::write(byte type, byte address, byte value)
 
         uint8_t address_response = (checksum - writeByte - type - value_response) & 0xFF;
 
-        if ((address_response == address) & (value_response == value))
+        if ((address_response == address) && (value_response == value))
         {
             Serial.printf("  [SUCESS]\n");
             return true;

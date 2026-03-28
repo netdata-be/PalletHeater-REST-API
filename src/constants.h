@@ -65,18 +65,12 @@ char buffer[9000];
 bool StoveIsOn = false;
 String StoveStateStr = "Unknown";
 
-unsigned long firstv;
-unsigned long secondv;
-
 unsigned long StoveStateUpdatedAt = 0;
 unsigned long ambTempUpdatedAt = 0;
 unsigned long flamePowerpUpdatedAt = 0;
 unsigned long fumesTempUpdatedAt = 0;
 unsigned long getStatesUpdatedAt = 0;
 
-int buttonState;
-
-int deepSleep = 0;
 long previousMillis;
 long previousMillisNTP;
 
@@ -116,8 +110,6 @@ int cachedNumberOfStarts = 0;
 int cachedFumeFanRPM = 0;
 int cachedRemoteControlLastSeen = -1;
 int cachedErrors[5] = {0, 0, 0, 0, 0};
-
-char resp[2];
 
 char storedRam[256];
 char storedEeprom[256];
