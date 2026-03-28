@@ -117,34 +117,37 @@ EEPROM (0x20)
 
 Not fully completed yet
 
-| ID  | Selected Item         |
-|-----|-----------------------|
-| 0   | Main screen           |
-| 1   | Multifuoco            |
-| 2   | Chrono                |
-| 3   | Language              |
-| 5   | Clock                 |
-| 7   | Multicomfort          |
-| 8   | Multi Comfort Plus    |
-| 9   | Enegery Saving        |
-| 11  | Beep                  |
-| 12  | Display               |
-| 13  | Installer             |
-| 39  | -- FILL AUGER         |
-| 40  | -- Pallet reserve     |
-| 41  | -- Pallet contact     |
-| 42  | -- External Thermo    |
-| 43  | -- Memory             |
-| 51  | ---- Total Hours      |
-| 52  | ---- Interval hours   |
-| 53  | ---- Amount of starts |
-| 54  | ---- Error Memory     |
-| 44  | -- Pallet quality     |
-| 46  | -- Setting wireless   |
-| 47  | -- Link wireless      |
-| 49  | -- Parameters         |
-| 14  | State Stove           |
-| 15  | exit                  |
+| int  | Selected Item         |
+|------|-----------------------|
+| 0    | Main screen           |
+| 1    | Multifuoco            |
+| 2    | Chrono                |
+| 3    | Language              |
+| 5    | Clock                 |
+| 7    | Multicomfort          |
+| 8    | Multi Comfort Plus    |
+| 9    | Enegery Saving        |
+| 11   | Beep                  |
+| 12   | Display               |
+| 13   | Installer             |
+| 39   | -- FILL AUGER         |
+| 40   | -- Pallet reserve     |
+| 41   | -- Pallet contact     |
+| 42   | -- External Thermo    |
+| 43   | -- Memory             |
+| 51   | ---- Total Hours      |
+| 52   | ---- Interval hours   |
+| 53   | ---- Amount of starts |
+| 54   | ---- Error Memory     |
+| 44   | -- Pallet quality     |
+| 46   | -- Setting wireless   |
+| 47   | -- Link wireless      |
+| 49   | -- Wifi               |
+| 64   | ---- WPS              |
+| 65   | ---- Wifi Reset       |
+| 14   | State Stove           |
+| 50   | -- Parameters         |
+| 15   | exit                  |
 
 
 # Selected in menu (RAM 0x18)

@@ -223,7 +223,10 @@ void getEnergySaving()
 }
 
 
-void getStates() // Calls all the get…() functions
+int getErrorMemory(int pos);
+void getStoveDateTime();
+
+void getStates() // Refreshes the full sensor cache — called from loop(), not from HTTP handlers
 {
     getStoveState();
     getAmbTemp();
@@ -234,6 +237,15 @@ void getStates() // Calls all the get…() functions
     getRoomFanSpeed();
     getTempSetpoint();
     getEnergySaving();
+    cachedLowPallet          = arePalletsLow();
+    cachedBeepEnabled        = stoveBeepIsEnabled();
+    cachedNumberOfStarts     = numberOfStarts();
+    cachedFumeFanRPM         = getFumeFanRPM();
+    cachedRemoteControlLastSeen = getRemoteControlLastSeen();
+    for (int i = 0; i < 5; i++) {
+        cachedErrors[i] = getErrorMemory(i);
+    }
+    getStoveDateTime(); // updates stoveTime global
 }
 
 void fullReset()
@@ -260,9 +272,45 @@ bool setDisplay(int menu)
     return true;
 }
 
+bool setEnergySavingStart(int start)
+{
+    if ((start >= 0) && (start <= 3))
+    {
+        if (stove.write(eeprom, 0x91, start) ) {
+            delay(20); // delay to ensure the stove has time to process the first write before we read back the value
+            return true;
+        } else {
+            return false;
+        }
+    }
+    else
+    {
+        log_e("Start not in range, it should be between 0 and 3\n");
+        return false;
+    }
+}
+
+bool setEnergySavingStop(int stop)
+{
+    if ((stop >= 0) && (stop <= 3))
+    {
+        if (stove.write(eeprom, 0x90, stop) ) {
+            delay(20); // delay to ensure the stove has time to process the first write before we read back the value
+            return true;
+        } else {
+            return false;
+        }
+    }
+    else
+    {
+        log_e("Stop not in range, it should be between 0 and 3\n");
+        return false;
+    }
+}
+
 bool setRoomFanSpeed(int speed)
 {
-    if ((speed >= 0) & (speed <= 3))
+    if ((speed >= 0) && (speed <= 3))
     {
         if (stove.write(eeprom, 0x81, speed) ) {
             return stove.write(ram, 0x19, speed);
@@ -309,7 +357,7 @@ int getErrorMemory(int pos)
 
 bool setFlamePower(int power)
 {
-    if ((power >= 1) & (power <= 4))
+    if ((power >= 1) && (power <= 4))
     {
         return stove.write(eeprom, 0x7f, power);
     }
@@ -366,6 +414,139 @@ void handleRouteDisplay()
     wm.server->send(200, "application/json", buffer);
 }
 
+const char* getRemoteMenuName(int id)
+{
+    switch (id)
+    {
+        case 0:  return "Main screen";
+        case 1:  return "Multifuoco";
+        case 2:  return "Chrono";
+        case 3:  return "Language";
+        case 5:  return "Clock";
+        case 7:  return "Multicomfort";
+        case 8:  return "Multi Comfort Plus";
+        case 9:  return "Energy Saving";
+        case 11: return "Beep";
+        case 12: return "Display";
+        case 13: return "Installer";
+        case 39: return "Installer > Fill Auger";
+        case 40: return "Installer > Pallet reserve";
+        case 41: return "Installer > Pallet contact";
+        case 42: return "Installer > External Thermo";
+        case 43: return "Installer > Memory";
+        case 51: return "Installer > Memory > Total Hours";
+        case 52: return "Installer > Memory > Interval hours";
+        case 53: return "Installer > Memory > Amount of starts";
+        case 54: return "Installer > Memory > Error Memory";
+        case 44: return "Installer > Pallet quality";
+        case 45: return "Installer > Combustion quality";
+        case 46: return "Installer > Setting wireless";
+        case 47: return "Installer > Link wireless";
+        case 49: return "Installer > Wifi";
+        case 64: return "Installer > Wifi > WPS";
+        case 65: return "Installer > Wifi > Wifi Reset";
+        case 14: return "State Stove";
+        case 50: return "Installer > Parameters";
+        case 19: return "Installer > Parameters > Factory Reset";
+        case 20: return "Installer > Parameters > Databank";
+        case 21: return "Installer > Parameters > Smoke Ext Settings";
+        case 22: return "Installer > Parameters > Load Settings";
+        case 23: return "Installer > Parameters > MultiFUOCO v1";
+        case 26: return "Installer > Parameters > Reset Alarm";
+        case 25: return "Installer > Parameters > Reset Parthour";
+        case 27: return "Installer > Parameters > Encoder";
+        case 15: return "exit";
+        default:
+            static char unknownMenuBuf[16];
+            snprintf(unknownMenuBuf, sizeof(unknownMenuBuf), "(%d)", id);
+            return unknownMenuBuf;
+    }
+}
+
+void handleRouteRemote()
+{
+    StaticJsonDocument<200> json;
+    json.clear();
+
+    if (wm.server->method() != HTTP_GET)
+    {
+        wm.server->send(405);
+        return;
+    }
+
+    int menuId = stove.read(ram, 0x1A);
+    if (menuId < 0)
+    {
+        json["error"] = "Failed to read remote menu - RS232 error";
+        serializeJson(json, buffer);
+        wm.server->send(500, "application/json", buffer);
+        return;
+    }
+
+    json["diplayed_menu"] = getRemoteMenuName(menuId);
+
+    int paramId = stove.read(ram, 0x18);
+    if (paramId < 0)
+    {
+        json["selected_parameter"] = "Unknown";
+    }
+    else
+    {
+        switch (paramId)
+        {
+            case 0:   json["selected_parameter"] = nullptr;                 break;
+            case 71:  json["selected_parameter"] = "Multi Comfort";         break;
+            case 76:  json["selected_parameter"] = "Beep";                  break;
+            case 79:  json["selected_parameter"] = "Display settings";      break;
+            case 80:  json["selected_parameter"] = "Language";              break;
+            case 123: json["selected_parameter"] = "State Stove";           break;
+            case 128: json["selected_parameter"] = "Flame power";           break;
+            case 130: json["selected_parameter"] = "MultiFuoco";            break;
+            case 145: json["selected_parameter"] = "Energy Saving - Stop";  break;
+            case 146: json["selected_parameter"] = "Energy Saving - Start"; break;
+            case 193: json["selected_parameter"] = "Combustion quality";    break;
+            case 198: json["selected_parameter"] = "Pallet quality";        break;
+            case 200: json["selected_parameter"] = "Multi Comfort Plus";    break;
+            case 235: json["selected_parameter"] = "WPS";                   break;
+            case 236: json["selected_parameter"] = "Reset";                 break;
+            case 248: json["selected_parameter"] = "Day of week";           break;
+            case 249: json["selected_parameter"] = "Hour";                  break;
+            case 250: json["selected_parameter"] = "min";                   break;
+            case 251: json["selected_parameter"] = "Day";                   break;
+            case 252: json["selected_parameter"] = "Month";                 break;
+            case 253: json["selected_parameter"] = "year";                  break;
+            default:
+                snprintf(buffer, sizeof(buffer), "Unknown (%d)", paramId);
+                json["selected_parameter"] = buffer;
+                break;
+        }
+    }
+
+    int langId = stove.read(eeprom, 0x4F);
+    if (langId < 0)
+    {
+        json["language"] = "Unknown";
+    }
+    else
+    {
+        switch (langId)
+        {
+            case 1: json["language"] = "ENG"; break;
+            case 2: json["language"] = "FRA"; break;
+            case 3: json["language"] = "DEU"; break;
+            case 4: json["language"] = "NLD"; break;
+            case 5: json["language"] = "POR"; break;
+            case 6: json["language"] = "SPA"; break;
+            case 7: json["language"] = "HRV"; break;
+            case 8: json["language"] = "DAN"; break;
+            default: json["language"] = "Unknown"; break;
+        }
+    }
+
+    serializeJson(json, buffer);
+    wm.server->send(200, "application/json", buffer);
+}
+
 void getStoveDateTime()
 {
     int cur_min = stove.read(ram, 0x7d);
@@ -405,7 +586,6 @@ void handleRouteTime()
     {
         setStoveDateTime();
         json["result"] = "success Synced NTP time to stove";
-        delay(100);
     }
     
     if (wm.server->method() == HTTP_GET || wm.server->method() == HTTP_PATCH )
@@ -424,6 +604,80 @@ void handleRouteTime()
         http_code=405;
     }
 
+
+    serializeJson(json, buffer);
+    wm.server->send(http_code, "application/json", buffer);
+}
+
+void handleRouteEnergysaving()
+{
+    StaticJsonDocument<350> json;
+    int http_code;
+    http_code=200;
+    json.clear();
+
+    if (wm.server->method() == HTTP_POST)
+    {
+        for (uint8_t i = 0; i < wm.server->args(); i++)
+        {
+            if (wm.server->argName(i) == "start")
+            {
+                if (  wm.server->arg(i) == "0" ||  wm.server->arg(i) == "-1" ||  wm.server->arg(i) == "-2" ||  wm.server->arg(i) == "-3") 
+                {
+                    int start = wm.server->arg(i).toInt() * -1;
+                    if ( setEnergySavingStart(start) )
+                    {
+                        json["result"] = "success";
+                    } else 
+                    {
+                        json["result"] = "Failed - RS2232 error...";
+                        http_code=500;
+                    }
+                } else
+                {
+                    json["result"] = "failed - start is out of range: Should be between -3 and 0";
+                    http_code=400;
+                }
+            }
+            if (wm.server->argName(i) == "stop")
+            {
+                if (  wm.server->arg(i) == "0" ||  wm.server->arg(i) == "1" ||  wm.server->arg(i) == "2" ||  wm.server->arg(i) == "3") 
+                {
+                    int stop = wm.server->arg(i).toInt();
+                    if ( setEnergySavingStop(stop) )
+                    {
+                        json["result"] = "success";
+                    } else 
+                    {
+                        json["result"] = "Failed - RS2232 error...";
+                        http_code=500;
+                    }
+                } else
+                {
+                    json["result"] = "failed - start is out of range: Should be between -3 and 0";
+                    http_code=400;
+                }
+            }
+        }
+    }
+    
+    if (wm.server->method() == HTTP_GET || wm.server->method() == HTTP_POST)
+    {
+        delay(20);
+        getEnergySaving();
+        JsonObject obj_energysaving = json.createNestedObject("energySaving");
+        obj_energysaving["start"] = energySavingStart;
+        obj_energysaving["stop"] = energySavingStop;
+        obj_energysaving["enabled"] = (energySavingStart != 0 || energySavingStop != 0);
+        if (energySavingStart != 0 || energySavingStop != 0) {
+            obj_energysaving["startTemperature"] = setPointTemp + energySavingStart;
+            obj_energysaving["stopTemperature"] = setPointTemp + energySavingStop;
+        }
+
+
+    } else {
+        wm.server->send(405);
+    }
 
     serializeJson(json, buffer);
     wm.server->send(http_code, "application/json", buffer);
@@ -453,8 +707,7 @@ void handleRouteFanspeed()
                         json["result"] = "Failed - RS2232 error...";
                         http_code=500;
                     }
-                    delay(50);
-                } else 
+                } else
                 {
                     json["result"] = "failed - Speed is out of range: Should be between 0 and 3";
                     http_code=400;
@@ -489,35 +742,30 @@ void handleRouteErrors()
                 int error = wm.server->arg(i).toInt();
                 setError(0, error);
                 json["action"] = "MemoryPos_1 set";
-                delay(50);
             }
             if (wm.server->argName(i) == "MemoryPos_2")
             {
                 int error = wm.server->arg(i).toInt();
                 setError(1, error);
                 json["action"] = "MemoryPos_2 set";
-                delay(50);
             }
             if (wm.server->argName(i) == "MemoryPos_3")
             {
                 int error = wm.server->arg(i).toInt();
                 setError(2, error);
                 json["action"] = "MemoryPos_3 set";
-                delay(50);
             }
             if (wm.server->argName(i) == "MemoryPos_4")
             {
                 int error = wm.server->arg(i).toInt();
                 setError(3, error);
                 json["action"] = "MemoryPos_4 set";
-                delay(50);
             }
             if (wm.server->argName(i) == "MemoryPos_5")
             {
                 int error = wm.server->arg(i).toInt();
                 setError(4, error);
                 json["action"] = "MemoryPos_5 set";
-                delay(50);
             }
         }
     }
@@ -616,7 +864,7 @@ void handleRouteHealth()
 
         } else 
         {
-            json["health"] = "Faild to talk to Stove";
+            json["health"] = "Failed to talk to Stove";
             http_code=500;
         }
     } else {
@@ -652,9 +900,8 @@ void handleRouteFlamePower()
                     {
                         json["result"] = "Failed - RS2232 error...";
                         http_code=500;
-                    } 
-                    delay(50);
-                } else 
+                    }
+                } else
                 {
                     json["result"] = "failed - power is out of range: Should be between 1 and 4";
                     http_code=400;
@@ -774,7 +1021,6 @@ void handleRoutePower()
             }
         }
     }
-    delay(50);
     getStoveState();
     json["stoveState"] = stoveState;
     json["state"] = StoveStateStr;
@@ -813,7 +1059,6 @@ void setStoveOn()
 
     json["result"] = message;
 
-    delay(50);
     getStoveState();
     JsonObject obj_stove = json.createNestedObject("stoveState");
     obj_stove["stoveState"] = stoveState;
@@ -821,7 +1066,6 @@ void setStoveOn()
     obj_stove["poweredOn"] = StoveIsOn;
 
     serializeJson(json, buffer);
-    getStoveState();
     wm.server->send(http_code, "application/json", buffer);
 }
 
@@ -878,7 +1122,6 @@ void setStoveOff()
     json.clear();
 
     json["result"] = message;
-    delay(50);
     getStoveState();
     JsonObject obj_stove = json.createNestedObject("stoveState");
     obj_stove["stoveState"] = stoveState;
@@ -886,7 +1129,6 @@ void setStoveOff()
     obj_stove["poweredOn"] = StoveIsOn;
 
     serializeJson(json, buffer);
-    getStoveState();
     wm.server->send(200, "application/json", buffer);
 }
 
@@ -979,13 +1221,11 @@ void getStatus()
     if (wm.server->method() == HTTP_GET)
     {
     telnet.println("Get status called");
-    getStates();
 
     DynamicJsonDocument json(2048);
     json.clear();
 
     JsonObject obj_stove = json.createNestedObject("stoveState");
-
     obj_stove["stoveState"] = stoveState;
     obj_stove["state"] = StoveStateStr;
     obj_stove["poweredOn"] = StoveIsOn;
@@ -993,7 +1233,6 @@ void getStatus()
     if (int_hydro_mode == 1)
     {
         JsonObject hydro = json.createNestedObject("hydro");
-
         hydro["Pressure"] = waterPres;
         hydro["Temp"] = waterTemp;
     }
@@ -1011,61 +1250,36 @@ void getStatus()
     JsonObject obj_energysaving = json.createNestedObject("energySaving");
     obj_energysaving["start"] = energySavingStart;
     obj_energysaving["stop"] = energySavingStop;
+    obj_energysaving["enabled"] = (energySavingStart != 0 || energySavingStop != 0);
+    if (energySavingStart != 0 || energySavingStop != 0) {
+        obj_energysaving["startTemperature"] = setPointTemp + energySavingStart;
+        obj_energysaving["stopTemperature"] = setPointTemp + energySavingStop;
+    }
 
     json["RoomFanSpeed"] = roomFanSpeed;
-
-    json["lowPalletAlarm"] = arePalletsLow();
-
-    json["stoveBeepEnabled"] = stoveBeepIsEnabled();
-    json["numberOfStarts"] = numberOfStarts();
-    json["fumeFanRPM"] = getFumeFanRPM();
-    json["RemoteControlLastSeen"] = getRemoteControlLastSeen();
+    json["lowPalletAlarm"] = cachedLowPallet;
+    json["stoveBeepEnabled"] = cachedBeepEnabled;
+    json["numberOfStarts"] = cachedNumberOfStarts;
+    json["fumeFanRPM"] = cachedFumeFanRPM;
+    json["RemoteControlLastSeen"] = cachedRemoteControlLastSeen;
 
     JsonObject obj_errors = json.createNestedObject("previousErrors");
+    const char* memKeys[5] = {"MemoryPos_1","MemoryPos_2","MemoryPos_3","MemoryPos_4","MemoryPos_5"};
+    for (int i = 0; i < 5; i++) {
+        JsonObject eb = obj_errors.createNestedObject(memKeys[i]);
+        eb["id"]    = cachedErrors[i];
+        eb["error"] = getErrorCode(cachedErrors[i]);
+        eb["desc"]  = getErrorDesc(cachedErrors[i]);
+    }
 
-    JsonObject errorbank1 = obj_errors.createNestedObject("MemoryPos_1");
-    int error = getErrorMemory(0);
-    errorbank1["id"] = error;
-    errorbank1["error"] = getErrorCode(error);
-    errorbank1["desc"] = getErrorDesc(error);
-
-    JsonObject errorbank2 = obj_errors.createNestedObject("MemoryPos_2");
-    error = getErrorMemory(1);
-    errorbank2["id"] = error;
-    errorbank2["error"] = getErrorCode(error);
-    errorbank2["desc"] = getErrorDesc(error);
-
-    JsonObject errorbank3 = obj_errors.createNestedObject("MemoryPos_3");
-    error = getErrorMemory(2);
-    errorbank3["id"] = error;
-    errorbank3["error"] = getErrorCode(error);
-    errorbank3["desc"] = getErrorDesc(error);
-
-    JsonObject errorbank4 = obj_errors.createNestedObject("MemoryPos_4");
-    error = getErrorMemory(3);
-    errorbank4["id"] = error;
-    errorbank4["error"] = getErrorCode(error);
-    errorbank4["desc"] = getErrorDesc(error);
-
-    JsonObject errorbank5 = obj_errors.createNestedObject("MemoryPos_5");
-    error = getErrorMemory(4);
-    errorbank5["id"] = error;
-    errorbank5["error"] = getErrorCode(error);
-    errorbank5["desc"] = getErrorDesc(error);
-
-    JsonObject time = json.createNestedObject("time");
-
-    getNTPtime(2);
     char time_output[30];
-
+    JsonObject time = json.createNestedObject("time");
     strftime(time_output, 30, "%F %T", localtime(&now));
     time["ntp"] = time_output;
-
-    getStoveDateTime();
     strftime(time_output, 30, "%F %T", localtime(&stoveTime));
     time["stove"] = time_output;
-
     time["delta"] = now - stoveTime;
+
     serializeJson(json, buffer);
     wm.server->send(200, "application/json", buffer);
     } else{
@@ -1172,10 +1386,12 @@ void setup()
     wm.server->on("/api/flame", handleRouteFlamePower);
     wm.server->on("/api/fan", handleRouteFanspeed);
     wm.server->on("/api/power", handleRoutePower);
+    wm.server->on("/api/energysaving", handleRouteEnergysaving);
     wm.server->on("/api/errors", handleRouteErrors);
     wm.server->on("/api/state", getStatus);
     wm.server->on("/api/health", handleRouteHealth);
     wm.server->on("/api/time", handleRouteTime);
+    wm.server->on("/api/remote", handleRouteRemote);
     wm.server->on("/api", handleRouteSwaggerUI);    
     wm.server->on("/api-specs.json", handleRouteSwaggerJSON);   
 
@@ -1186,6 +1402,7 @@ void setup()
     {
         setupTelnet();
     }
+    getStates();
 }
 
 void loop()
@@ -1197,25 +1414,37 @@ void loop()
     ArduinoOTA.handle();
 
     unsigned long currentMillis = millis();
-    if (previousMillis > currentMillis)
+    if (previousMillis > currentMillis)    { previousMillis = 0; }
+    if (previousMillisNTP > currentMillis) { previousMillisNTP = 0; }
+
+    // Sensor cache refresh — only while WiFi is up; previousMillis reset AFTER
+    // getStates() returns so the ~1.4s UART cycle does not immediately re-trigger.
+    if (currentMillis - previousMillis >= 2000)
     {
-        previousMillis = 0;
+        if (WiFi.status() == WL_CONNECTED)
+        {
+            getStates();
+        }
+        previousMillis = millis(); // reset after blocking call, not before
     }
-    if (currentMillis - previousMillis >= 10000)
+
+    // NTP sync + WiFi health check — every 60s
+    if (currentMillis - previousMillisNTP >= 60000)
     {
         if (WiFi.status() != WL_CONNECTED)
         {
             onboardLED.off();
             onboardLED.flash();
             Serial.println("Reconnecting to WiFi...");
-            WiFi.reconnect();
+            WiFi.disconnect(false);  // reset state machine, keep credentials
+            WiFi.begin();            // reconnect with stored credentials
         }
-        if (WiFi.status() == WL_CONNECTED)
+        else
         {
             getNTPtime(2);
+            getStoveDateTime(); // 6 UART reads moved here — runs every 60s instead of every cycle
             onboardLED.on();
         }
-        getStates();
-        previousMillis = currentMillis;
+        previousMillisNTP = currentMillis;
     }
 }

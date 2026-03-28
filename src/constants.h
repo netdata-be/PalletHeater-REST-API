@@ -78,6 +78,7 @@ int buttonState;
 
 int deepSleep = 0;
 long previousMillis;
+long previousMillisNTP;
 
 #define SENSOR_DEBUG 0  // Set to 1 to enable verbose sensor read logging
 
@@ -108,6 +109,13 @@ float setPointTemp = 0;
 float waterPres = 0;
 int energySavingStart = 0;
 int energySavingStop = 0;
+
+int cachedLowPallet = 0;
+bool cachedBeepEnabled = false;
+int cachedNumberOfStarts = 0;
+int cachedFumeFanRPM = 0;
+int cachedRemoteControlLastSeen = -1;
+int cachedErrors[5] = {0, 0, 0, 0, 0};
 
 char resp[2];
 

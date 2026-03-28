@@ -29,15 +29,15 @@ byte Stove::read(byte type, byte address)
     if (StoveSerial->readBytes(stoveRxData, 4) == 4)
     {
         esp_task_wdt_reset();
-        Serial.printf("Serial <<< { 0x%02X, 0x%02X, 0x%02X, 0x%02X }\n", stoveRxData[0], stoveRxData[1], stoveRxData[2], stoveRxData[3]);
+        //Serial.printf("Serial <<< { 0x%02X, 0x%02X, 0x%02X, 0x%02X }\n", stoveRxData[0], stoveRxData[1], stoveRxData[2], stoveRxData[3]);
 
         byte checksum = stoveRxData[2];
         byte val = stoveRxData[3];
         byte address_response = checksum - val - type;
-        Serial.printf("Serial === %i\n", int(val));
+        //Serial.printf("Serial === %i\n", int(val));
         if (address_response == address)
         {
-            Serial.printf("Serial === %i\n", int(val));
+            //Serial.printf("Serial === %i\n", int(val));
             delay(10);
             return val;
         }
@@ -61,7 +61,7 @@ bool Stove::write(byte type, byte address, byte value)
     byte message[4] = {firstbyte, address, value, checksum_calc};
 
     
-    Serial.printf("Sending to Stove = { 0x%02X, 0x%02X, 0x%02X, 0x%02X}\n", message[0], message[1], message[2], message[3]);
+    //Serial.printf("Sending to Stove = { 0x%02X, 0x%02X, 0x%02X, 0x%02X}\n", message[0], message[1], message[2], message[3]);
 
     esp_task_wdt_reset();
     StoveSerial->write(message, sizeof(message));
@@ -72,7 +72,7 @@ bool Stove::write(byte type, byte address, byte value)
     if (StoveSerial->readBytes(stoveRxData, 6) != 0)
     {
         esp_task_wdt_reset();
-        Serial.printf("Received from Stove = { 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X}\n", stoveRxData[0], stoveRxData[1], stoveRxData[2], stoveRxData[3], stoveRxData[4], stoveRxData[5]);
+        //Serial.printf("Received from Stove = { 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X}\n", stoveRxData[0], stoveRxData[1], stoveRxData[2], stoveRxData[3], stoveRxData[4], stoveRxData[5]);
         // Bytes 0-3 are just echo from our TX line
         byte checksum = stoveRxData[4];
         byte value_response = stoveRxData[5];

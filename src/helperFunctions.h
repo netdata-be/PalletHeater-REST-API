@@ -41,7 +41,7 @@ void getStoveState() // Get detailed stove state
         break;
     case STANDBY:
         StoveStateStr = "Standby";
-        StoveIsOn = false;
+        StoveIsOn = true;
         break;
     case ALARM:
         StoveStateStr = "Alarm State";
