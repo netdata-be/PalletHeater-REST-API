@@ -64,7 +64,7 @@ void getAmbTemp() // Get room temperature
 
 int getFumeFanRPM()
 {
-    int rpm = stove.read(ram, 0x37);
+    int rpm = stove.read(ram, fumeFanRPMAddr);
     if (rpm > 0)
     {
         rpm = (rpm + 25) * 10;
@@ -74,7 +74,7 @@ int getFumeFanRPM()
 
 int getRemoteControlLastSeen()
 {
-    int ttl = stove.read(ram, 0x2e);
+    int ttl = stove.read(ram, remoteControlTTLAddr);
     if (ttl > 0)
     {
         ttl = 240 - ttl;
@@ -88,7 +88,7 @@ int getRemoteControlLastSeen()
 
 void getAmbTempStove() // Get room temperature from stove sensor
 {
-    ambTempStove = stove.read(ram, 0x44);
+    ambTempStove = stove.read(ram, ambTempStoveAddr);
     if (ambTempStove >= 0)
     {
         ambTempStove = (float)ambTempStove / 2;
@@ -105,7 +105,7 @@ void getAmbTempStove() // Get room temperature from stove sensor
 
 void getAmbTempRemoteControl() // Get room temperature from stove sensor
 {
-    ambTempRemoteControl = stove.read(ram, 0x8f);
+    ambTempRemoteControl = stove.read(ram, ambTempRemoteAddr);
     if (ambTempRemoteControl >= 0)
     {
         ambTempRemoteControl = (float)ambTempRemoteControl / 2;
@@ -122,12 +122,15 @@ void getAmbTempRemoteControl() // Get room temperature from stove sensor
 
 int numberOfStarts()
 {
-    return ( stove.read(eeprom, 0xef) << 8 ) + stove.read(eeprom, 0xee);
+    int hi = stove.read(eeprom, numberOfStartsHiAddr);
+    int lo = stove.read(eeprom, numberOfStartsLoAddr);
+    if (hi < 0 || lo < 0) return -1;
+    return (hi << 8) + lo;
 }
 
 bool stoveBeepIsEnabled() // Get room temperature
 {
-    ambTemp = stove.read(eeprom, 0x4b);
+    ambTemp = stove.read(eeprom, beepEnabledAddr);
     if (ambTemp == 0)
     {
         return false;
@@ -140,10 +143,10 @@ bool stoveBeepIsEnabled() // Get room temperature
 
 int arePalletsLow()
 {
-    int val = stove.read(ram, 0xa4);
+    int val = stove.read(ram, palletSensorAddr);
     if (val == 5)
     {
-        val = stove.read(ram, 0x89);
+        val = stove.read(ram, palletLevelAddr);
         if (val <= 1) {
             return 1;
         }
@@ -174,7 +177,7 @@ void getFumeTemp() // Get flue gas temperature
 #endif
 }
 
-void writeDatepartToStove(char format[3], byte address)
+void writeDatepartToStove(const char* format, byte address)
 {
     char time_output[30];
     int number;
@@ -195,17 +198,17 @@ void writeDatepartToStove(char format[3], byte address)
 void setStoveDateTime()
 {
     getNTPtime(2);
-    writeDatepartToStove("%d", 0xfb); // Write NTP date part: Day
-    writeDatepartToStove("%m", 0xfc); // Write NTP date part: Month
-    writeDatepartToStove("%y", 0xfd); // Write NTP date part: Year
-    writeDatepartToStove("%H", 0xf9); // Write NTP date part: Hour
-    writeDatepartToStove("%M", 0xfa); // Write NTP date part: Minute
-    writeDatepartToStove("%W", 0xf8); // Write NTP date part: Day of Week
+    writeDatepartToStove("%d", eepromDateDayAddr);
+    writeDatepartToStove("%m", eepromDateMonthAddr);
+    writeDatepartToStove("%y", eepromDateYearAddr);
+    writeDatepartToStove("%H", eepromTimeHourAddr);
+    writeDatepartToStove("%M", eepromTimeMinAddr);
+    writeDatepartToStove("%W", eepromTimeDOWAddr);
 }
 
 void getRoomFanSpeed()
 {
-    roomFanSpeed = stove.read(eeprom, 0x81);
+    roomFanSpeed = stove.read(eeprom, roomFanEepromAddr);
 #if SENSOR_DEBUG
     Serial.printf("Fan speed: %d\n", roomFanSpeed);
 #endif
@@ -213,13 +216,13 @@ void getRoomFanSpeed()
 
 void getFlamePower() // Get the flame power (0, 1, 2, 3, 4, 5)
 {
-    flamePower = stove.read(eeprom, 0x7f);
+    flamePower = stove.read(eeprom, flamePowerEepromAddr);
 }
 
 void getEnergySaving() 
 {
-    energySavingStart = stove.read(eeprom, 0x91)*-1;
-    energySavingStop = stove.read(eeprom, 0x90);
+    energySavingStart = stove.read(eeprom, energySavingStartAddr)*-1;
+    energySavingStop = stove.read(eeprom, energySavingStopAddr);
 }
 
 
@@ -239,8 +242,12 @@ void getStates() // Refreshes the full sensor cache — called from loop(), not 
     getEnergySaving();
     cachedLowPallet          = arePalletsLow();
     cachedBeepEnabled        = stoveBeepIsEnabled();
-    cachedNumberOfStarts     = numberOfStarts();
-    cachedFumeFanRPM         = getFumeFanRPM();
+    cachedNumberOfStarts          = numberOfStarts();
+    cachedHoursSinceLastService   = stove.read(eeprom, hoursSinceLastServiceAddr);
+    cachedTotalRuntime            = stove.read(eeprom, totalRuntimeAddrLow) | (stove.read(eeprom, totalRuntimeAddrHigh) << 8);
+    cachedCombustionQuality       = stove.read(eeprom, combustionQualityAddr);
+    cachedPelletQuality           = stove.read(eeprom, pelletQualityAddr);
+    cachedFumeFanRPM              = getFumeFanRPM();
     cachedRemoteControlLastSeen = getRemoteControlLastSeen();
     for (int i = 0; i < 5; i++) {
         cachedErrors[i] = getErrorMemory(i);
@@ -268,7 +275,7 @@ void buttonPressed()
 
 bool setDisplay(int menu)
 {
-    stove.write(ram, 0x1a, menu);
+    stove.write(ram, displayMenuAddr, menu);
     return true;
 }
 
@@ -276,7 +283,7 @@ bool setEnergySavingStart(int start)
 {
     if ((start >= 0) && (start <= 3))
     {
-        if (stove.write(eeprom, 0x91, start) ) {
+        if (stove.write(eeprom, energySavingStartAddr, start) ) {
             delay(20); // delay to ensure the stove has time to process the first write before we read back the value
             return true;
         } else {
@@ -294,7 +301,7 @@ bool setEnergySavingStop(int stop)
 {
     if ((stop >= 0) && (stop <= 3))
     {
-        if (stove.write(eeprom, 0x90, stop) ) {
+        if (stove.write(eeprom, energySavingStopAddr, stop) ) {
             delay(20); // delay to ensure the stove has time to process the first write before we read back the value
             return true;
         } else {
@@ -312,8 +319,8 @@ bool setRoomFanSpeed(int speed)
 {
     if ((speed >= 0) && (speed <= 3))
     {
-        if (stove.write(eeprom, 0x81, speed) ) {
-            return stove.write(ram, 0x19, speed);
+        if (stove.write(eeprom, roomFanEepromAddr, speed) ) {
+            return stove.write(ram, roomFanAddr, speed);
         } else {
             return false;
         }
@@ -327,7 +334,7 @@ bool setRoomFanSpeed(int speed)
 
 void setCombustionQuality(int speed)
 {
-    stove.write(eeprom, 0xc0, speed);
+    stove.write(eeprom, combustionQualityAddr, speed);
 }
 
 int readErrorMemory(int pos)
@@ -335,7 +342,7 @@ int readErrorMemory(int pos)
     switch (pos)
     {
     case 0 ... 4:
-        pos = 0xe0 + pos;
+        pos = errorMemoryBaseAddr + pos;
         return stove.read(eeprom, byte(pos));
         break;
     }
@@ -348,7 +355,7 @@ int getErrorMemory(int pos)
     switch (pos)
     {
     case 0 ... 4:
-        pos = 0xe0 + pos;
+        pos = errorMemoryBaseAddr + pos;
         error = stove.read(eeprom, byte(pos));
         break;
     }
@@ -359,7 +366,7 @@ bool setFlamePower(int power)
 {
     if ((power >= 1) && (power <= 4))
     {
-        return stove.write(eeprom, 0x7f, power);
+        return stove.write(eeprom, flamePowerEepromAddr, power);
     }
     else
     {
@@ -370,7 +377,7 @@ bool setFlamePower(int power)
 
 void setError(int pos, int error)
 {
-    int address = 0xe0 + pos;
+    int address = errorMemoryBaseAddr + pos;
     stove.write(eeprom, address, error);
 }
 
@@ -412,6 +419,130 @@ void handleRouteDisplay()
 
     serializeJson(json, buffer);
     wm.server->send(200, "application/json", buffer);
+}
+
+const char* getCombustionQualityLabel(int val)
+{
+    switch (val)
+    {
+        case 76: return "+G";
+        case 2:  return "-3";
+        case 3:  return "-2";
+        case 4:  return "-1";
+        case 5:  return "0";
+        case 6:  return "1";
+        case 7:  return "2";
+        case 8:  return "3";
+        default: return nullptr;
+    }
+}
+
+const char* getPelletQualityFromLabel(int val)
+{
+    switch (val)
+    {
+        case 0:  return "-5";
+        case 1:  return "-4";
+        case 2:  return "-3";
+        case 3:  return "-2";
+        case 4:  return "-1";
+        case 5:  return "0";
+        case 6:  return "1";
+        case 7:  return "2";
+        case 8:  return "3";
+        case 9:  return "4";
+        case 10: return "5";
+        default: return nullptr;
+    }
+}
+
+int combustionQualityFromLabel(const String& label)
+{
+    if (label == "+G") return 76;
+    if (label == "-3") return 2;
+    if (label == "-2") return 3;
+    if (label == "-1") return 4;
+    if (label == "0")  return 5;
+    if (label == "1")  return 6;
+    if (label == "2")  return 7;
+    if (label == "3")  return 8;
+    return -1;
+}
+
+int pelletQualityFromLabel(const String& label)
+{
+    if (label == "-5") return 0;
+    if (label == "-4") return 1;
+    if (label == "-3") return 2;
+    if (label == "-2") return 3;
+    if (label == "-1") return 4;
+    if (label == "0")  return 5;
+    if (label == "1")  return 6;
+    if (label == "2")  return 7;
+    if (label == "3")  return 8;
+    if (label == "4")  return 9;
+    if (label == "5")  return 10;
+    return -1;
+}
+
+void handleRouteBurn()
+{
+    StaticJsonDocument<200> json;
+    int http_code = 200;
+    json.clear();
+
+    if (wm.server->method() == HTTP_POST)
+    {
+        for (uint8_t i = 0; i < wm.server->args(); i++)
+        {
+            if (wm.server->argName(i) == "combustionQuality")
+            {
+                int val = combustionQualityFromLabel(wm.server->arg(i));
+                if (val != -1)
+                {
+                    setCombustionQuality(val);
+                    cachedCombustionQuality = val;
+                    json["result"] = "success";
+                }
+                else
+                {
+                    json["result"] = "failed - combustionQuality must be one of: +G, -3, -2, -1, 0, +1, +2, +3";
+                    http_code = 400;
+                }
+            }
+            if (wm.server->argName(i) == "pelletQuality")
+            {
+                int val = pelletQualityFromLabel(wm.server->arg(i));
+                if (val != -1)
+                {
+                    stove.write(eeprom, pelletQualityAddr, val);
+                    cachedPelletQuality = val;
+                    json["result"] = "success";
+                }
+                else
+                {
+                    json["result"] = "failed - pelletQuality must be one of: +G, -3, -2, -1, 0, +1, +2, +3";
+                    http_code = 400;
+                }
+            }
+        }
+    }
+    else if (wm.server->method() != HTTP_GET)
+    {
+        wm.server->send(405);
+        return;
+    }
+
+    int cq = (wm.server->method() == HTTP_GET) ? stove.read(eeprom, combustionQualityAddr) : cachedCombustionQuality;
+    const char* cqLabel = getCombustionQualityLabel(cq);
+    json["combustionQuality"] = cqLabel ? cqLabel : "Unknown";
+
+    int pq = (wm.server->method() == HTTP_GET) ? stove.read(eeprom, pelletQualityAddr) : cachedPelletQuality;
+    const char* pqLabel = getPelletQualityFromLabel(pq);
+    json["pelletQuality"] = pqLabel ? pqLabel : "Unknown";
+
+    serializeJson(json, buffer);
+    wm.server->send(http_code, "application/json", buffer);
 }
 
 const char* getRemoteMenuName(int id)
@@ -474,7 +605,7 @@ void handleRouteRemote()
         return;
     }
 
-    int menuId = stove.read(ram, 0x1A);
+    int menuId = stove.read(ram, displayMenuAddr);
     if (menuId < 0)
     {
         json["error"] = "Failed to read remote menu - RS232 error";
@@ -485,7 +616,7 @@ void handleRouteRemote()
 
     json["diplayed_menu"] = getRemoteMenuName(menuId);
 
-    int paramId = stove.read(ram, 0x18);
+    int paramId = stove.read(ram, selectedParamAddr);
     if (paramId < 0)
     {
         json["selected_parameter"] = "Unknown";
@@ -522,7 +653,7 @@ void handleRouteRemote()
         }
     }
 
-    int langId = stove.read(eeprom, 0x4F);
+    int langId = stove.read(eeprom, languageAddr);
     if (langId < 0)
     {
         json["language"] = "Unknown";
@@ -549,12 +680,12 @@ void handleRouteRemote()
 
 void getStoveDateTime()
 {
-    int cur_min = stove.read(ram, 0x7d);
-    int cur_hour = stove.read(ram, 0x7c);
-    int cur_sec = stove.read(ram, 0x7a);
-    int cur_day = stove.read(ram, 0x7e);
-    int cur_month = stove.read(ram, 0x7f);
-    int cur_year = stove.read(ram, 0x80);
+    int cur_min = stove.read(ram, stoveTimeMinAddr);
+    int cur_hour = stove.read(ram, stoveTimeHourAddr);
+    int cur_sec = stove.read(ram, stoveTimeSecAddr);
+    int cur_day = stove.read(ram, stoveTimeDayAddr);
+    int cur_month = stove.read(ram, stoveTimeMonthAddr);
+    int cur_year = stove.read(ram, stoveTimeYearAddr);
 
     sprintf(buffer, "20%i-%02d-%02d %02d:%02d:%02d", cur_year, cur_month, cur_day, cur_hour, cur_min, cur_sec);
 
@@ -772,35 +903,26 @@ void handleRouteErrors()
     
     if (wm.server->method() == HTTP_GET || wm.server->method() == HTTP_POST)
     {
-        JsonObject errorbank1 = json.createNestedObject("MemoryPos_1");
-        int error = getErrorMemory(0);
-        errorbank1["id"] = error;
-        errorbank1["error"] = getErrorCode(error);
-        errorbank1["desc"] = getErrorDesc(error);
-
-        JsonObject errorbank2 = json.createNestedObject("MemoryPos_2");
-        error = getErrorMemory(1);
-        errorbank2["id"] = error;
-        errorbank2["error"] = getErrorCode(error);
-        errorbank2["desc"] = getErrorDesc(error);
-
-        JsonObject errorbank3 = json.createNestedObject("MemoryPos_3");
-        error = getErrorMemory(2);
-        errorbank3["id"] = error;
-        errorbank3["error"] = getErrorCode(error);
-        errorbank3["desc"] = getErrorDesc(error);
-
-        JsonObject errorbank4 = json.createNestedObject("MemoryPos_4");
-        error = getErrorMemory(3);
-        errorbank4["id"] = error;
-        errorbank4["error"] = getErrorCode(error);
-        errorbank4["desc"] = getErrorDesc(error);
-
-        JsonObject errorbank5 = json.createNestedObject("MemoryPos_5");
-        error = getErrorMemory(4);
-        errorbank5["id"] = error;
-        errorbank5["error"] = getErrorCode(error);
-        errorbank5["desc"] = getErrorDesc(error);
+        const char* memKeys[5] = {"MemoryPos_1","MemoryPos_2","MemoryPos_3","MemoryPos_4","MemoryPos_5"};
+        int errors[5];
+        bool hasErrors = false;
+        for (int i = 0; i < 5; i++) {
+            errors[i] = getErrorMemory(i);
+            if (errors[i] != 0) hasErrors = true;
+        }
+        if (!hasErrors) {
+            json["previousErrors"] = false;
+        } else {
+            JsonObject obj_errors = json.createNestedObject("previousErrors");
+            for (int i = 0; i < 5; i++) {
+                if (errors[i] != 0) {
+                    JsonObject eb = obj_errors.createNestedObject(memKeys[i]);
+                    eb["id"]    = errors[i];
+                    eb["error"] = getErrorCode(errors[i]);
+                    eb["desc"]  = getErrorDesc(errors[i]);
+                }
+            }
+        }
     } else
     {
         wm.server->send(405);
@@ -1079,14 +1201,11 @@ void storeAllRamValues()
 
 void getParams()
 {
-    // storeAllRamValues();
     StaticJsonDocument<350> json;
     json.clear();
     char data[2];
 
     data[0] = ram;
-
-    // json["test"] = (wm.server->method() == HTTP_GET) ? "GET" : "POST";
 
     for (uint8_t i = 0; i < wm.server->args(); i++)
     {
@@ -1107,9 +1226,6 @@ void getParams()
             data[1] = byte(wm.server->arg(i).toInt());
         }
     }
-
-    // Serial.printf("send[0] = 0x%02X\n", data[0]);
-    // Serial.printf("send[1] = 0x%02X\n", data[1]);
 
     snprintf(buffer, sizeof(buffer), "0x%02X", data[0]);
     JsonObject type = json.createNestedObject(buffer);
@@ -1180,16 +1296,31 @@ void getStatus()
     json["lowPalletAlarm"] = cachedLowPallet;
     json["stoveBeepEnabled"] = cachedBeepEnabled;
     json["numberOfStarts"] = cachedNumberOfStarts;
+    json["hoursSinceLastService"] = cachedHoursSinceLastService;
+    json["totalRuntime"] = cachedTotalRuntime;
+    JsonObject obj_burn = json.createNestedObject("burn");
+    obj_burn["combustionQuality"] = getCombustionQualityLabel(cachedCombustionQuality);
+    obj_burn["pelletQuality"] = getCombustionQualityLabel(cachedPelletQuality);
     json["fumeFanRPM"] = cachedFumeFanRPM;
     json["RemoteControlLastSeen"] = cachedRemoteControlLastSeen;
 
-    JsonObject obj_errors = json.createNestedObject("previousErrors");
     const char* memKeys[5] = {"MemoryPos_1","MemoryPos_2","MemoryPos_3","MemoryPos_4","MemoryPos_5"};
+    bool hasErrors = false;
     for (int i = 0; i < 5; i++) {
-        JsonObject eb = obj_errors.createNestedObject(memKeys[i]);
-        eb["id"]    = cachedErrors[i];
-        eb["error"] = getErrorCode(cachedErrors[i]);
-        eb["desc"]  = getErrorDesc(cachedErrors[i]);
+        if (cachedErrors[i] != 0) { hasErrors = true; break; }
+    }
+    if (!hasErrors) {
+        json["previousErrors"] = false;
+    } else {
+        JsonObject obj_errors = json.createNestedObject("previousErrors");
+        for (int i = 0; i < 5; i++) {
+            if (cachedErrors[i] != 0) {
+                JsonObject eb = obj_errors.createNestedObject(memKeys[i]);
+                eb["id"]    = cachedErrors[i];
+                eb["error"] = getErrorCode(cachedErrors[i]);
+                eb["desc"]  = getErrorDesc(cachedErrors[i]);
+            }
+        }
     }
 
     char time_output[30];
@@ -1264,19 +1395,18 @@ void setup()
     httpRouteMetrics();
     enableOTA();
     File configFile = SPIFFS.open("/config.txt", "r");
-    Serial.println("Reading values");
-    // int line = 0;
-    while (configFile.available())
-    {
-        String hydroString = configFile.readStringUntil('\n');
-
-        // mqtt_port = portString.c_str();
-        // mqtt_port.trim();
-        // int_mqtt_port = mqtt_port.toInt();
-
-        hydro_mode = hydroString.c_str();
-        hydro_mode.trim();
-        int_hydro_mode = hydro_mode.toInt();
+    if (configFile) {
+        Serial.println("Reading values");
+        while (configFile.available())
+        {
+            String hydroString = configFile.readStringUntil('\n');
+            hydro_mode = hydroString.c_str();
+            hydro_mode.trim();
+            int_hydro_mode = hydro_mode.toInt();
+        }
+        configFile.close();
+    } else {
+        Serial.println("Config file not found, using defaults");
     }
 
     resetButton.begin();
@@ -1312,6 +1442,7 @@ void setup()
     wm.server->on("/api/health", handleRouteHealth);
     wm.server->on("/api/time", handleRouteTime);
     wm.server->on("/api/remote", handleRouteRemote);
+    wm.server->on("/api/burn", handleRouteBurn);
     wm.server->on("/api", handleRouteSwaggerUI);    
     wm.server->on("/api-specs.json", handleRouteSwaggerJSON);   
 

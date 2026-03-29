@@ -221,3 +221,20 @@ Coundn't reverse the following error codes :
 |  6  | +1      |
 |  7  | +2      |
 |  8  | +3      |
+
+
+# Pellet Quality
+
+| Val | Setting |
+|-----|---------|
+|  0  | -5      |
+|  1  | -4      |
+|  2  | -3      |
+|  3  | -2      |
+|  4  | -1      |
+|  5  |  0      |
+|  6  |  1      |
+|  7  |  2      |
+|  8  |  3      |
+|  9  |  4      |
+|  10 |  5      |

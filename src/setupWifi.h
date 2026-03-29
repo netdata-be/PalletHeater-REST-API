@@ -5,8 +5,13 @@ void saveConfigCallback() // Save params to SPIFFS
     Serial.println("Get Params:");
     Serial.println(custom_hydro_mode.getValue());
     Serial.println(F("Initializing FS..."));
-    File file = SPIFFS.open("/config.txt", "a+"); // We open a file to save value on SPIFFS
-    file.println(custom_hydro_mode.getValue());   // 6th line: Hydro mode
+    File file = SPIFFS.open("/config.txt", "w");
+    if (!file) {
+        log_e("Failed to open config file for writing");
+        return;
+    }
+    file.println(custom_hydro_mode.getValue());
+    file.close();
 }
 
 void setup_wifi() // Setup WiFiManager and connect to WiFi
