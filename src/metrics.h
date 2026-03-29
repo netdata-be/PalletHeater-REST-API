@@ -163,6 +163,9 @@ String getMetrics() {
   setCounter(&p, "stove_total_runtime_h",        "Total runtime in hours",                 String(cachedTotalRuntime));
   setCounter(&p, "stove_hours_since_last_service", "Hours since last service",             String(cachedHoursSinceLastService));
 
+  // Time sync
+  setMetric(&p,  "stove_time_delta_seconds",       "Delta in seconds between NTP time and stove internal clock", String(now - stoveTime));
+
   return p;
 }
 
