@@ -120,6 +120,13 @@ long previousMillisNTP;
 #define totalRuntimeAddrLow       0xEA  // Total runtime low byte (16-bit little-endian)
 #define totalRuntimeAddrHigh      0xEB  // Total runtime high byte (16-bit little-endian)
 #define languageAddr          0x4F  // Language setting
+// Firmware version (EEPROM) — format: FW-{char0x8A}{char0x8B}-{0x8C}-V-{0x8D}-{0x8E}-{0x8F}
+#define fwVariantChar0Addr    0x8A  // Firmware variant char 0 (ASCII)
+#define fwVariantChar1Addr    0x8B  // Firmware variant char 1 (ASCII)
+#define fwProductAddr         0x8C  // Firmware product number
+#define fwMajorAddr           0x8D  // Firmware major version
+#define fwMinorAddr           0x8E  // Firmware minor version
+#define fwPatchAddr           0x8F  // Firmware patch version
 // EEPROM date/time write addresses (BCD encoded)
 #define eepromDateDayAddr     0xfb
 #define eepromDateMonthAddr   0xfc
@@ -145,6 +152,7 @@ int energySavingStart = 0;
 int energySavingStop = 0;
 
 float cachedAugerSpeed = 0.0;
+String cachedFirmwareVersion = "";
 int cachedLowPallet = 0;
 bool cachedBeepEnabled = false;
 int cachedNumberOfStarts = 0;

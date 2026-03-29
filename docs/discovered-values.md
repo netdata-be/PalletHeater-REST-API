@@ -107,10 +107,19 @@ EEPROM (0x20)
 | 0xE2       | 226        | x       | error  | Memory Error - Position 3 - See table  |                          |            |
 | 0xE3       | 227        | x       | error  | Memory Error - Position 4 - See table  |                          |            |
 | 0xE4       | 228        | x       | error  | Memory Error - Position 5 - See table  |                          |            |
-| 0xE7       | 231        | x       | hours  | Working hours ???                      |                          |            |
-| 0xEA       | 234        | x       | hours  | Working hours ???                      |                          |            |
+| 0x8A       | 138        | ASCII   |        | Firmware variant char 0                | A                        |            |
+| 0x8B       | 139        | ASCII   |        | Firmware variant char 1                | R                        |            |
+| 0x8C       | 140        | x       |        | Firmware product number                | 1                        |            |
+| 0x8D       | 141        | x       |        | Firmware major version                 | 31                       |            |
+| 0x8E       | 142        | x       |        | Firmware minor version                 | 1                        |            |
+| 0x8F       | 143        | x       |        | Firmware patch version                 | 0                        |            |
+| 0xBC       | 188        | x       | id     | Pellet quality, see combustion quality lookup |                   |            |
+| 0xE7       | 231        | x       | hours  | Hours since last service               |                          |            |
+| 0xEA       | 234        | x       | hours  | Total runtime low byte (16-bit LE)     |                          |            |
+| 0xEB       | 235        | x       | hours  | Total runtime high byte (16-bit LE)    |                          |            |
 | 0xEC       | 236        | x       | hours  | Working hours ???                      |                          |            |
-| 0xEE       | 238        | x       | amount | Amount of starts                       | 1                        | ???        |
+| 0xEE       | 238        | x       | amount | Amount of starts low byte (16-bit LE)  | 1                        |            |
+| 0xEF       | 239        | x       | amount | Amount of starts high byte (16-bit LE) |                          |            |
 | 0xFA       | 250        |         |        | Unknown                                |                          |            |
 
 # menu Item on remote  (RAM 0x1A)

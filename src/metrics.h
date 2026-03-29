@@ -166,6 +166,11 @@ String getMetrics() {
   // Time sync
   setMetric(&p,  "stove_time_delta_seconds",       "Delta in seconds between NTP time and stove internal clock", String(now - stoveTime));
 
+  // Firmware version (info metric — value is always 1, label carries the version string)
+  p += "# HELP stove_firmware_info Firmware version of the stove\n";
+  p += "# TYPE stove_firmware_info gauge\n";
+  p += "stove_firmware_info{version=\"" + cachedFirmwareVersion + "\"} 1\n";
+
   return p;
 }
 

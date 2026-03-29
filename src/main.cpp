@@ -62,6 +62,21 @@ void getAmbTemp() // Get room temperature
 #endif
 }
 
+String readFirmwareVersion()
+{
+    char variant0 = stove.read(eeprom, fwVariantChar0Addr);
+    char variant1 = stove.read(eeprom, fwVariantChar1Addr);
+    int  product  = stove.read(eeprom, fwProductAddr);
+    int  major    = stove.read(eeprom, fwMajorAddr);
+    int  minor    = stove.read(eeprom, fwMinorAddr);
+    int  patch    = stove.read(eeprom, fwPatchAddr);
+
+    char buf[24];
+    snprintf(buf, sizeof(buf), "FW-%c%c-%02d-V-%02d-%02d-%02d",
+             variant0, variant1, product, major, minor, patch);
+    return String(buf);
+}
+
 int getFumeFanRPM()
 {
     int rpm = stove.read(ram, fumeFanRPMAddr);
@@ -241,6 +256,7 @@ void getStates() // Refreshes the full sensor cache — called from loop(), not 
     getTempSetpoint();
     getEnergySaving();
     cachedAugerSpeed         = stove.read(ram, augerSpeedAddr) / 10.0f;
+    cachedFirmwareVersion    = readFirmwareVersion();
     cachedLowPallet          = arePalletsLow();
     cachedBeepEnabled        = stoveBeepIsEnabled();
     cachedNumberOfStarts          = numberOfStarts();
@@ -1299,6 +1315,7 @@ void getStatus()
     json["numberOfStarts"] = cachedNumberOfStarts;
     json["hoursSinceLastService"] = cachedHoursSinceLastService;
     json["totalRuntime"] = cachedTotalRuntime;
+    json["firmwareVersion"] = cachedFirmwareVersion;
     json["augerSpeed"] = cachedAugerSpeed;
     JsonObject obj_burn = json.createNestedObject("burn");
     obj_burn["combustionQuality"] = getCombustionQualityLabel(cachedCombustionQuality);
