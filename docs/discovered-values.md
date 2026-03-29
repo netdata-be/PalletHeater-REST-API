@@ -9,7 +9,7 @@ RAM (0x00)
 | 0x01       | 1          | x/2       | °C     | Ambient temperature                         | 40 (== 20)               |            |
 | 0x04       | 4          | x         | Bool   | Hot enough for fan?                         |                          |            |
 | 0x0B       | 11         |           |        | Unknown, 0 if off ~ 100 if on               |                          |            |
-| 0x0D       | 13         | x/10      | rpm    | Feed rate ???                               |                          |            |
+| 0x0D       | 13         | x/10      | rpm    | Auger speed                                 |                          |            |
 | 0x11       | 17         | x         |        | Countdown counter 20 -> 0 / sec             |                          |            |
 | 0x13       | 19         |           |        | Countdown Counter ? 120 -> 0                |                          |            |
 | 0x14       | 20         |           |        | Unknown Boolean value                       |                          |            | 

@@ -92,6 +92,7 @@ long previousMillisNTP;
 #define ambTempStoveAddr     0x44  // Ambient temp from stove sensor
 #define ambTempRemoteAddr    0x8f  // Ambient temp from remote control
 #define palletSensorAddr     0xa4  // Pallet sensor state (5 = active)
+#define augerSpeedAddr       0x0D  // Auger speed (raw / 10 = rpm)
 #define palletLevelAddr      0x89  // Pallet fill level
 #define displayMenuAddr      0x1a  // Currently displayed menu / display write target
 #define selectedParamAddr    0x18  // Parameter selected in display menu
@@ -143,6 +144,7 @@ float waterPres = 0;
 int energySavingStart = 0;
 int energySavingStop = 0;
 
+float cachedAugerSpeed = 0.0;
 int cachedLowPallet = 0;
 bool cachedBeepEnabled = false;
 int cachedNumberOfStarts = 0;

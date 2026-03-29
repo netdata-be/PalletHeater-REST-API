@@ -240,6 +240,7 @@ void getStates() // Refreshes the full sensor cache — called from loop(), not 
     getRoomFanSpeed();
     getTempSetpoint();
     getEnergySaving();
+    cachedAugerSpeed         = stove.read(ram, augerSpeedAddr) / 10.0f;
     cachedLowPallet          = arePalletsLow();
     cachedBeepEnabled        = stoveBeepIsEnabled();
     cachedNumberOfStarts          = numberOfStarts();
@@ -1298,6 +1299,7 @@ void getStatus()
     json["numberOfStarts"] = cachedNumberOfStarts;
     json["hoursSinceLastService"] = cachedHoursSinceLastService;
     json["totalRuntime"] = cachedTotalRuntime;
+    json["augerSpeed"] = cachedAugerSpeed;
     JsonObject obj_burn = json.createNestedObject("burn");
     obj_burn["combustionQuality"] = getCombustionQualityLabel(cachedCombustionQuality);
     obj_burn["pelletQuality"] = getCombustionQualityLabel(cachedPelletQuality);
