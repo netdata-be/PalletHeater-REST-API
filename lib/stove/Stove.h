@@ -20,7 +20,11 @@ class Stove
     Stove(int uart_nr);
     bool write(byte type, byte address, byte value);
     byte read(byte type, byte address);
+    void setDebug(bool enabled);
+    bool isDebugEnabled() const;
   private:
     HardwareSerial* StoveSerial;
+    bool _debugEnabled = false;
+    void debugLog(const char* msg);
 };
 #endif

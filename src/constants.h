@@ -151,6 +151,8 @@ float waterPres = 0;
 int energySavingStart = 0;
 int energySavingStop = 0;
 
+String stoveDebugBuffer = "";
+
 float cachedAugerSpeed = 0.0;
 String cachedFirmwareVersion = "";
 int cachedLowPallet = 0;
