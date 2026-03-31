@@ -158,18 +158,56 @@ String getMetrics() {
   // Remote control
   setMetric(&p, "stove_remote_last_seen",        "Seconds since last remote control contact", String(cachedRemoteControlLastSeen));
 
+  // Timer metrics
+  p.concat("# HELP stove_timer_enabled 1 if timer is enabled\n");
+  p.concat("# TYPE stove_timer_enabled gauge\n");
+  p.concat("# HELP stove_timer_on_minutes On time in minutes since midnight (-1 = not set)\n");
+  p.concat("# TYPE stove_timer_on_minutes gauge\n");
+  p.concat("# HELP stove_timer_off_minutes Off time in minutes since midnight (-1 = not set)\n");
+  p.concat("# TYPE stove_timer_off_minutes gauge\n");
+  p.concat("# HELP stove_timer_dow_mask Day-of-week bitmask (Mon=1 Tue=2 Wed=4 Thu=8 Fri=16 Sat=32 Sun=64)\n");
+  p.concat("# TYPE stove_timer_dow_mask gauge\n");
+  p.concat("# HELP stove_timer_setpoint_c Temperature setpoint for timer\n");
+  p.concat("# TYPE stove_timer_setpoint_c gauge\n");
+  p.concat("# HELP stove_timer_flame_power Flame power configured for timer\n");
+  p.concat("# TYPE stove_timer_flame_power gauge\n");
+  p.concat("# HELP stove_timer_room_fan_speed Room fan speed configured for timer\n");
+  p.concat("# TYPE stove_timer_room_fan_speed gauge\n");
+
+  for (int i = 0; i < 6; i++) {
+    char timerLabel[8];
+    sprintf(timerLabel, "PR%d", i + 1);
+    char labels[24];
+    sprintf(labels, "{timer=\"%s\"}", timerLabel);
+
+    int enabled = cachedTimerEnabled[i];
+    int onVal = cachedTimerOnVal[i];
+    int offVal = cachedTimerOffVal[i];
+    int setpoint = cachedTimerSetpoint[i];
+    int flame = cachedTimerFlame[i];
+    int fan = cachedTimerFan[i];
+    int dow = cachedTimerDowMask[i];
+
+    p.concat("stove_timer_enabled"); p.concat(labels); p.concat(" "); p.concat(String(enabled == 1 ? 1 : 0)); p.concat("\n");
+    p.concat("stove_timer_on_minutes"); p.concat(labels); p.concat(" "); p.concat(String(onVal  >= 144 ? -1 : onVal  * 10)); p.concat("\n");
+    p.concat("stove_timer_off_minutes"); p.concat(labels); p.concat(" "); p.concat(String(offVal >= 144 ? -1 : offVal * 10)); p.concat("\n");
+    p.concat("stove_timer_dow_mask"); p.concat(labels); p.concat(" "); p.concat(String(dow)); p.concat("\n");
+    p.concat("stove_timer_setpoint_c"); p.concat(labels); p.concat(" "); p.concat(String(setpoint)); p.concat("\n");
+    p.concat("stove_timer_flame_power"); p.concat(labels); p.concat(" "); p.concat(String(flame)); p.concat("\n");
+    p.concat("stove_timer_room_fan_speed"); p.concat(labels); p.concat(" "); p.concat(String(fan)); p.concat("\n");
+  }
+
   // Counters
   setCounter(&p, "stove_number_of_starts",       "Total number of stove starts",           String(cachedNumberOfStarts));
-  setCounter(&p, "stove_total_runtime_h",        "Total runtime in hours",                 String(cachedTotalRuntime));
-  setCounter(&p, "stove_hours_since_last_service", "Hours since last service",             String(cachedHoursSinceLastService));
-
-  // Time sync
   setMetric(&p,  "stove_time_delta_seconds",       "Delta in seconds between NTP time and stove internal clock", String(now - stoveTime));
 
   // Firmware version (info metric — value is always 1, label carries the version string)
   p += "# HELP stove_firmware_info Firmware version of the stove\n";
   p += "# TYPE stove_firmware_info gauge\n";
-  p += "stove_firmware_info{version=\"" + cachedFirmwareVersion + "\"} 1\n";
+  {
+    String firmwareMetric = String("stove_firmware_info{version=\"") + String(cachedFirmwareVersion) + String("\"} 1\n");
+    p += firmwareMetric;
+  }
 
   return p;
 }

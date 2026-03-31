@@ -13,49 +13,49 @@ void getStoveState() // Get detailed stove state
     switch (stoveState)
     {
     case OFF:
-        StoveStateStr = "Off";
+        snprintf(StoveStateStr, sizeof(StoveStateStr), "Off");
         StoveIsOn = false;
         break;
     case STARTING:
-        StoveStateStr = "Starting";
+        snprintf(StoveStateStr, sizeof(StoveStateStr), "Starting");
         StoveIsOn = true;
         break;
     case PALLET_LOADING:
-        StoveStateStr = "Pellet loading"; // Phase I
+        snprintf(StoveStateStr, sizeof(StoveStateStr), "Pellet loading");
         StoveIsOn = true;
         break;
     case IGNITION:
-        StoveStateStr = "Ignition"; // Phase II
+        snprintf(StoveStateStr, sizeof(StoveStateStr), "Ignition");
         StoveIsOn = true;
         break;
     case WORKING:
-        StoveStateStr = "Working";
+        snprintf(StoveStateStr, sizeof(StoveStateStr), "Working");
         StoveIsOn = true;
         break;
     case BRAZIER_CLEANING:
-        StoveStateStr = "Brazier cleaning";
+        snprintf(StoveStateStr, sizeof(StoveStateStr), "Brazier cleaning");
         break;
     case FINAL_CLEANING:
-        StoveStateStr = "Final cleaning"; // Shut Down
+        snprintf(StoveStateStr, sizeof(StoveStateStr), "Final cleaning");
         StoveIsOn = false;
         break;
     case STANDBY:
-        StoveStateStr = "Standby";
+        snprintf(StoveStateStr, sizeof(StoveStateStr), "Standby");
         StoveIsOn = true;
         break;
     case ALARM:
-        StoveStateStr = "Alarm State";
+        snprintf(StoveStateStr, sizeof(StoveStateStr), "Alarm State");
         break;
     case IGNITION_FAILURE:
-        StoveStateStr = "Ignition failure";
+        snprintf(StoveStateStr, sizeof(StoveStateStr), "Ignition failure");
         StoveIsOn = false;
         break;
     case ALARM_STATE:
-        StoveStateStr = "Alarm";
+        snprintf(StoveStateStr, sizeof(StoveStateStr), "Alarm");
         StoveIsOn = false;
         break;
     case UNKNOWN:
-        StoveStateStr = "Unkown [RS232 Serial Error]";
+        snprintf(StoveStateStr, sizeof(StoveStateStr), "Unkown [RS232 Serial Error]");
         StoveIsOn = false;
         break;
     }

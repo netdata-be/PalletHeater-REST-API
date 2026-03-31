@@ -89,11 +89,53 @@ EEPROM (0x20)
 | 0x06       | 6          | x/10    | kg/h   | Pellets on level 2                     | 46 == 4,6                |            |   
 | 0x07       | 7          | x/10    | kg/h   | Pellets on level 3                     | 62 == 6,2                |            | 
 | 0x08       | 8          | x/10    | kg/h   | Pellets on level 4                     | 78 == 7,8                |            | 
-| 0x09       | 9          | x/10    | kg/h   | Pellets on level 5                     | 78 == 7,8                |            | 
+| 0x09       | 9          | x/10    | kg/h   | Pellets on level 5                     | 78 == 7,8                |            |
+| 0x3C       | 60         | x       | bool   | Timer PR1 enabled                      | 0                        | 0 - 1      |
+| 0x3D       | 61         | val×10min | HH:MM | Timer PR1 on time (144 = off)       | 144                      | 0 - 144    |
+| 0x3E       | 62         | val×10min | HH:MM | Timer PR1 off time (144 = off)      | 144                      | 0 - 144    |
+| 0x3F       | 63         | x       | °C     | Timer PR1 setpoint                     | 21                       | 7 - 30     |
+| 0x40       | 64         | x       | level  | Timer PR1 flame power                  | 2                        | 1 - 5      |
+| 0x41       | 65         | x       | speed  | Timer PR1 room fan speed               | 0                        | 0 - 3      |
+| 0x43       | 67         | bitmask | days   | Timer PR1 days of week                 |                          | see below  |
 | 0x48       | 72         | x       | bool   | Ext Thermostat Modulate = 0 / Stop = 1 | 0                        | 0 - 1      |
 | 0x49       | 73         | x       | bool   | Ext Thermostat N.O. = 0 / N.C. = 1     | 0                        | 0 - 1      |
 | 0x4B       | 75         | x       | bool   | Beep is enabled                        | 1                        | 0 - 1      |
 | 0x4F       | 79         | x       | id     | Language remote, see lookup table      | 1                        | 1 - 8      |
+| 0x50       | 80         | x       | bool   | Timer PR2 enabled                      | 0                        | 0 - 1      |
+| 0x51       | 81         | val×10min | HH:MM | Timer PR2 on time (144 = off)       | 144                      | 0 - 144    |
+| 0x52       | 82         | val×10min | HH:MM | Timer PR2 off time (144 = off)      | 144                      | 0 - 144    |
+| 0x53       | 83         | x       | °C     | Timer PR2 setpoint                     |                          | 7 - 30     |
+| 0x54       | 84         | x       | level  | Timer PR2 flame power                  |                          | 1 - 5      |
+| 0x55       | 85         | x       | speed  | Timer PR2 room fan speed               |                          | 0 - 3      |
+| 0x57       | 87         | bitmask | days   | Timer PR2 days of week                 |                          | see below  |
+| 0x58       | 88         | x       | bool   | Timer PR3 enabled                      | 0                        | 0 - 1      |
+| 0x59       | 89         | val×10min | HH:MM | Timer PR3 on time (144 = off)       | 144                      | 0 - 144    |
+| 0x5A       | 90         | val×10min | HH:MM | Timer PR3 off time (144 = off)      | 144                      | 0 - 144    |
+| 0x5B       | 91         | x       | °C     | Timer PR3 setpoint                     |                          | 7 - 30     |
+| 0x5C       | 92         | x       | level  | Timer PR3 flame power                  |                          | 1 - 5      |
+| 0x5D       | 93         | x       | speed  | Timer PR3 room fan speed               |                          | 0 - 3      |
+| 0x5F       | 95         | bitmask | days   | Timer PR3 days of week                 |                          | see below  |
+| 0x60       | 96         | x       | bool   | Timer PR4 enabled                      | 0                        | 0 - 1      |
+| 0x61       | 97         | val×10min | HH:MM | Timer PR4 on time (144 = off)       | 144                      | 0 - 144    |
+| 0x62       | 98         | val×10min | HH:MM | Timer PR4 off time (144 = off)      | 144                      | 0 - 144    |
+| 0x63       | 99         | x       | °C     | Timer PR4 setpoint                     |                          | 7 - 30     |
+| 0x64       | 100        | x       | level  | Timer PR4 flame power                  |                          | 1 - 5      |
+| 0x65       | 101        | x       | speed  | Timer PR4 room fan speed               |                          | 0 - 3      |
+| 0x67       | 103        | bitmask | days   | Timer PR4 days of week                 |                          | see below  |
+| 0x68       | 104        | x       | bool   | Timer PR5 enabled                      | 0                        | 0 - 1      |
+| 0x69       | 105        | val×10min | HH:MM | Timer PR5 on time (144 = off)       | 144                      | 0 - 144    |
+| 0x6A       | 106        | val×10min | HH:MM | Timer PR5 off time (144 = off)      | 144                      | 0 - 144    |
+| 0x6B       | 107        | x       | °C     | Timer PR5 setpoint                     |                          | 7 - 30     |
+| 0x6C       | 108        | x       | level  | Timer PR5 flame power                  |                          | 1 - 5      |
+| 0x6D       | 109        | x       | speed  | Timer PR5 room fan speed               |                          | 0 - 3      |
+| 0x6F       | 111        | bitmask | days   | Timer PR5 days of week                 |                          | see below  |
+| 0x70       | 112        | x       | bool   | Timer PR6 enabled                      | 0                        | 0 - 1      |
+| 0x71       | 113        | val×10min | HH:MM | Timer PR6 on time (144 = off)       | 144                      | 0 - 144    |
+| 0x72       | 114        | val×10min | HH:MM | Timer PR6 off time (144 = off)      | 144                      | 0 - 144    |
+| 0x73       | 115        | x       | °C     | Timer PR6 setpoint                     |                          | 7 - 30     |
+| 0x74       | 116        | x       | level  | Timer PR6 flame power                  |                          | 1 - 5      |
+| 0x75       | 117        | x       | speed  | Timer PR6 room fan speed               |                          | 0 - 3      |
+| 0x77       | 119        | bitmask | days   | Timer PR6 days of week                 |                          | see below  |
 | 0x7D       | 125        | x       | °C     | Setpoint Room Temperature              | 23                       |            |
 | 0x7F       | 127        | x       | amount | Flame power level                      |                          | 1 - 4      |
 | 0x81       | 129        | x       | speed  | Room fan speed                         | 0                        | 0 - 3      |
@@ -121,6 +163,38 @@ EEPROM (0x20)
 | 0xEE       | 238        | x       | amount | Amount of starts low byte (16-bit LE)  | 1                        |            |
 | 0xEF       | 239        | x       | amount | Amount of starts high byte (16-bit LE) |                          |            |
 | 0xFA       | 250        |         |        | Unknown                                |                          |            |
+
+# Timer encoding
+
+Each timer (PR1–PR6) occupies an 8-byte block in EEPROM. PR1 starts at 0x3C; PR2–PR6 follow at 0x50, 0x58, 0x60, 0x68, 0x70.
+
+**Time value encoding** (on/off time fields):
+
+| Value | Time  |
+|-------|-------|
+| 0     | 00:00 |
+| 1     | 00:10 |
+| 6     | 01:00 |
+| 142   | 23:40 |
+| 143   | 23:50 |
+| 144   | off   |
+
+Formula: `minutes = value × 10`, times are in 10-minute steps only.
+
+**Day-of-week bitmask** (offset +7):
+
+| Bit | Value | Day       |
+|-----|-------|-----------|
+| 0   | 1     | Monday    |
+| 1   | 2     | Tuesday   |
+| 2   | 4     | Wednesday |
+| 3   | 8     | Thursday  |
+| 4   | 16    | Friday    |
+| 5   | 32    | Saturday  |
+| 6   | 64    | Sunday    |
+
+Example: Monday + Wednesday + Friday = 1 + 4 + 16 = 21
+
 
 # menu Item on remote  (RAM 0x1A)
 

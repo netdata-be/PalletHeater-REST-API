@@ -7,6 +7,10 @@
 #include <SPIFFS.h>
 #include <WiFiManager.h>
 #include <WiFiUdp.h>
+#include <time.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/semphr.h>
 #include <metrics.h>
 
 #include <helperFunctions.h>
@@ -15,23 +19,26 @@
 
 #define FORMAT_SPIFFS_IF_FAILED true
 
+static SemaphoreHandle_t stoveMutex = NULL;
 
 bool getNTPtime(int sec)
 {
-
     {
         uint32_t start = millis();
+        struct tm ntp_tm = {0};
         do
         {
             time(&now);
-            localtime_r(&now, &timeinfo);
+            localtime_r(&now, &ntp_tm);
 #if SENSOR_DEBUG
             Serial.print(".");
 #endif
             delay(10);
-        } while (((millis() - start) <= (1000 * sec)) && (timeinfo.tm_year < (2016 - 1900)));
-        if (timeinfo.tm_year <= (2016 - 1900))
+        } while (((millis() - start) <= (1000 * sec)) && (ntp_tm.tm_year < (2016 - 1900)));
+        if (ntp_tm.tm_year <= (2016 - 1900))
             return false; // the NTP call was not successful
+
+        currentDst = ntp_tm.tm_isdst;
 #if SENSOR_DEBUG
         Serial.print("now ");
         Serial.println(now);
@@ -63,7 +70,7 @@ void getAmbTemp() // Get room temperature
 #endif
 }
 
-String readFirmwareVersion()
+void readFirmwareVersion(char* out, size_t len)
 {
     char variant0 = stove.read(eeprom, fwVariantChar0Addr);
     char variant1 = stove.read(eeprom, fwVariantChar1Addr);
@@ -72,10 +79,8 @@ String readFirmwareVersion()
     int  minor    = stove.read(eeprom, fwMinorAddr);
     int  patch    = stove.read(eeprom, fwPatchAddr);
 
-    char buf[24];
-    snprintf(buf, sizeof(buf), "FW-%c%c-%02d-V-%02d-%02d-%02d",
+    snprintf(out, len, "FW-%c%c-%02d-V-%02d-%02d-%02d",
              variant0, variant1, product, major, minor, patch);
-    return String(buf);
 }
 
 int getFumeFanRPM()
@@ -209,10 +214,15 @@ void writeDatepartToStove(const char* format, byte address)
     value = mostSigDigit * 0x10 + leastSigDigit;
 
     stove.write(eeprom, address, value);
+    delay(20);
 }
 
 void setStoveDateTime()
 {
+    if (stoveMutex) {
+        xSemaphoreTake(stoveMutex, portMAX_DELAY);
+    }
+
     getNTPtime(2);
     writeDatepartToStove("%d", eepromDateDayAddr);
     writeDatepartToStove("%m", eepromDateMonthAddr);
@@ -220,6 +230,10 @@ void setStoveDateTime()
     writeDatepartToStove("%H", eepromTimeHourAddr);
     writeDatepartToStove("%M", eepromTimeMinAddr);
     writeDatepartToStove("%W", eepromTimeDOWAddr);
+
+    if (stoveMutex) {
+        xSemaphoreGive(stoveMutex);
+    }
 }
 
 void getRoomFanSpeed()
@@ -245,32 +259,96 @@ void getEnergySaving()
 int getErrorMemory(int pos);
 void getStoveDateTime();
 
-void getStates() // Refreshes the full sensor cache — called from loop(), not from HTTP handlers
+// Fast-changing values — refreshed every 2 s
+void getFastStates()
 {
+    if (stoveMutex) xSemaphoreTake(stoveMutex, portMAX_DELAY);
+
     getStoveState();
-    getAmbTemp();
-    getAmbTempStove();
-    getAmbTempRemoteControl();
     getFumeTemp();
     getFlamePower();
     getRoomFanSpeed();
+    cachedFumeFanRPM            = getFumeFanRPM();
+    cachedRemoteControlLastSeen = getRemoteControlLastSeen();
+
+    if (stoveMutex) xSemaphoreGive(stoveMutex);
+}
+
+// Slow-changing values — refreshed every ~16 s
+void getSlowStates()
+{
+    if (stoveMutex) xSemaphoreTake(stoveMutex, portMAX_DELAY);
+
+    getAmbTemp();
+    getAmbTempStove();
+    getAmbTempRemoteControl();
     getTempSetpoint();
     getEnergySaving();
-    cachedAugerSpeed         = stove.read(ram, augerSpeedAddr) / 10.0f;
-    cachedFirmwareVersion    = readFirmwareVersion();
-    cachedLowPallet          = arePalletsLow();
-    cachedBeepEnabled        = stoveBeepIsEnabled();
-    cachedNumberOfStarts          = numberOfStarts();
-    cachedHoursSinceLastService   = stove.read(eeprom, hoursSinceLastServiceAddr);
-    cachedTotalRuntime            = stove.read(eeprom, totalRuntimeAddrLow) | (stove.read(eeprom, totalRuntimeAddrHigh) << 8);
-    cachedCombustionQuality       = stove.read(eeprom, combustionQualityAddr);
-    cachedPelletQuality           = stove.read(eeprom, pelletQualityAddr);
-    cachedFumeFanRPM              = getFumeFanRPM();
-    cachedRemoteControlLastSeen = getRemoteControlLastSeen();
+    yield();
+
+    cachedAugerSpeed = stove.read(ram, augerSpeedAddr) / 10.0f;
+    readFirmwareVersion(cachedFirmwareVersion, sizeof(cachedFirmwareVersion));
+    yield();
+
+    cachedLowPallet      = arePalletsLow();
+    cachedBeepEnabled    = stoveBeepIsEnabled();
+    cachedNumberOfStarts = numberOfStarts();
+    yield();
+
+    cachedHoursSinceLastService = stove.read(eeprom, hoursSinceLastServiceAddr);
+    cachedTotalRuntime          = stove.read(eeprom, totalRuntimeAddrLow) | (stove.read(eeprom, totalRuntimeAddrHigh) << 8);
+    yield();
+
+    cachedCombustionQuality = stove.read(eeprom, combustionQualityAddr);
+    cachedPelletQuality     = stove.read(eeprom, pelletQualityAddr);
+    yield();
+
     for (int i = 0; i < 5; i++) {
         cachedErrors[i] = getErrorMemory(i);
+        yield();
     }
-    getStoveDateTime(); // updates stoveTime global
+
+    for (int i = 0; i < 6; i++) {
+        byte base = timerBases[i];
+        cachedTimerEnabled[i]  = stove.read(eeprom, base + TIMER_ONOFF_OFFSET);
+        cachedTimerOnVal[i]    = stove.read(eeprom, base + TIMER_ONTIME_OFFSET);
+        cachedTimerOffVal[i]   = stove.read(eeprom, base + TIMER_OFFTIME_OFFSET);
+        cachedTimerSetpoint[i] = stove.read(eeprom, base + TIMER_SETPOINT_OFFSET);
+        cachedTimerFlame[i]    = stove.read(eeprom, base + TIMER_FLAME_OFFSET);
+        cachedTimerFan[i]      = stove.read(eeprom, base + TIMER_FAN_OFFSET);
+        cachedTimerDowMask[i]  = stove.read(eeprom, base + TIMER_DOW_OFFSET);
+        yield();
+    }
+
+    if (stoveMutex) xSemaphoreGive(stoveMutex);
+
+    getStoveDateTime();
+}
+
+// Full refresh — used at startup and for manual sync
+void getStates()
+{
+    getFastStates();
+    getSlowStates();
+}
+
+static void sensorTask(void* pvParameters)
+{
+    const TickType_t delayTicks = pdMS_TO_TICKS(500);
+    uint8_t slowCounter = 0;
+    for (;;)
+    {
+        if (WiFi.status() == WL_CONNECTED)
+        {
+            getFastStates();
+            if (++slowCounter >= 30) // every ~15 s
+            {
+                getSlowStates();
+                slowCounter = 0;
+            }
+        }
+        vTaskDelay(delayTicks);
+    }
 }
 
 void fullReset()
@@ -644,6 +722,36 @@ const char* getRemoteMenuName(int id)
     }
 }
 
+static bool isKnownRamAddr(byte addr)
+{
+    switch (addr) {
+        case 0x01: case 0x04: case 0x0D: case 0x18: case 0x1A:
+        case 0x21: case 0x31: case 0x32: case 0x33: case 0x34:
+        case 0x37: case 0x3E: case 0x44: case 0x48: case 0x4D:
+        case 0x50: case 0x7A: case 0x7B: case 0x7C: case 0x7D:
+        case 0x7E: case 0x7F: case 0x80: case 0x8F: case 0xD0:
+        case 0xD3: case 0xDF:
+            return true;
+        default: return false;
+    }
+}
+
+static bool isKnownEepromAddr(byte addr)
+{
+    switch (addr) {
+        case 0x02: case 0x04: case 0x05: case 0x06: case 0x07:
+        case 0x08: case 0x09: case 0x48: case 0x49: case 0x4B:
+        case 0x4F: case 0x7D: case 0x7F: case 0x81: case 0x8A:
+        case 0x8B: case 0x8C: case 0x8D: case 0x8E: case 0x8F:
+        case 0x90: case 0x91: case 0xBC: case 0xC0: case 0xC4:
+        case 0xC6: case 0xE0: case 0xE1: case 0xE2: case 0xE3:
+        case 0xE4: case 0xE7: case 0xEA: case 0xEB: case 0xEC:
+        case 0xEE: case 0xEF:
+            return true;
+        default: return false;
+    }
+}
+
 static String getRamValueTxt(byte addr, int val)
 {
     if (val < 0) return "read error";
@@ -789,8 +897,9 @@ void handleRouteDump()
     String regParam = wm.server->arg("register");
     if (regParam.length() == 0) regParam = "ram";
     regParam.toLowerCase();
-    bool doRam    = regParam.indexOf("all") >= 0 || regParam.indexOf("ram")    >= 0;
-    bool doEeprom = regParam.indexOf("all") >= 0 || regParam.indexOf("eeprom") >= 0;
+    bool doRam         = regParam.indexOf("all") >= 0 || regParam.indexOf("ram")    >= 0;
+    bool doEeprom      = regParam.indexOf("all") >= 0 || regParam.indexOf("eeprom") >= 0;
+    bool filterUnknown = regParam.indexOf("unknown") >= 0;
 
     // --- address param ---
     bool addrs[256];
@@ -801,9 +910,10 @@ void handleRouteDump()
         byte        type;
         const char* label;
         String      (*txtFn)(byte, int);
+        bool        (*isKnownFn)(byte);
     } regs[] = {
-        { doRam,    ram,    "RAM(0x00)",    getRamValueTxt    },
-        { doEeprom, eeprom, "EEPROM(0x20)", getEepromValueTxt },
+        { doRam,    ram,    "RAM(0x00)",    getRamValueTxt,    isKnownRamAddr    },
+        { doEeprom, eeprom, "EEPROM(0x20)", getEepromValueTxt, isKnownEepromAddr },
     };
 
     String out;
@@ -823,6 +933,7 @@ void handleRouteDump()
         bool firstAddr = true;
         for (int addr = 0; addr <= 0xFF; addr++) {
             if (!addrs[addr]) continue;
+            if (filterUnknown && r.isKnownFn((byte)addr)) continue;
             esp_task_wdt_reset();
             int val      = stove.read(r.type, (byte)addr);
             uint8_t uval = (val >= 0) ? (uint8_t)val : 0;
@@ -900,6 +1011,10 @@ void handleRouteRemote()
 
 void getStoveDateTime()
 {
+    if (stoveMutex) {
+        xSemaphoreTake(stoveMutex, portMAX_DELAY);
+    }
+
     int cur_min = stove.read(ram, stoveTimeMinAddr);
     int cur_hour = stove.read(ram, stoveTimeHourAddr);
     int cur_sec = stove.read(ram, stoveTimeSecAddr);
@@ -907,13 +1022,24 @@ void getStoveDateTime()
     int cur_month = stove.read(ram, stoveTimeMonthAddr);
     int cur_year = stove.read(ram, stoveTimeYearAddr);
 
-    sprintf(buffer, "20%i-%02d-%02d %02d:%02d:%02d", cur_year, cur_month, cur_day, cur_hour, cur_min, cur_sec);
+    if (stoveMutex) {
+        xSemaphoreGive(stoveMutex);
+    }
 
-    strptime(buffer, "%Y-%m-%d %H:%M:%S", &tm);
+    char stoveTimeBuffer[32];
+    struct tm stove_tm = {0};
+
+    snprintf(stoveTimeBuffer, sizeof(stoveTimeBuffer), "20%i-%02d-%02d %02d:%02d:%02d",
+             cur_year, cur_month, cur_day, cur_hour, cur_min, cur_sec);
+
+    strptime(stoveTimeBuffer, "%Y-%m-%d %H:%M:%S", &stove_tm);
     // Take the current NTP based DST setting in order to interprete the stove it's Time
     // The stove does not support DST so a time change is required
-    tm.tm_isdst = timeinfo.tm_isdst;
-    stoveTime = mktime(&tm);
+    stove_tm.tm_isdst = currentDst;
+    time_t newStoveTime = mktime(&stove_tm);
+    if (newStoveTime != (time_t)-1) {
+        stoveTime = newStoveTime;
+    }
 }
 
 void handleRouteSwaggerUI() { 
@@ -936,13 +1062,14 @@ void handleRouteTime()
     if (wm.server->method() == HTTP_PATCH) 
     {
         setStoveDateTime();
+        delay(200);
+        getStoveDateTime();
         json["result"] = "success Synced NTP time to stove";
     }
     
     if (wm.server->method() == HTTP_GET || wm.server->method() == HTTP_PATCH )
     {
         JsonObject time = json.createNestedObject("time");
-        getStoveDateTime();
         strftime(time_output, 30, "%F %T", localtime(&stoveTime));
         time["stove"] = time_output;
 
@@ -1032,6 +1159,269 @@ void handleRouteEnergysaving()
 
     serializeJson(json, buffer);
     wm.server->send(http_code, "application/json", buffer);
+}
+
+void handleRouteBeep()
+{
+    StaticJsonDocument<128> json;
+
+    if (wm.server->method() == HTTP_POST)
+    {
+        String val = wm.server->arg("enabled");
+        if (val != "true" && val != "false" && val != "1" && val != "0")
+        {
+            json["result"] = "failed - expected enabled=true/false";
+            serializeJson(json, buffer);
+            wm.server->send(400, "application/json", buffer);
+            return;
+        }
+        bool enable = (val == "true" || val == "1");
+        bool ok = stove.write(eeprom, beepEnabledAddr, enable ? 1 : 0);
+        if (!ok)
+        {
+            json["result"] = "failed - RS232 error";
+            serializeJson(json, buffer);
+            wm.server->send(500, "application/json", buffer);
+            return;
+        }
+        cachedBeepEnabled = enable;
+        json["result"]  = "success";
+        json["enabled"] = cachedBeepEnabled;
+        serializeJson(json, buffer);
+        wm.server->send(200, "application/json", buffer);
+        return;
+    }
+
+    if (wm.server->method() == HTTP_GET)
+    {
+        cachedBeepEnabled = stoveBeepIsEnabled();
+        json["enabled"] = cachedBeepEnabled;
+        serializeJson(json, buffer);
+        wm.server->send(200, "application/json", buffer);
+        return;
+    }
+
+    wm.server->send(405);
+}
+
+static int timeStrToTimerValue(const char* str)
+{
+    if (strcmp(str, "off") == 0) return 144;
+    int h = 0, m = 0;
+    if (sscanf(str, "%d:%d", &h, &m) != 2) return -1;
+    if (h < 0 || h > 23 || m < 0 || m > 59) return -1;
+    int totalMins = h * 60 + m;
+    if (totalMins % 10 != 0) return -1;
+    return totalMins / 10;
+}
+
+// ─────────────────────────────────────────────
+// Timer helpers shared by /api/timers and /api/timers/prN
+// ─────────────────────────────────────────────
+
+static int timerIndexFromUri(const String& uri)
+{
+    const char* prNames[6] = {"pr1", "pr2", "pr3", "pr4", "pr5", "pr6"};
+    String lower = uri;
+    lower.toLowerCase();
+    for (int i = 0; i < 6; i++)
+        if (lower.endsWith(prNames[i])) return i;
+    return -1;
+}
+
+static void serializeTimerToJson(int idx, JsonObject timer)
+{
+    byte base    = timerBases[idx];
+    int  enabled = stove.read(eeprom, base + TIMER_ONOFF_OFFSET);
+    timer["enabled"] = enabled > 0;
+    if (enabled > 0)
+    {
+        timer["on"]  = timerValueToTimeStr(stove.read(eeprom, base + TIMER_ONTIME_OFFSET));
+        timer["off"] = timerValueToTimeStr(stove.read(eeprom, base + TIMER_OFFTIME_OFFSET));
+
+        int dow = stove.read(eeprom, base + TIMER_DOW_OFFSET);
+        JsonObject enabledOn = timer.createNestedObject("enabled_on");
+        enabledOn["monday"]    = (dow & 1)  != 0;
+        enabledOn["tuesday"]   = (dow & 2)  != 0;
+        enabledOn["wednesday"] = (dow & 4)  != 0;
+        enabledOn["thursday"]  = (dow & 8)  != 0;
+        enabledOn["friday"]    = (dow & 16) != 0;
+        enabledOn["saturday"]  = (dow & 32) != 0;
+        enabledOn["sunday"]    = (dow & 64) != 0;
+
+        JsonObject settings = timer.createNestedObject("settings");
+        settings["setpoint"]     = stove.read(eeprom, base + TIMER_SETPOINT_OFFSET);
+        settings["flame_power"]  = stove.read(eeprom, base + TIMER_FLAME_OFFSET);
+        settings["RoomFanSpeed"] = stove.read(eeprom, base + TIMER_FAN_OFFSET);
+    }
+}
+
+// Partial write — only touches keys present in the JSON object
+static void applyTimerJson(int idx, JsonObject timer)
+{
+    byte base = timerBases[idx];
+
+    if (timer.containsKey("enabled"))
+        stove.write(eeprom, base + TIMER_ONOFF_OFFSET, (timer["enabled"] | false) ? 1 : 0);
+
+    if (timer.containsKey("on"))
+    {
+        int val = timeStrToTimerValue(timer["on"].as<const char*>());
+        if (val >= 0) stove.write(eeprom, base + TIMER_ONTIME_OFFSET, val);
+    }
+
+    if (timer.containsKey("off"))
+    {
+        int val = timeStrToTimerValue(timer["off"].as<const char*>());
+        if (val >= 0) stove.write(eeprom, base + TIMER_OFFTIME_OFFSET, val);
+    }
+
+    if (timer.containsKey("enabled_on"))
+    {
+        JsonObject dow = timer["enabled_on"].as<JsonObject>();
+        byte dowVal = 0;
+        if (dow["monday"]    | false) dowVal |= 1;
+        if (dow["tuesday"]   | false) dowVal |= 2;
+        if (dow["wednesday"] | false) dowVal |= 4;
+        if (dow["thursday"]  | false) dowVal |= 8;
+        if (dow["friday"]    | false) dowVal |= 16;
+        if (dow["saturday"]  | false) dowVal |= 32;
+        if (dow["sunday"]    | false) dowVal |= 64;
+        stove.write(eeprom, base + TIMER_DOW_OFFSET, dowVal);
+    }
+
+    if (timer.containsKey("settings"))
+    {
+        JsonObject settings = timer["settings"].as<JsonObject>();
+        if (settings.containsKey("setpoint"))
+        {
+            int sp = settings["setpoint"].as<int>();
+            if (sp >= 7 && sp <= 30) stove.write(eeprom, base + TIMER_SETPOINT_OFFSET, sp);
+        }
+        if (settings.containsKey("flame_power"))
+        {
+            int fp = settings["flame_power"].as<int>();
+            if (fp >= 1 && fp <= 5) stove.write(eeprom, base + TIMER_FLAME_OFFSET, fp);
+        }
+        if (settings.containsKey("RoomFanSpeed"))
+        {
+            int fs = settings["RoomFanSpeed"].as<int>();
+            if (fs >= 0 && fs <= 3) stove.write(eeprom, base + TIMER_FAN_OFFSET, fs);
+        }
+    }
+}
+
+// ─────────────────────────────────────────────
+// GET/POST  /api/timers  — all timers
+// ─────────────────────────────────────────────
+
+void handleRouteTimers()
+{
+    const char* prNames[6] = {"PR1", "PR2", "PR3", "PR4", "PR5", "PR6"};
+
+    if (wm.server->method() == HTTP_GET)
+    {
+        DynamicJsonDocument json(2048);
+        JsonObject timers = json.createNestedObject("timers");
+        for (int i = 0; i < 6; i++)
+            serializeTimerToJson(i, timers.createNestedObject(prNames[i]));
+        serializeJson(json, buffer);
+        wm.server->send(200, "application/json", buffer);
+        return;
+    }
+
+    if (wm.server->method() == HTTP_POST)
+    {
+        String body = wm.server->arg("plain");
+        if (body.length() == 0) { wm.server->send(400, "application/json", "{\"error\":\"Empty body\"}"); return; }
+        DynamicJsonDocument input(2048);
+        if (deserializeJson(input, body)) { wm.server->send(400, "application/json", "{\"error\":\"Invalid JSON\"}"); return; }
+        if (!input.containsKey("timers")) { wm.server->send(400, "application/json", "{\"error\":\"Missing 'timers' key\"}"); return; }
+
+        JsonObject timers = input["timers"].as<JsonObject>();
+        for (int i = 0; i < 6; i++)
+            if (timers.containsKey(prNames[i]))
+                applyTimerJson(i, timers[prNames[i]].as<JsonObject>());
+
+        wm.server->send(200, "application/json", "{\"result\":\"success\"}");
+        return;
+    }
+
+    wm.server->send(405, "application/json", "{\"error\":\"Method not allowed\"}");
+}
+
+// ─────────────────────────────────────────────
+// GET / POST / PATCH / DELETE  /api/timers/prN
+// ─────────────────────────────────────────────
+
+static void sendTimerResponse(int idx)
+{
+    const char* prNames[6] = {"PR1", "PR2", "PR3", "PR4", "PR5", "PR6"};
+    DynamicJsonDocument json(512);
+    json["result"] = "success";
+    serializeTimerToJson(idx, json.createNestedObject(prNames[idx]));
+    String out;
+    serializeJson(json, out);
+    wm.server->send(200, "application/json", out);
+}
+
+void handleRouteTimer()
+{
+    int idx = timerIndexFromUri(wm.server->uri());
+    if (idx < 0) { wm.server->send(404, "application/json", "{\"error\":\"Timer not found\"}"); return; }
+
+    const char* prNames[6] = {"PR1", "PR2", "PR3", "PR4", "PR5", "PR6"};
+
+    // GET — return this timer's current config
+    if (wm.server->method() == HTTP_GET)
+    {
+        DynamicJsonDocument json(512);
+        serializeTimerToJson(idx, json.createNestedObject(prNames[idx]));
+        String out;
+        serializeJson(json, out);
+        wm.server->send(200, "application/json", out);
+        return;
+    }
+
+    // DELETE — disable the timer
+    if (wm.server->method() == HTTP_DELETE)
+    {
+        stove.write(eeprom, timerBases[idx] + TIMER_ONOFF_OFFSET, 0);
+        sendTimerResponse(idx);
+        return;
+    }
+
+    // POST — full replace (all fields required)
+    // PATCH — partial update (only provided fields written)
+    if (wm.server->method() == HTTP_POST || wm.server->method() == HTTP_PATCH)
+    {
+        String body = wm.server->arg("plain");
+
+        // Empty body on POST = enable the timer without touching other settings
+        if (body.length() == 0)
+        {
+            if (wm.server->method() == HTTP_POST)
+            {
+                stove.write(eeprom, timerBases[idx] + TIMER_ONOFF_OFFSET, 1);
+                sendTimerResponse(idx);
+            }
+            else
+            {
+                wm.server->send(400, "application/json", "{\"error\":\"Empty body\"}");
+            }
+            return;
+        }
+
+        DynamicJsonDocument input(512);
+        if (deserializeJson(input, body)) { wm.server->send(400, "application/json", "{\"error\":\"Invalid JSON\"}"); return; }
+
+        JsonObject timer = input.as<JsonObject>();
+        applyTimerJson(idx, timer);
+        sendTimerResponse(idx);
+        return;
+    }
+
+    wm.server->send(405, "application/json", "{\"error\":\"Method not allowed\"}");
 }
 
 void handleRouteFanspeed()
@@ -1644,6 +2034,14 @@ void setup()
     wm.server->on("/api/time", handleRouteTime);
     wm.server->on("/api/remote", handleRouteRemote);
     wm.server->on("/api/burn", handleRouteBurn);
+    wm.server->on("/api/beep", handleRouteBeep);
+    wm.server->on("/api/timers",     handleRouteTimers);
+    wm.server->on("/api/timers/pr1", handleRouteTimer);
+    wm.server->on("/api/timers/pr2", handleRouteTimer);
+    wm.server->on("/api/timers/pr3", handleRouteTimer);
+    wm.server->on("/api/timers/pr4", handleRouteTimer);
+    wm.server->on("/api/timers/pr5", handleRouteTimer);
+    wm.server->on("/api/timers/pr6", handleRouteTimer);
     wm.server->on("/api/dump", handleRouteDump);
     wm.server->on("/api", handleRouteSwaggerUI);    
     wm.server->on("/api-specs.json", handleRouteSwaggerJSON);   
@@ -1655,6 +2053,8 @@ void setup()
     {
         setupTelnet();
     }
+    stoveMutex = xSemaphoreCreateMutex();
+    xTaskCreatePinnedToCore(sensorTask, "SensorTask", 8192, NULL, 1, NULL, 0);
     getStates();
 }
 
@@ -1668,19 +2068,9 @@ void loop()
     ArduinoOTA.handle();
 
     unsigned long currentMillis = millis();
-    if (previousMillis > currentMillis)    { previousMillis = 0; }
     if (previousMillisNTP > currentMillis) { previousMillisNTP = 0; }
 
-    // Sensor cache refresh — only while WiFi is up; previousMillis reset AFTER
-    // getStates() returns so the ~1.4s UART cycle does not immediately re-trigger.
-    if (currentMillis - previousMillis >= 1500)
-    {
-        if (WiFi.status() == WL_CONNECTED)
-        {
-            getStates();
-        }
-        previousMillis = millis(); // reset after blocking call, not before
-    }
+    // Sensor cache is refreshed by a background task on the second core.
 
     // NTP sync + WiFi health check — every 60s
     if (currentMillis - previousMillisNTP >= 60000)

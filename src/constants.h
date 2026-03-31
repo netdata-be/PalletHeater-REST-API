@@ -5,7 +5,8 @@
 #include <WiFiUdp.h>
 #include "EasyLed.h"
 #include <EasyButton.h>
-#include "time.h"
+#include <ctime>
+
 #include "Stove.h"
 
 
@@ -25,8 +26,7 @@
 const char* ntpServer = "nl.pool.ntp.org";
 const char * defaultTimezone = "CET-1CEST,M3.5.0/2,M10.5.0/3";
 
-tm timeinfo;
-struct tm tm = {0};
+int currentDst = 0;
 time_t now;
 time_t stoveTime;
 long unsigned lastNTPtime;
@@ -63,7 +63,7 @@ Stove stove(2);
 char buffer[9000];
 
 bool StoveIsOn = false;
-String StoveStateStr = "Unknown";
+char StoveStateStr[32] = "Unknown";
 
 unsigned long StoveStateUpdatedAt = 0;
 unsigned long ambTempUpdatedAt = 0;
@@ -71,7 +71,6 @@ unsigned long flamePowerpUpdatedAt = 0;
 unsigned long fumesTempUpdatedAt = 0;
 unsigned long getStatesUpdatedAt = 0;
 
-long previousMillis;
 long previousMillisNTP;
 
 #define SENSOR_DEBUG 0  // Set to 1 to enable verbose sensor read logging
@@ -154,7 +153,7 @@ int energySavingStop = 0;
 String stoveDebugBuffer = "";
 
 float cachedAugerSpeed = 0.0;
-String cachedFirmwareVersion = "";
+char cachedFirmwareVersion[32] = "Unknown";
 int cachedLowPallet = 0;
 bool cachedBeepEnabled = false;
 int cachedNumberOfStarts = 0;
@@ -166,8 +165,38 @@ int cachedFumeFanRPM = 0;
 int cachedRemoteControlLastSeen = -1;
 int cachedErrors[5] = {0, 0, 0, 0, 0};
 
+int cachedTimerEnabled[6] = {0, 0, 0, 0, 0, 0};
+int cachedTimerOnVal[6] = {0, 0, 0, 0, 0, 0};
+int cachedTimerOffVal[6] = {0, 0, 0, 0, 0, 0};
+int cachedTimerSetpoint[6] = {0, 0, 0, 0, 0, 0};
+int cachedTimerFlame[6] = {0, 0, 0, 0, 0, 0};
+int cachedTimerFan[6] = {0, 0, 0, 0, 0, 0};
+int cachedTimerDowMask[6] = {0, 0, 0, 0, 0, 0};
+
 char storedRam[256];
 char storedEeprom[256];
+
+// ── Timer (PR1-PR6) EEPROM layout ───────────────────────────────────────────
+// Base addresses for each timer block (8 bytes each)
+static const byte timerBases[6] = { 0x3C, 0x50, 0x58, 0x60, 0x68, 0x70 };
+
+// Offsets within each 8-byte timer block
+#define TIMER_ONOFF_OFFSET    0   // 0=disabled, 1=enabled
+#define TIMER_ONTIME_OFFSET   1   // val*10 = minutes since 00:00; 144=off
+#define TIMER_OFFTIME_OFFSET  2   // same encoding
+#define TIMER_SETPOINT_OFFSET 3   // °C  (7–30)
+#define TIMER_FLAME_OFFSET    4   // flame power (1–5)
+#define TIMER_FAN_OFFSET      5   // room fan speed (0–3)
+#define TIMER_DOW_OFFSET      7   // day-of-week bitmask (Mon=1 … Sun=64)
+
+static String timerValueToTimeStr(int val)
+{
+    if (val < 0 || val >= 144) return "off";
+    int totalMinutes = val * 10;
+    char buf[6];
+    snprintf(buf, sizeof(buf), "%02d:%02d", totalMinutes / 60, totalMinutes % 60);
+    return String(buf);
+}
 
 enum stoveStateCode {
     UNKNOWN = -1,
