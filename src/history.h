@@ -325,6 +325,9 @@ static void historyTick()
     static unsigned long lastMs = 0;
     time_t t = time(nullptr);
     if (t < 1700000000 || lastFastStatesAt == 0 || lastSlowStatesAt == 0) return;  // no NTP / no data yet
+    // serial link to the stove down: no samples (the cached values are only the last
+    // known ones), the chart shows a gap; the week averages skip this time too
+    if (stove.linkDown || stoveState == UNKNOWN) return;
     if (histCount && millis() - lastMs < HIST_INTERVAL_S * 1000UL) return;
     lastMs = millis();
     // Loaded history may already contain a sample from just before a restart

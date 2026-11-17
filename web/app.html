@@ -2706,7 +2706,22 @@ function renderHistory() {
   const f = hist.fields, col = n => f.includes(n) ? samples.map(r => r[f.indexOf(n)]) : samples.map(() => null);
   const times = col("t"), states = col("state");
   const cs = getComputedStyle(document.documentElement), color = n => cs.getPropertyValue(n).trim();
-  const series = SERIES.filter(s => histVis[s.key] && seriesOn(s) && seriesHasData(s)).map(s => ({ ...s, values: s.derive ? s.derive(col) : col(s.field), stroke: color(s.color) }));
+  // Serial link down (link events): nothing was measured, keep the chart empty there.
+  // Older firmware still stored samples with the last known values in that time.
+  const downs = [];
+  { let from = null;
+    for (const e of (Array.isArray(events) ? events : [])) {
+      if (e.type !== "link") continue;
+      if (!e.up && from === null) from = e.t;
+      else if (e.up && from !== null) { downs.push([from, e.t]); from = null; }
+    }
+    if (from !== null) downs.push([from, Infinity]); }
+  const inDown = tm => downs.some(([a, b]) => tm >= a && tm <= b);
+  const crossesDown = (ta, tb) => downs.some(([a, b]) => a < tb && b > ta);
+  const series = SERIES.filter(s => histVis[s.key] && seriesOn(s) && seriesHasData(s)).map(s => {
+    const raw = s.derive ? s.derive(col) : col(s.field);
+    return { ...s, values: raw.map((v, i) => inDown(times[i]) ? null : v), stroke: color(s.color) };
+  });
   const lanes = LANES.filter(l => series.some(s => s.lane === l.id));
   const host = $("histChart"), svg = host.querySelector("svg"), tip = host.querySelector(".tip");
   const W = Math.max(280, host.clientWidth), m = { l: 34, r: 58, t: 6, b: 22 }, gap = 26, titleH = 14;
@@ -2760,7 +2775,7 @@ function renderHistory() {
       let d = "", prevT = null;
       s.values.forEach((v, i) => {
         if (v === null || isNaN(v)) { prevT = null; return; }
-        const brk = prevT === null || times[i] - prevT > gapS;             // 5 intervals without samples: gap
+        const brk = prevT === null || times[i] - prevT > gapS || crossesDown(prevT, times[i]);   // 5 intervals without samples, or the serial link was down in between: gap
         if (s.step && !brk) d += `H${X(times[i]).toFixed(1)}V${Y(v).toFixed(1)}`;
         else d += `${brk ? "M" : "L"}${X(times[i]).toFixed(1)},${Y(v).toFixed(1)}`;
         prevT = times[i];
