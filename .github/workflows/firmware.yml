@@ -63,6 +63,13 @@ jobs:
             echo "::error::git describe ($v) does not match the tag ${GITHUB_REF_NAME}"; exit 1
           fi
 
+      - name: Prepare src/buildinfo.cpp
+        # scripts/buildinfo.py writes src/buildinfo.cpp (not in git) during the first build.
+        # PlatformIO wipes all of .pio/build when the list of source files changes between
+        # two `pio run` calls, so a new file after the first build would delete the firmware
+        # of the previous step. Create it up front; the build overwrites it.
+        run: touch src/buildinfo.cpp
+
       - name: Unit tests (native)
         run: pio test -e native
 
