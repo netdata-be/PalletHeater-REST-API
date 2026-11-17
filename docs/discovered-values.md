@@ -148,7 +148,7 @@ EEPROM (0x20)
 | 0x91       | 145        | x * -1  | °C     | Energy saving START negative offset    |                          | 0 - 3      |
 | 0xC0       | 192        | x       | id     | Combustion Quality, see lookup         | 76                       |            |
 | 0xC6       | 198        | x       | bool   | Low pellets monitoring                 | 1                        | 0 - 1      |
-| 0xC4       | 196        | x       | bool   | Pellet contact N.O. = 0 / N.C. = 1     | 0                        | 0 - 1      |
+| 0xC4       | 196        | x       | bool   | Pellet contact N.O. = 0 / N.C. = 1 (verified 17/11/2026) | 0              | 0 - 1      |
 | 0xE0       | 224        | x       | error  | Memory Error - Position 1 - See table  |                          |            |
 | 0xE1       | 225        | x       | error  | Memory Error - Position 2 - See table  |                          |            |
 | 0xE2       | 226        | x       | error  | Memory Error - Position 3 - See table  |                          |            |
@@ -167,7 +167,7 @@ EEPROM (0x20)
 | 0xEC       | 236        | x       | hours  | Working hours ???                      |                          |            |
 | 0xEE       | 238        | x       | amount | Amount of starts low byte (16-bit LE)  | 1                        |            |
 | 0xEF       | 239        | x       | amount | Amount of starts high byte (16-bit LE) |                          |            |
-| 0xFA       | 250        |         |        | Unknown                                |                          |            |
+| 0xF8 – 0xFD | 248 – 253 | BCD     |        | Clock, see below (0xF9 hour, 0xFA minute) |                       |            |
 
 # Clock (EEPROM 0xF8 - 0xFD)
 
@@ -253,9 +253,14 @@ Not fully completed yet
 |  79 | Display settings      |
 |  80 | Language              |
 | 123 | State Stove           |
+| 128 | Flame power           |
 | 130 | MultiFuoco            |
 | 145 | Energy Saving - Stop  |
 | 146 | Energy Saving - Start |
+| 193 | Combustion quality    |
+| 197 | Pellet contact        |
+| 198 | Pellet quality        |
+| 199 | Pellet reserve        |
 | 200 | Multi Comfort Plus    |
 | 248 | Day of week           |
 | 249 | Hour                  |
@@ -381,7 +386,7 @@ Not verified with a controlled change unless stated. Sources: a full RAM + EEPRO
 
 Verified 16/11/2026 on the remote (menu shows ON): RAM 0x1A = 40, 0x18 = 199, 0x19 = 1. The setting is stored in **EEPROM 0xC6** (1 = ON).
 
-Parameter ids in RAM 0x18 map to EEPROM address = id − 1 for all settings checked so far (CHRONO verified 16/11/2026: PR1 on/off = parameter 61 = EEPROM 0x3C, so program n field f = parameter timerBase[n] + f + 1, i.e. PR1 61–68, PR2 81–88, PR3 89–96, PR4 97–104, PR5 105–112, PR6 113–120): 76 beep → 0x4B, 80 language → 0x4F, 128 flame → 0x7F, 130 MultiFuoco → 0x81, 145 / 146 energy saving → 0x90 / 0x91, 193 combustion quality → 0xC0, 199 pellet reserve → 0xC6. Exception: 198 pellet quality is read from 0xBC (0xC5 holds 137, meaning unknown).
+Parameter ids in RAM 0x18 map to EEPROM address = id − 1 for all settings checked so far (CHRONO verified 16/11/2026: PR1 on/off = parameter 61 = EEPROM 0x3C, so program n field f = parameter timerBase[n] + f + 1, i.e. PR1 61–68, PR2 81–88, PR3 89–96, PR4 97–104, PR5 105–112, PR6 113–120): 76 beep → 0x4B, 80 language → 0x4F, 128 flame → 0x7F, 130 MultiFuoco → 0x81, 145 / 146 energy saving → 0x90 / 0x91, 193 combustion quality → 0xC0, 197 pellet contact → 0xC4, 199 pellet reserve → 0xC6. Exception: 198 pellet quality is read from 0xBC (0xC5 holds 137, meaning unknown).
 
 `lowPalletAlarm` is computed from RAM 0xA4 (5 = reserve sensor active) and RAM 0x89 (≤ 1 = alarm). With the hopper not empty: 0xA4 = 0, 0x89 = 20. Whether 0x89 is a remaining-time counter that starts when the sensor triggers is not verified. It is not a copy of the set point: it stayed 20 when the set point was changed to 21 (17/11/2026).
 | Room fan in standby (superseded: power 9 is the reduced power, see "Modulation when the set point is reached") | At 17:27, 13 min after standby started, with fumes at 108 °C: 0x0A 21 → 9, 0xA7 86 → 104, 0xD3 2 → 1, 0x04 2 → 1, 0x66 21 → 5 | The stove keeps the room fan running at a low cooling power (9) after the flame is out. 0xD3 = 1 / 0x04 = 1 probably mean "cooling run" (2 = normal run). The app shows this as "running at low power" |
@@ -396,6 +401,10 @@ Update 17/11/2026 19:41 – 20:05 (pellets running low, stove working at flame 1
 
 Update 17/11/2026 16:38 – 16:40 (stove restarting by energy saving, state 2 pellet loading): RAM 0x2F counted down 208 → 145 in 63 s (~1 per second) and RAM 0x31 56 → 53, 0x07 1 → 4. Supports 0x2F = countdown in seconds of the current phase, now also seen in the start-up phase. In this phase: 0x09 / 0x43 = 0 / 10, 0x39 = 16, 0x36 = 0x37 = 119 (1440 rpm fume fan), 0x0A = 0 (room fan off, 0x04 = 0 too cold), 0xAF = 56, 0xA1 = 214.
 
+
+# PELLET CONTACT (installer menu 41, parameter 197)
+
+Verified 17/11/2026 on the remote, stove in standby (state 7). Changing *CONTACT PELLET* from N.O. to N.C.: RAM 0x1A = 41 (menu), 0x18 = 197 while editing and 0 after confirming, 0x19 followed the value shown (0 = N.O., 1 = N.C.). The setting is stored in **EEPROM 0xC4** (0 = N.O., 1 = N.C.), in line with id − 1. A full EEPROM dump before, after and after setting it back showed no other change apart from the clock (0xF9 / 0xFA, hour and minute in BCD). The stove raised no error (no E19) with N.C.; it was set back to N.O. the same evening.
 # DISPLAY – backlight (menu 12, parameter 79)
 
 Verified 16/11/2026: the screen "SET ACHTERGRONDVERLICHTING ON 10 s" is menu 12, parameter 79 (EEPROM 0x4E = 1). RAM 0x19 stays 1 while the value on the remote is changed (10 s → 9 s), so the backlight time is kept in the remote itself and is not visible over the stove bus. The screen "SET POWER ON 31 s" in the same menu also shows parameter 79 with 0x19 = 1: all DISPLAY screens look the same on the bus, so it cannot be told which one is open.

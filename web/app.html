@@ -2348,7 +2348,7 @@ const LCD_MENU = {
   45: ["COMBUSTION|QUALITY", "COMBUSTION|QUALITY", "flameair", 1], 46: ["INSTELL|WIRELESS", "SET|WIRELESS", null, 1],
   47: ["ASSOCIEREN|WIRELESS", "LINK|WIRELESS", null, 1], 49: ["WIFI", "WIFI", "signal", 1], 50: ["PARAMETER", "PARAMETERS", "tools", 1],
 };
-const LCD_PARAM_MENU = { 199: 40, 130: 1, 71: 7, 200: 8, 145: 9, 146: 9, 76: 11, 79: 12, 80: 3, 193: 45, 198: 44, 217: 46, 248: 5, 249: 5, 250: 5, 251: 5, 252: 5, 253: 5 };
+const LCD_PARAM_MENU = { 199: 40, 130: 1, 71: 7, 200: 8, 145: 9, 146: 9, 76: 11, 79: 12, 80: 3, 193: 45, 197: 41, 198: 44, 217: 46, 248: 5, 249: 5, 250: 5, 251: 5, 252: 5, 253: 5 };
 const LCD_LANG = { 1: "ENG", 2: "FRA", 3: "DEU", 4: "NLD", 5: "POR", 6: "SPA", 7: "HRV", 8: "DAN" };
 const CQ_RAW = { 76: "+G", 2: "-3", 3: "-2", 4: "-1", 5: "0", 6: "+1", 7: "+2", 8: "+3" };
 const L = (nl, en) => (lang === "nl" ? nl : en);
@@ -2576,11 +2576,11 @@ function renderLcd() {
 // Name of the parameter being edited on the remote (RAM 0x18), in the web app language
 const PARAM_NAMES = {
   nl: { 71:"Multicomfort", 76:"Zoemer", 79:"Display (instelling in de afstandsbediening)", 80:"Taal", 123:"Staat kachel", 128:"Vlamvermogen", 130:"Multifuoco",
-        145:"Energy saving – stop", 146:"Energy saving – start", 193:"Verbrandingskwaliteit", 198:"Pelletkwaliteit", 199:"Pelletreserve",
+        145:"Energy saving – stop", 146:"Energy saving – start", 193:"Verbrandingskwaliteit", 197:"Contact pellet", 198:"Pelletkwaliteit", 199:"Pelletreserve",
         200:"Multicomfort Plus", 217:"Instell wireless", 248:"Klok – dag", 249:"Klok – uur", 250:"Klok – minuten", 251:"Klok – datum",
         252:"Klok – maand", 253:"Klok – jaar" },
   en: { 71:"Multicomfort", 76:"Beep", 79:"Display (setting kept in the remote)", 80:"Language", 123:"Stove status", 128:"Flame power", 130:"Multifuoco",
-        145:"Energy saving – stop", 146:"Energy saving – start", 193:"Combustion quality", 198:"Pellet quality", 199:"Pellet reserve",
+        145:"Energy saving – stop", 146:"Energy saving – start", 193:"Combustion quality", 197:"Pellet contact", 198:"Pellet quality", 199:"Pellet reserve",
         200:"Multicomfort Plus", 217:"Set wireless", 248:"Clock – day", 249:"Clock – hour", 250:"Clock – minutes", 251:"Clock – date",
         252:"Clock – month", 253:"Clock – year" },
 };
@@ -2992,7 +2992,7 @@ const PARAMS = [
     x: ["Altijd 1; de schermverlichting zit in de afstandsbediening zelf", "Always 1; the backlight is kept in the remote itself"] },
   { a: [0x48], n: ["Externe thermostaat: werking", "External thermostat: mode"], f: v => v[0] ? "Stop" : L("Moduleren", "Modulate"), st: "doc" },
   { a: [0x49], n: ["Externe thermostaat: contact", "External thermostat: contact"], f: v => v[0] ? "N.C." : "N.O.", st: "doc" },
-  { a: [0xC4], n: ["Pelletcontact", "Pellet contact"], f: v => v[0] ? "N.C." : "N.O.", st: "doc" },
+  { a: [0xC4], n: ["Pelletcontact", "Pellet contact"], f: v => v[0] ? "N.C." : "N.O.", st: "ok" },
   { a: [0xC5], n: ["Onbekend (naast pelletkwaliteit)", "Unknown (next to pellet quality)"], f: v => String(v[0]), st: "u" },
   { a: [0xE7], n: ["Uren sinds onderhoud", "Hours since service"], f: v => v[0] + " h", st: "ok" },
   { a: [0xEA, 0xEB], n: ["Werkuren totaal", "Total working hours"], f: v => (v[0] | (v[1] << 8)) + " h", st: "ok" },

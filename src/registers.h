@@ -20,6 +20,7 @@ const char* getSelectedParameterName(int id)
         case 145: return "Energy Saving - Stop";
         case 146: return "Energy Saving - Start";
         case 193: return "Combustion quality";
+        case 197: return "Pellet contact";
         case 198: return "Pellet quality";
         case 199: return "Pellet reserve";
         case 200: return "Multi Comfort Plus";
