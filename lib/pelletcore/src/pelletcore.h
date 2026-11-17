@@ -397,4 +397,107 @@ inline int firmwareAssetRank(const char* name)
     return 0;
 }
 
+// ---- Ring buffers for the live views (log, bus monitor) ---------------------------
+// Readers keep a cursor = the total number of items written so far (`next` of the
+// previous read). A cursor older than the buffer reports `lost`; a cursor from
+// before a restart (larger than the total) starts again at the oldest item.
+template <size_t N>
+struct TextRing {
+    char buf[N];
+    uint32_t total = 0;                       // bytes ever written
+    void write(const char* s, size_t n) {
+        for (size_t i = 0; i < n; i++) buf[(total + i) % N] = s[i];
+        total += (uint32_t)n;
+    }
+    uint32_t oldest() const { return total > N ? total - (uint32_t)N : 0; }
+    // Copies at most `max` bytes from cursor `since` into out. Returns the count;
+    // `from` = where the copy really started, `lost` = bytes that were overwritten.
+    size_t read(uint32_t since, char* out, size_t max, uint32_t& from, bool& lost) const {
+        uint32_t lo = oldest();
+        lost = since < lo && since != 0;
+        from = (since < lo || since > total) ? lo : since;
+        size_t n = total - from; if (n > max) n = max;
+        for (size_t i = 0; i < n; i++) out[i] = buf[(from + i) % N];
+        return n;
+    }
+};
+
+template <typename T, size_t N>
+struct Ring {
+    T items[N];
+    uint32_t total = 0;                       // items ever pushed
+    void push(const T& v) { items[total % N] = v; total++; }
+    uint32_t oldest() const { return total > N ? total - (uint32_t)N : 0; }
+    // Same cursor rules as TextRing. Item k (k >= from) is at(k).
+    size_t read(uint32_t since, size_t max, uint32_t& from, bool& lost) const {
+        uint32_t lo = oldest();
+        lost = since < lo && since != 0;
+        from = (since < lo || since > total) ? lo : since;
+        size_t n = total - from; return n > max ? max : n;
+    }
+    const T& at(uint32_t k) const { return items[k % N]; }
+};
+
+// ---- Hourly history (7 days) -------------------------------------------------------
+// The 2-minute samples are averaged per clock hour. Unknown inputs are negative
+// (-1) and left out of their average.
+struct HourInput {
+    uint32_t t;
+    int room10, stove10, remote10;            // °C x10
+    int setpoint, fume, flame, flameActual, fan, fanActual, state;
+    int auger10, fumeRpm;                     // -1 = unknown
+};
+struct HourRecord {                           // stored on SPIFFS: keep the layout
+    uint32_t t;                               // start of the hour (unix, UTC)
+    int16_t  room10, stove10, remote10;
+    uint8_t  setpoint, fume, fumeMax;
+    uint8_t  burnPct;                         // % of the samples in a heating state (1 - 5)
+    uint8_t  flame10, flameAct10, fan10, fanAct10;   // averages x10, 0xFF = unknown
+    int8_t   state;                           // most frequent state
+    uint8_t  n;                               // number of samples
+    int16_t  auger10;                         // rpm x10, -1 = unknown
+    uint16_t fumeRpm;                         // 0xFFFF = unknown
+};
+inline bool heatingState(int s) { return s >= 1 && s <= 5; }
+struct HourAcc {
+    uint32_t hour = 0; int n = 0;
+    long room = 0, stove = 0, remote = 0, fume = 0, flame = 0, fan = 0;
+    long flameAct = 0, fanAct = 0, auger = 0, rpm = 0;
+    int nFlameAct = 0, nFanAct = 0, nAuger = 0, nRpm = 0, burning = 0, fumeMax = 0, setpoint = 0;
+    int states[12] = {0};                     // index state + 1 (-1 .. 10)
+    static uint32_t hourOf(uint32_t t) { return t - t % 3600; }
+    bool empty() const { return n == 0; }
+    void reset() { *this = HourAcc(); }
+    void add(const HourInput& s) {
+        if (n == 0) hour = hourOf(s.t);
+        n++;
+        room += s.room10; stove += s.stove10; remote += s.remote10;
+        fume += s.fume; if (s.fume > fumeMax) fumeMax = s.fume;
+        flame += s.flame; fan += s.fan; setpoint = s.setpoint;   // set point: last value of the hour
+        if (s.flameActual >= 0) { flameAct += s.flameActual; nFlameAct++; }
+        if (s.fanActual >= 0)   { fanAct += s.fanActual; nFanAct++; }
+        if (s.auger10 >= 0)     { auger += s.auger10; nAuger++; }
+        if (s.fumeRpm >= 0)     { rpm += s.fumeRpm; nRpm++; }
+        if (heatingState(s.state)) burning++;
+        if (s.state >= -1 && s.state <= 10) states[s.state + 1]++;
+    }
+    HourRecord result() const {
+        HourRecord r = {};
+        r.t = hour; r.n = (uint8_t)(n > 255 ? 255 : n);
+        if (!n) return r;
+        auto avg = [](long sum, int cnt) { return (long)((sum >= 0 ? sum * 2 + cnt : sum * 2 - cnt) / (2 * cnt)); };   // rounded
+        r.room10 = (int16_t)avg(room, n); r.stove10 = (int16_t)avg(stove, n); r.remote10 = (int16_t)avg(remote, n);
+        r.setpoint = (uint8_t)setpoint; r.fume = (uint8_t)avg(fume, n); r.fumeMax = (uint8_t)fumeMax;
+        r.burnPct = (uint8_t)((burning * 100 + n / 2) / n);
+        r.flame10 = (uint8_t)avg(flame * 10, n); r.fan10 = (uint8_t)avg(fan * 10, n);
+        r.flameAct10 = nFlameAct ? (uint8_t)avg(flameAct * 10, nFlameAct) : 0xFF;
+        r.fanAct10   = nFanAct   ? (uint8_t)avg(fanAct * 10, nFanAct)     : 0xFF;
+        r.auger10 = nAuger ? (int16_t)avg(auger, nAuger) : -1;
+        r.fumeRpm = nRpm ? (uint16_t)avg(rpm, nRpm) : 0xFFFF;
+        int best = 0; for (int i = 1; i < 12; i++) if (states[i] > states[best]) best = i;
+        r.state = (int8_t)(best - 1);
+        return r;
+    }
+};
+
 } // namespace pc

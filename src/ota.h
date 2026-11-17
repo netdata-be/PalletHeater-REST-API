@@ -12,36 +12,36 @@ void enableOTA(){
         if (bleEnabled) NimBLEDevice::stopAdvertising();
         String type;
         type = (ArduinoOTA.getCommand() == U_FLASH) ? "sketch" : "filesystem";
-        Serial.println("Updating...");
+        LOGI("update", "ArduinoOTA update started");
     }).onEnd([](){
         otaActive = false;
         if (bleEnabled) NimBLEDevice::startAdvertising();
-        Serial.println("\nEnd");
+        LOGI("update", "ArduinoOTA update done");
+        markRestart("firmware update (ArduinoOTA)");
     }).onProgress([](unsigned int progress, unsigned int total){
         esp_task_wdt_reset();
-        Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
     }).onError([](ota_error_t error){
         otaActive = false;
         if (bleEnabled) NimBLEDevice::startAdvertising();
-        Serial.printf("Error[%u]: ", error);
+        LOGE("update", "ArduinoOTA error %u", error);
         switch(error){
             case OTA_AUTH_ERROR:
-                Serial.println("Auth Failed");
+                LOGE("update", "ArduinoOTA: Auth failed");
                 break;
             case OTA_BEGIN_ERROR:
-                Serial.println("Begin Failed");
+                LOGE("update", "ArduinoOTA: Begin failed");
                 break;
             case OTA_CONNECT_ERROR:
-                Serial.println("Connect Failed");
+                LOGE("update", "ArduinoOTA: Connect failed");
                 break;
             case OTA_RECEIVE_ERROR:
-                Serial.println("Receive Failed");
+                LOGE("update", "ArduinoOTA: Receive failed");
                 break;
             case OTA_END_ERROR:
-                Serial.println("End Failed");
+                LOGE("update", "ArduinoOTA: End failed");
                 break;
             default:
-                Serial.println("¯\\_(ツ)_/¯ I... don't know.");
+                LOGE("update", "ArduinoOTA: unknown error");
         }
     });
 

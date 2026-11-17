@@ -4,7 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#111418">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PelletBridge">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>OpenPelletBridge</title>
+<script>try{var th=localStorage.getItem("theme");if(th==="light"||th==="dark")document.documentElement.setAttribute("data-theme",th)}catch(e){}</script>
 <style>
 :root{
   --bg:#f4f5f7;--card:#fff;--text:#16191d;--muted:#69707a;--line:#e3e6ea;
@@ -15,13 +23,22 @@
   /* virtual remote */
   --lcd:#dfe5d6;--lcd-ink:#1c2418;--remote:#2a2f36;--remote-btn:#3a4049;
 }
-@media (prefers-color-scheme:dark){:root{
+/* dark: follows the device (auto), or forced with the theme button (data-theme on <html>) */
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#111418;--card:#1a1e23;--text:#e9ecef;--muted:#9aa2ad;--line:#2b3138;
   --accent:#ff7a2e;--accent-soft:#3a2416;--ok:#51cf66;--warn:#fcc419;--err:#ff6b6b;
   --seg:#242a31;--shadow:none;
   --s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#0ca30c;--s7:#9085e9;--s8:#e66767;--grid:#262c33;
   --lcd:#b9c4ad;--lcd-ink:#141a10;--remote:#0d1013;--remote-btn:#262b31;
 }}
+:root[data-theme="dark"]{
+  --bg:#111418;--card:#1a1e23;--text:#e9ecef;--muted:#9aa2ad;--line:#2b3138;
+  --accent:#ff7a2e;--accent-soft:#3a2416;--ok:#51cf66;--warn:#fcc419;--err:#ff6b6b;
+  --seg:#242a31;--shadow:none;
+  --s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#0ca30c;--s7:#9085e9;--s8:#e66767;--grid:#262c33;
+  --lcd:#b9c4ad;--lcd-ink:#141a10;--remote:#0d1013;--remote-btn:#262b31;
+}
+:root{color-scheme:light dark} :root[data-theme="light"]{color-scheme:light} :root[data-theme="dark"]{color-scheme:dark}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
@@ -189,6 +206,7 @@ details.tbl th:first-child,details.tbl td:first-child{text-align:left}
 .lcd .chr{position:absolute;right:6px;top:4px}
 .lcd .big{font-size:26px;text-align:center;line-height:1.1;margin-top:4px}
 .lcd .big.huge{font-size:34px}
+.lcd .big3{font-size:25px;text-align:center;line-height:1;margin-top:5px;letter-spacing:.02em}
 .lcd .big.inv{background:var(--lcd-ink);color:var(--lcd);border-radius:3px;margin:4px auto 0;width:max-content;padding:0 6px}
 .lcd .mid{font-size:12px;text-align:center;margin-top:10px;line-height:1.2}
 .lcd .ttl.small{font-size:10px;line-height:1.25}
@@ -285,11 +303,46 @@ body:not(.debug) .d{display:none!important}
 .hyp td.o{color:var(--muted);min-width:180px}
 .hyp td.h{min-width:200px}
 @media (max-width:420px){main{padding:12px;gap:12px;grid-template-columns:1fr}.big-temps{gap:16px}.big-temps .v{font-size:24px}.bar{gap:8px}.conn span:last-child{max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+/* keyboard focus (accessibility) */
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.switch input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+/* update badge in the header */
+.xbtn.upd{border-color:var(--accent);color:var(--accent);font-weight:650}
+@media (max-width:560px){#updBadge .v{display:none}}
+/* live debugging */
+.livebar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:4px}
+.livebar input[type=text]{flex:1;min-width:160px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:7px 10px}
+.livebar label{display:flex;gap:5px;align-items:center;font-size:13px;color:var(--muted)}
+.liveout{height:380px;overflow:auto;background:var(--seg);border-radius:10px;padding:10px 12px;margin:10px 0 6px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all}
+.loglvl{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px 14px;padding:8px 0}
+.loglvl label{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px}
+.loglvl label span{color:var(--muted)}
+.liveout .warn{color:var(--warn)}
+.livewrap{margin:10px 0 6px}
+.livewrap .liveout{margin:0}
+.livehdr{font:600 12px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--muted);background:var(--seg);border-radius:10px 10px 0 0;padding:8px 12px 4px;border-bottom:1px solid var(--line);white-space:pre;overflow:hidden}
+.livehdr:not([hidden])+.liveout{border-radius:0 0 10px 10px}
+.livelegend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--muted);margin:0 0 6px}
+.livelegend span{display:inline-flex;align-items:center;gap:6px}
+.livelegend i{display:inline-block;width:10px;height:10px;border-radius:3px;background:currentColor}
+.liveout .first{color:var(--muted)}
+.liveout .raw{color:var(--muted)}
+.liveout .err{color:var(--err)} .liveout .w{color:var(--accent);font-weight:600} .liveout .ch{color:var(--ok)} .liveout .lost{color:var(--muted);font-style:italic}
+/* backup / restore dialog */
+#bkModal{position:fixed;inset:0;z-index:30;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);padding:16px}
+#bkModal.show{display:flex}
+#bkModal .mc{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;max-width:440px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+#bkModal h3{margin:0 0 6px;font-size:17px}
+#bkModal p{margin:0 0 12px;color:var(--muted);font-size:14px}
+.bksec{display:flex;gap:8px;align-items:flex-start;padding:6px 0;font-size:14px}
+.bksec input{margin-top:3px}
 </style>
 </head>
 <body>
 <header><div class="bar">
   <h1>OpenPelletBridge <span class="ver" id="appVer"></span></h1>
+  <button id="updBadge" class="xbtn upd" type="button" hidden></button>
+  <button id="themeBtn" class="xbtn" type="button"></button>
   <button id="expertBtn" class="xbtn" type="button" aria-pressed="false" data-i="expert"></button>
   <button id="debugBtn" class="xbtn" type="button" aria-pressed="false" data-i="debug"></button>
   <div class="conn"><span class="dot" id="dot"></span><span id="conn">…</span></div>
@@ -364,12 +417,12 @@ body:not(.debug) .d{display:none!important}
   <!-- History -->
   <section class="card wide">
     <h2><span data-i="history"></span>
-      <span class="seg" id="rangeSeg"><button data-h="0.5">30 min</button><button data-h="1">1 h</button><button data-h="6">6 h</button><button data-h="12">12 h</button><button data-h="24">24 h</button></span></h2>
+      <span class="seg" id="rangeSeg"><button data-h="0.5">30 min</button><button data-h="1">1 h</button><button data-h="6">6 h</button><button data-h="12">12 h</button><button data-h="24">24 h</button><button data-h="168">7 d</button></span></h2>
     <div class="chips" id="histToggles"></div>
     <div id="histEmpty" class="muted" style="display:none"></div>
     <div id="histCharts">
       <div class="chart" id="histChart"><svg role="img"></svg><div class="tip"></div></div>
-      <p class="muted" style="font-size:12px;margin:6px 0 0" data-i="histNote"></p>
+      <p class="muted" style="font-size:12px;margin:6px 0 0" id="histNote"></p>
       <details class="tbl x"><summary data-i="showTable"></summary><div class="scroll"><table id="histTable"></table></div></details>
     </div>
     <details class="tbl" id="evtBox" style="display:none"><summary data-i="evtTitle"></summary><div class="scroll"><table id="evtTable"></table></div></details>
@@ -381,7 +434,7 @@ body:not(.debug) .d{display:none!important}
     <div class="remote-wrap">
       <div class="remote" aria-hidden="true">
         <div class="lcd" id="lcd"></div>
-        <div class="rbtns"><span>▲</span><span>OK</span><span>▼</span><span>ESC</span><span class="pw">⏻</span></div>
+        <div class="rbtns" aria-hidden="true"><span>▲</span><span>OK</span><span>▼</span><span>ESC</span><span class="pw">⏻</span></div>
       </div>
       <div class="remote-info">
         <dl id="remoteList"></dl>
@@ -452,7 +505,7 @@ body:not(.debug) .d{display:none!important}
       <label class="switch"><input type="checkbox" id="keyReqToggle"><span></span></label>
     </div>
     <div class="row" id="keyRow">
-      <span class="lbl">API-key<span class="hint mono" id="keyVal">–</span></span>
+      <span class="lbl"><span data-i="apiKeyLbl"></span><span class="hint mono" id="keyVal">–</span></span>
       <span class="keybtns"><button id="keyShow" data-i="keyShow"></button><button id="keyCopy" data-i="keyCopy"></button><button id="keyRotate" data-i="keyRotate"></button></span>
     </div>
     <div class="row" id="ghRow" hidden>
@@ -475,6 +528,8 @@ body:not(.debug) .d{display:none!important}
       <a class="x" href="/api"><button data-i="apiDocs"></button></a>
       <a class="x" href="/metrics"><button>Metrics</button></a>
       <a class="x" href="/device"><button data-i="devicePage"></button></a>
+      <button id="bkExport" data-i="bkExport"></button>
+      <button id="bkImport" data-i="bkImport"></button><input type="file" id="bkFile" accept=".json,application/json" hidden>
       <button class="danger" id="restart" data-i="restart"></button>
     </div>
   </section>
@@ -533,6 +588,25 @@ body:not(.debug) .d{display:none!important}
     <p class="muted" style="font-size:12px;margin:8px 0 0" data-i="parNote"></p>
   </section>
 
+  <!-- Live debugging (debug only): firmware log and stove bus monitor -->
+  <section class="card wide d" id="liveCard">
+    <h2><span><span data-i="liveTitle"></span><span data-help="live"></span></span>
+      <span class="seg" id="liveSeg"><button data-v="log" data-i="liveLog"></button><button data-v="bus" data-i="liveBus"></button></span></h2>
+    <div class="livebar">
+      <button id="livePause" type="button"></button><button id="liveClear" type="button" data-i="liveClear"></button><button id="liveDl" type="button" data-i="liveDl"></button>
+      <input type="text" id="liveFilter" spellcheck="false" autocomplete="off">
+      <label id="busChangesL" hidden><input type="checkbox" id="busChanges" checked><span data-i="busChanges"></span></label>
+      <label id="busWritesL" hidden><input type="checkbox" id="busWrites"><span data-i="busWrites"></span></label>
+      <label id="busErrorsL" hidden><input type="checkbox" id="busErrors"><span data-i="busErrors"></span></label>
+      <label id="busRawL" hidden><input type="checkbox" id="busRaw"><span data-i="busRaw"></span></label>
+      <label id="busBinL" hidden><input type="checkbox" id="busBin"><span data-i="busBin"></span></label>
+    </div>
+    <details id="logLvlBox" class="tbl" style="margin-top:8px"><summary data-i="logLevels"></summary><div id="logLvl" class="loglvl"></div></details>
+    <div class="livewrap"><div id="liveHdr" class="livehdr" hidden></div><pre id="liveOut" class="liveout" tabindex="0"></pre></div>
+    <div id="liveLegend" class="livelegend"></div>
+    <p class="muted" style="font-size:12px;margin:0"><span id="liveStat"></span> · <span data-i="liveNote"></span></p>
+  </section>
+
   <!-- Register hypotheses (debug only) -->
   <section class="card wide d" id="hypCard">
     <h2><span><span data-i="hypTitle"></span><span data-help="hyp"></span></span><span class="muted" id="hypAge" style="text-transform:none;letter-spacing:0;font-weight:400"></span></h2>
@@ -541,7 +615,15 @@ body:not(.debug) .d{display:none!important}
   </section>
 </main>
 
-<div id="toast"></div>
+<div id="bkModal" role="dialog" aria-modal="true" aria-labelledby="bkTitle"><div class="mc">
+  <h3 id="bkTitle" data-i="bkTitle"></h3>
+  <p id="bkInfo"></p>
+  <div id="bkSections"></div>
+  <p class="muted" style="font-size:12px;margin-top:10px" data-i="bkNote"></p>
+  <div class="actions" style="justify-content:flex-end"><button id="bkCancel" data-i="cancel"></button><button class="primary" id="bkApply" data-i="bkApply"></button></div>
+</div></div>
+
+<div id="toast" role="status" aria-live="polite"></div>
 <div id="pop" role="tooltip"></div>
 <div id="tpPop" role="dialog" aria-modal="false"></div>
 <div id="keyModal" role="dialog" aria-modal="true" aria-labelledby="keyModalTitle"><div class="mc">
@@ -594,6 +676,32 @@ const I18N = {
     h_brazier:"While burning the stove cleans the brazier at a fixed interval (EEPROM 0x02, in minutes): the fume fan speeds up and the stove briefly shows 'Brazier cleaning'. RAM 0x32 counts down the minutes to the next cleaning. Only shown while the stove is working.",
     fwUpdate:"Upload OpenPelletBridge firmware", fwHint:"Upload a firmware.bin (from .pio/build/…)", fwPick:"Choose file…", fwBadFile:"Choose the firmware .bin file",
     fwConfirm:"Install {0} ({1} MB)? The controller restarts afterwards; the stove keeps running.", fwProgress:"Uploading… {0}% · {1} KB/s",
+    themeTitle:"Theme: {0} (click to change)", theme_auto:"automatic (follows the device)", theme_light:"light", theme_dark:"dark",
+    apiKeyLbl:"API key", lastStart:"Last start", ctrlStarts:"Controller starts", ctrlStartsVal:"{0} ({1} after a crash)", wifiDrops:"Connection drops", wifiDropsVal:"{0} · last {1} ago: {2}",
+    logLevels:"Log levels per module", logLevelSaved:"Log level {0} = {1}",
+    updBadge:"Update", updBadgeTitle:"New firmware {0} available – show it under Device", helpFor:"Explanation",
+    histWeekNote:"Hourly averages, last 7 days (burning = share of the hour the stove was heating), stored on the controller.", burnPct:"Burning", fumeMax:"Fume max.",
+    liveTitle:"Live debugging", liveLog:"Firmware log", liveBus:"Stove bus", livePause:"Pause", liveResume:"Resume", liveClear:"Clear", liveDl:"Download",
+    liveFilterLog:"Filter on text", liveFilterBus:"Addresses (0x21, 0x6E) or text", busChanges:"Changes only", busWrites:"Writes only", busErrors:"Errors only",
+    liveLost:"… older output was overwritten …", liveLines:"{0} lines", liveRate:"{0} transactions · {1}/s", livePaused:"paused", liveNA:"Not available (older firmware)",
+    busRead:"read", busWrite:"write", busFailed:"FAILED after {0} attempts", busWas:"was {0}", busFirst:"first reading", busUnknown:"(no description known)",
+    busHTime:"Time", busHAction:"Action", busHReg:"Register", busHValue:"Value", busHMeaning:"Meaning",
+    lgFirst:"first reading of a register", lgSame:"same value as before", lgChanged:"value changed (← previous value)", lgWrite:"write to the stove", lgFailed:"failed (no answer / checksum)",
+    lgInfo:"I = info, D = debug", lgWarn:"W = warning", lgError:"E = error", lgBefore:"lines from before the last restart",
+    busRaw:"Raw bytes", busBin:"Binary", rawRead:"read {0}, address {1}", rawWrite:"write {0}, address {1}, value {2}, checksum {3}", rawEcho:"echo of TX",
+    rawAnswer:"checksum {0} ({1}), value {2}", rawOk:"OK", rawBad:"WRONG", rawShort:"only {0} of {1} bytes received (timeout)",
+    lgRaw:"TX = bytes sent by the controller; RX = bytes received: the echo of TX, then the stove's answer",
+    busErr:"error", busTries:"{0} attempts",
+    liveNote:"Log: what the firmware writes to its serial port (Serial, UART0) (last 8 KB, also from before you opened this). Stove bus: every read and write on the bus to the stove, recorded only while this view is open.",
+    h_live:"Firmware log: the messages of the controller firmware (WiFi, MQTT, updates, errors), the same as on the serial port, with the time. Output of some built-in libraries is not included. Stove bus: every read and write between the controller and the stove, one line each: time, action, register (RAM or EEPROM and address), value (decimal and hex) and what the value means according to the known register table. A changed value shows the previous one (← was …). With 'Changes only' (on by default) you see the first reading of each register and then only what changes, writes and failures; the colours are explained under the output. Filter on addresses to follow registers, e.g. while pressing keys on the remote. The bus monitor only records while this view is open and stops by itself 60 s after you leave. After a restart the log starts with the last lines from before it (kept in RTC memory, also after a crash, not after a power cut). Log levels per module set how much each part of the firmware writes (kept on the controller).",
+    bkExport:"Back up settings", bkImport:"Restore settings", bkTitle:"Restore settings", bkInfo:"Backup of {0} · firmware {1} · {2}", bkModelDiff:"Made for a {0}; this controller is built for a {1}.",
+    bkApply:"Restore", bkNote:"Only the checked parts are written. The MQTT password and the API key are not in a backup (the current ones stay).",
+    secStove:"Stove settings: set point, flame power, fan, energy saving, beep, combustion and pellet quality", secTimers:"Timers PR1 – PR6", secMqtt:"MQTT settings",
+    secNet:"Network: hostname and IP settings (take effect after a restart)", secDevice:"Device: Bluetooth, telnet, automatic update check (a Bluetooth change restarts the controller)", secUi:"Display: theme, expert, debug and chart choices",
+    bkBad:"This is not an OpenPelletBridge backup", bkBusy:"Restoring {0}…", bkDone:"Settings restored", bkDoneErr:"Restored with errors: {0}", bkSaved:"Backup downloaded",
+    ghDevNewer:"Development build {0} ({1}) – newer than the latest release {2}, so there is no update", ghAhead:"{0} commit(s) after {1}", ghDirty:"with uncommitted changes", ghNoTag:"not built from a release tag",
+    ghBack:"Back to {0}", ghBackTitle:"Replace this development build by the published release {0} (a step back)",
+    ghConfirmBack:"Go back to release {0}? This controller runs development build {1}, which is newer: installing {0} removes the changes of this build. The controller restarts and is unreachable for about a minute; the stove keeps running.",
     ghTitle:"OpenPelletBridge firmware", ghCheck:"Check for update", ghInstall:"Install {0}", ghNotes:"Release notes",
     ghChecking:"Checking GitHub…", ghDownloading:"Downloading and installing… {0}%", ghNever:"Not checked yet", ghError:"Check failed: {0}",
     ghAvail:"New version {0} available (since {1}) – you have {2}", ghUpToDate:"Up to date ({0})", ghDev:"Development build {1} – latest release {0}",
@@ -717,6 +825,32 @@ const I18N = {
     h_brazier:"Tijdens het branden reinigt de kachel de brander op een vast interval (EEPROM 0x02, in minuten): de rookgasventilator draait harder en de kachel toont kort 'Brander reinigen'. RAM 0x32 telt de minuten af tot de volgende reiniging. Enkel zichtbaar terwijl de kachel brandt.",
     fwUpdate:"Upload OpenPelletBridge firmware", fwHint:"Upload een firmware.bin (uit .pio/build/…)", fwPick:"Kies bestand…", fwBadFile:"Kies het firmware-bestand (.bin)",
     fwConfirm:"{0} ({1} MB) installeren? De controller herstart daarna; de kachel blijft gewoon werken.", fwProgress:"Uploaden… {0}% · {1} KB/s",
+    themeTitle:"Thema: {0} (klik om te wijzigen)", theme_auto:"automatisch (volgt het toestel)", theme_light:"licht", theme_dark:"donker",
+    apiKeyLbl:"API-key", lastStart:"Laatste start", ctrlStarts:"Starts controller", ctrlStartsVal:"{0} ({1} na een crash)", wifiDrops:"Verbrekingen", wifiDropsVal:"{0} · laatste {1} geleden: {2}",
+    logLevels:"Logniveaus per module", logLevelSaved:"Logniveau {0} = {1}",
+    updBadge:"Update", updBadgeTitle:"Nieuwe firmware {0} beschikbaar – toon ze bij Toestel", helpFor:"Uitleg",
+    histWeekNote:"Uurgemiddelden, laatste 7 dagen (brandt = deel van het uur dat de kachel verwarmde), opgeslagen op de controller.", burnPct:"Brandt", fumeMax:"Rookgas max.",
+    liveTitle:"Live debugging", liveLog:"Firmware-log", liveBus:"Kachelbus", livePause:"Pauze", liveResume:"Hervat", liveClear:"Wissen", liveDl:"Download",
+    liveFilterLog:"Filter op tekst", liveFilterBus:"Adressen (0x21, 0x6E) of tekst", busChanges:"Enkel wijzigingen", busWrites:"Enkel schrijven", busErrors:"Enkel fouten",
+    liveLost:"… oudere uitvoer werd overschreven …", liveLines:"{0} regels", liveRate:"{0} transacties · {1}/s", livePaused:"gepauzeerd", liveNA:"Niet beschikbaar (oudere firmware)",
+    busRead:"lezen", busWrite:"schrijven", busFailed:"MISLUKT na {0} pogingen", busWas:"was {0}", busFirst:"eerste lezing", busUnknown:"(geen beschrijving gekend)",
+    busHTime:"Tijd", busHAction:"Actie", busHReg:"Register", busHValue:"Waarde", busHMeaning:"Betekenis",
+    lgFirst:"eerste lezing van een register", lgSame:"zelfde waarde als ervoor", lgChanged:"waarde gewijzigd (← vorige waarde)", lgWrite:"schrijfopdracht naar de kachel", lgFailed:"mislukt (geen antwoord / checksum)",
+    lgInfo:"I = info, D = debug", lgWarn:"W = waarschuwing", lgError:"E = fout", lgBefore:"regels van vóór de laatste herstart",
+    busRaw:"Ruwe bytes", busBin:"Binair", rawRead:"lees {0}, adres {1}", rawWrite:"schrijf {0}, adres {1}, waarde {2}, checksum {3}", rawEcho:"echo van TX",
+    rawAnswer:"checksum {0} ({1}), waarde {2}", rawOk:"OK", rawBad:"FOUT", rawShort:"maar {0} van {1} bytes ontvangen (timeout)",
+    lgRaw:"TX = bytes verzonden door de controller; RX = ontvangen bytes: de echo van TX, daarna het antwoord van de kachel",
+    busErr:"fout", busTries:"{0} pogingen",
+    liveNote:"Log: wat de firmware naar de seriële poort (Serial, UART0) schrijft (laatste 8 KB, ook van vóór je dit opende). Kachelbus: elke lees- en schrijfopdracht op de bus naar de kachel, enkel opgenomen zolang dit scherm open is.",
+    h_live:"Firmware-log: de meldingen van de controller-firmware (WiFi, MQTT, updates, fouten), dezelfde als op de seriële poort, met het tijdstip. Uitvoer van sommige ingebouwde bibliotheken zit er niet in. Kachelbus: elke lees- en schrijfopdracht tussen de controller en de kachel, één regel per opdracht: tijd, actie, register (RAM of EEPROM en adres), waarde (decimaal en hex) en wat de waarde betekent volgens de gekende registertabel (in het Engels). Bij een gewijzigde waarde staat de vorige erbij (← was …). Met 'Enkel wijzigingen' (standaard aan) zie je de eerste lezing van elk register en daarna enkel wat verandert, schrijfopdrachten en fouten; de kleuren staan onder de uitvoer uitgelegd. Filter op adressen om registers te volgen, bv. terwijl je toetsen indrukt op de afstandsbediening. De busmonitor neemt enkel op zolang dit scherm open is en stopt vanzelf 60 s nadat je het verlaat. Na een herstart begint de log met de laatste regels van ervoor (bewaard in RTC-geheugen, ook na een crash, niet na een stroomonderbreking). De logniveaus per module bepalen hoeveel elk deel van de firmware schrijft (bewaard op de controller).",
+    bkExport:"Back-up instellingen", bkImport:"Instellingen herstellen", bkTitle:"Instellingen herstellen", bkInfo:"Back-up van {0} · firmware {1} · {2}", bkModelDiff:"Gemaakt voor een {0}; deze controller is gebouwd voor een {1}.",
+    bkApply:"Herstellen", bkNote:"Enkel de aangevinkte delen worden geschreven. Het MQTT-wachtwoord en de API-key zitten niet in een back-up (de huidige blijven).",
+    secStove:"Kachelinstellingen: gewenste temperatuur, vlamvermogen, ventilator, energy saving, zoemer, verbrandings- en pelletkwaliteit", secTimers:"Timers PR1 – PR6", secMqtt:"MQTT-instellingen",
+    secNet:"Netwerk: hostname en IP-instellingen (actief na een herstart)", secDevice:"Toestel: Bluetooth, telnet, automatisch zoeken naar updates (Bluetooth wijzigen herstart de controller)", secUi:"Weergave: thema, expert, debug en grafiekkeuzes",
+    bkBad:"Dit is geen OpenPelletBridge-back-up", bkBusy:"{0} herstellen…", bkDone:"Instellingen hersteld", bkDoneErr:"Hersteld met fouten: {0}", bkSaved:"Back-up gedownload",
+    ghDevNewer:"Ontwikkelversie {0} ({1}) – nieuwer dan de laatste release {2}, dus geen update", ghAhead:"{0} commit(s) na {1}", ghDirty:"met niet-gecommitte wijzigingen", ghNoTag:"niet gebouwd van een release-tag",
+    ghBack:"Terug naar {0}", ghBackTitle:"Vervang deze ontwikkelversie door de gepubliceerde release {0} (een stap terug)",
+    ghConfirmBack:"Terug naar release {0}? Deze controller draait ontwikkelversie {1}, die nieuwer is: {0} installeren verwijdert de wijzigingen van deze build. De controller herstart en is ongeveer een minuut onbereikbaar; de kachel blijft gewoon werken.",
     ghTitle:"OpenPelletBridge-firmware", ghCheck:"Zoek update", ghInstall:"Installeer {0}", ghNotes:"Release-notes",
     ghChecking:"GitHub nakijken…", ghDownloading:"Downloaden en installeren… {0}%", ghNever:"Nog niet nagekeken", ghError:"Nakijken mislukt: {0}",
     ghAvail:"Nieuwe versie {0} beschikbaar (sinds {1}) – je hebt {2}", ghUpToDate:"Up-to-date ({0})", ghDev:"Ontwikkelversie {1} – laatste release {0}",
@@ -832,11 +966,13 @@ function langFromRemote(code) { return code === "NLD" ? "nl" : "en"; }
 function setLang(l) {
   if (LANG_OVERRIDE || l === lang) return;
   lang = l; try { localStorage.setItem("remoteLang", l); } catch (_) {}   // avoids a flash of the other language on the next load
-  applyStatic(); applyExpert(); if (state) render(state); renderTimers(); renderNext(); renderHistory(); renderEvents(); renderRemote(); renderAlerts(); renderHyp(); renderParams();
+  applyStatic(); applyExpert(); if (state) render(state); renderTimers(); renderNext(); renderHistory(); renderEvents(); renderRemote(); renderAlerts(); renderHyp(); if (liveReady) renderLive(); renderParams();
 }
 function t(key, ...a) { let s = (I18N[lang][key] ?? I18N.en[key] ?? key); a.forEach((v, i) => s = s.replace("{" + i + "}", v)); return s; }
 function errDesc(e) { return lang === "nl" && ERR_NL[e.id] ? ERR_NL[e.id] : e.desc; }
 
+let theme = (() => { try { const v = localStorage.getItem("theme"); return v === "light" || v === "dark" ? v : "auto"; } catch (_) { return "auto"; } })();
+let liveReady = false;   // the live debug block is initialised (its variables are declared further down)
 let state = null, remote = null, timersData = null, hist = null, events = null, histHours = 24, offline = false;
 let busy = 0, spPending = null, spTimer = null;
 let expert = (() => { try { return localStorage.getItem("expert") === "1"; } catch (_) { return false; } })();
@@ -913,9 +1049,16 @@ function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.
 // ---------- help popovers (texts from the stove manual) ----------
 const pop = $("pop");
 let popOwner = null;
+// Switches and selects in a settings row get the row title as accessible name
+function labelControls() {
+  document.querySelectorAll(".row").forEach(r => {
+    const name = r.querySelector(".lbl > span:first-child"); if (!name) return;
+    r.querySelectorAll("input, select").forEach(c => { if (!c.id || !document.querySelector(`label[for="${c.id}"]`)) c.setAttribute("aria-label", name.textContent.trim()); });
+  });
+}
 function helpBtn(key) {
   const b = el("button", "help", "i");
-  b.type = "button"; b.setAttribute("aria-label", "?"); b.setAttribute("aria-expanded", "false");
+  b.type = "button"; b.setAttribute("aria-label", t("helpFor")); b.setAttribute("aria-expanded", "false");
   b.onclick = ev => {
     ev.stopPropagation();
     if (popOwner === b) { hidePop(); return; }
@@ -940,6 +1083,7 @@ function applyStatic() {
   document.documentElement.lang = lang;
   document.querySelectorAll("[data-i]").forEach(e => e.textContent = t(e.dataset.i));
   document.querySelectorAll("[data-help]").forEach(e => { e.textContent = ""; e.appendChild(helpBtn("h_" + e.dataset.help)); });
+  labelControls();
   buildSeg($("fanSeg"), [0, 1, 2, 3], v => v === 0 ? t("off") : v, pickFan);
   if (state) markSeg($("fanSeg"), state.RoomFanSpeed);
 }
@@ -950,13 +1094,13 @@ function buildSeg(host, values, labelFn, onPick) {
   host.innerHTML = "";
   for (const v of values) { const b = el("button", "", labelFn(v)); b.dataset.v = v; b.onclick = () => onPick(v, b); host.appendChild(b); }
 }
-function markSeg(host, value) { for (const b of host.children) b.classList.toggle("active", String(b.dataset.v) === String(value)); }
+function markSeg(host, value) { for (const b of host.children) { const on = String(b.dataset.v) === String(value); b.classList.toggle("active", on); b.setAttribute("aria-pressed", on); } }
 buildSeg($("flameSeg"), [1, 2, 3, 4], v => v, async v => { markSeg($("flameSeg"), v); try { await write(t("flameN", v), "POST", "/api/flame", { power: v }); } catch (_) {} });
 async function pickFan(v) { markSeg($("fanSeg"), v); try { await write(v === 0 ? t("fanOff") : t("fanN", v), "POST", "/api/fan", { speed: v }); } catch (_) {} }
 for (const v of CQ) $("cq").add(new Option(v === "+G" || v.startsWith("-") || v === "0" ? v : "+" + v, v));
 for (const v of PQ) $("pq").add(new Option(v.startsWith("-") || v === "0" ? v : "+" + v, v));
 for (const b of $("rangeSeg").children) b.onclick = () => { histHours = Number(b.dataset.h); markSeg2(); loadHistory(); };
-function markSeg2() { for (const b of $("rangeSeg").children) b.classList.toggle("active", Number(b.dataset.h) === histHours); }
+function markSeg2() { for (const b of $("rangeSeg").children) { const on = Number(b.dataset.h) === histHours; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on); } }
 
 // ---------- set point (debounced) ----------
 document.querySelectorAll(".stepper button").forEach(b => b.onclick = () => {
@@ -1137,9 +1281,18 @@ function waitRestartThenReload(hint) {
   };
   setTimeout(() => waitBack(60), 5000);
 }
+// "2 commits after v1.0.1, with local changes"
+function devWhat(f) {
+  const parts = [];
+  if (f.ahead) parts.push(t("ghAhead", f.ahead, f.latest));
+  if (f.dirty) parts.push(t("ghDirty"));
+  return parts.join(", ") || t("ghNoTag");
+}
 function renderFw() {
   const f = fwInfo, hint = $("ghHint"), inst = $("ghInstall"), notes = $("ghNotes");
   $("ghRow").hidden = $("ghAutoRow").hidden = !f;   // older firmware without /api/firmware
+  const badge = $("updBadge"); badge.hidden = !(f && f.updateAvailable);
+  if (!badge.hidden) { badge.replaceChildren(document.createTextNode(t("updBadge") + " "), el("span", "v", f.latest)); badge.title = t("updBadgeTitle", f.latest); badge.setAttribute("aria-label", t("updBadgeTitle", f.latest)); }
   if (!f) return;
   $("ghAuto").checked = !!f.autoCheck;
   const working = ["checking", "downloading", "restarting"].includes(f.state);
@@ -1151,6 +1304,7 @@ function renderFw() {
   else if (f.state === "error") txt = t("ghError", f.lastError || "?");
   else if (!f.latest) txt = t("ghNever");
   else if (f.updateAvailable) txt = t("ghAvail", f.latest, f.published ? fmtDate(new Date(f.published)) : "?", f.current);
+  else if (f.devBuild && f.install === "downgrade") txt = t("ghDevNewer", f.current, devWhat(f), f.latest);
   else if (f.devBuild) txt = t("ghDev", f.latest, f.current);
   else txt = t("ghUpToDate", f.latest);
   hint.textContent = txt;
@@ -1159,11 +1313,19 @@ function renderFw() {
   $("ghProg").hidden = !(f.state === "downloading" || f.state === "restarting");
   $("ghBar").style.width = (f.state === "restarting" ? 100 : pct) + "%";
   const canInstall = !working && !!f.latest && f.assetAvailable && (f.updateAvailable || f.devBuild);
-  inst.hidden = !canInstall; if (canInstall) inst.textContent = t("ghInstall", f.latest);
+  inst.hidden = !canInstall;
+  if (canInstall) {
+    // an update is the main action (orange); going back to the release is not
+    const back = !f.updateAvailable && f.install === "downgrade";
+    inst.textContent = t(back ? "ghBack" : "ghInstall", f.latest);
+    inst.classList.toggle("primary", !!f.updateAvailable);
+    inst.title = back ? t("ghBackTitle", f.latest) : "";
+  }
   clearTimeout(fwFastT);
   if (f.state === "restarting") { waitRestartThenReload(hint); return; }
   if (working) fwFastT = setTimeout(loadFw, 1500);   // follow the check / download closely
 }
+$("updBadge").onclick = () => { $("devCard").scrollIntoView({ behavior: "smooth", block: "start" }); setTimeout(() => (!$("ghInstall").hidden ? $("ghInstall") : $("ghCheck")).focus({ preventScroll: true }), 400); };
 async function loadFw() { try { fwInfo = (await api("GET", "/api/firmware")).data; } catch (_) { fwInfo = null; } renderFw(); }
 async function fwAction(params, label) {
   try { fwInfo = (await api("POST", "/api/firmware", params)).data; toast(label); }
@@ -1173,13 +1335,284 @@ async function fwAction(params, label) {
 $("ghCheck").onclick = () => fwAction({ action: "check" }, t("ghChecking"));
 $("ghInstall").onclick = async () => {
   const f = fwInfo; if (!f) return;
-  if (!confirm(t(f.updateAvailable ? "ghConfirm" : "ghConfirmDev", f.latest, f.current))) return;
+  const msg = f.updateAvailable ? t("ghConfirm", f.latest, f.current)
+            : f.install === "downgrade" ? t("ghConfirmBack", f.latest, f.current)
+            : t("ghConfirmDev", f.latest, f.current);
+  if (!confirm(msg)) return;
   const p = { action: "install" }; if (!f.updateAvailable) p.force = true;
   fwAction(p, t("ghDownloading", 0));
 };
 $("ghAuto").onchange = async e => {
   try { fwInfo = await write(t("save2"), "POST", "/api/firmware", { autoCheck: e.target.checked }); renderFw(); }
   catch (_) { e.target.checked = !e.target.checked; }
+};
+
+// ---------- live debugging (debug mode): firmware log + stove bus monitor ----------
+// Both poll a cursor API once a second while debug mode is on and the page is
+// visible. The bus monitor only records on the controller while it is polled.
+const LIVE_KEEP = 3000, LIVE_SHOW = 600;
+let liveMode = "log", livePaused = false, liveT = null, liveNA = false;
+let logCur = 0, logPart = "", logLines = [];
+let busCur = 0, busRows = [], busLast = {}, busOn = false;
+const hex2 = n => "0x" + n.toString(16).toUpperCase().padStart(2, "0");
+function liveActive() { return debug && !document.hidden && !offline; }
+function liveSchedule(ms) { clearTimeout(liveT); liveT = setTimeout(liveTick, ms); }
+async function busSet(on) { try { await api("POST", "/api/busmon", { enabled: on, since: busCur }); busOn = on; } catch (_) {} }
+async function liveTick() {
+  if (!liveActive()) { if (busOn) busSet(false); liveSchedule(3000); return; }
+  if (livePaused) { liveSchedule(1000); return; }
+  let again = 1000;
+  try {
+    if (liveMode === "log") {
+      const d = (await api("GET", "/api/log", { since: logCur })).data;
+      if (d.lost) logLines.push({ s: t("liveLost"), c: "lost" });
+      const parts = (logPart + d.text).split("\n"); logPart = parts.pop();
+      for (const line of parts) logLines.push({ s: line, c: / E \[|^=====/.test(line) ? (line.startsWith("=====") ? "lost" : "err") : / W \[/.test(line) ? "warn" : /\b(error|fail|failed|timeout)\b/i.test(line) ? "err" : "" });
+      if (logLines.length > LIVE_KEEP) logLines.splice(0, logLines.length - LIVE_KEEP);
+      logCur = d.next; if (d.text.length >= 4000) again = 150;   // still catching up
+    } else {
+      let d = (await api(busOn ? "GET" : "POST", "/api/busmon", busOn ? { since: busCur } : { enabled: true, since: busCur })).data;
+      if (!d.active) d = (await api("POST", "/api/busmon", { enabled: true, since: busCur })).data;   // stopped meanwhile (60 s without poll)
+      busOn = true;
+      const off = Date.now() - d.now;   // controller millis -> local time
+      if (d.lost) busRows.push({ lost: true });
+      for (const [ms, w, ee, a, v, ok, att, txt, tx, rx] of d.events) {
+        const key = (ee ? "E" : "R") + a, prev = busLast[key];
+        busRows.push({ wall: ms + off, w: !!w, ee: !!ee, a, v, ok: !!ok, att, txt: txt || "", tx: tx || "", rx: rx || "",
+                       ch: !!ok && prev !== undefined && prev !== v, first: !!ok && !w && prev === undefined, prev });
+        if (ok) busLast[key] = v;
+      }
+      if (busRows.length > LIVE_KEEP) busRows.splice(0, busRows.length - LIVE_KEEP);
+      busCur = d.next; if (d.events.length >= 250) again = 150;
+    }
+    liveNA = false;
+  } catch (e) { liveNA = /404|not found/i.test(e.message); again = 3000; }
+  renderLive();
+  liveSchedule(again);
+}
+function fmtMs(ms) { const d = new Date(ms); return fmtHM(d) + ":" + pad(d.getSeconds()) + "." + String(d.getMilliseconds()).padStart(3, "0"); }
+// One readable line per bus transaction, in columns:
+//   time  action  memory+address  value (hex)  meaning  [was …]
+const BUS_COLS = [13, 10, 12, 11];   // widths of time, action, register, value
+function busHeader() {
+  return t("busHTime").padEnd(BUS_COLS[0]) + t("busHAction").padEnd(BUS_COLS[1]) + t("busHReg").padEnd(BUS_COLS[2]) + t("busHValue").padEnd(BUS_COLS[3]) + t("busHMeaning");
+}
+function busText(r) {
+  if (r.lost) return t("liveLost");
+  const action = r.w ? t("busWrite") : t("busRead");
+  const reg = (r.ee ? "EEPROM " : "RAM ") + hex2(r.a);
+  if (!r.ok) return fmtMs(r.wall).padEnd(BUS_COLS[0]) + action.padEnd(BUS_COLS[1]) + reg.padEnd(BUS_COLS[2]) + "–".padEnd(BUS_COLS[3]) + t("busFailed", r.att) + (r.w ? " (" + r.v + ")" : "");
+  const val = (String(r.v) + " (" + hex2(r.v) + ")").padEnd(BUS_COLS[3]);
+  let mean = r.txt || t("busUnknown");
+  if (r.ch) mean += "   ← " + t("busWas", r.prev);
+  else if (r.first) mean += "   (" + t("busFirst") + ")";
+  if (r.att > 1) mean += "   " + t("busTries", r.att);
+  return fmtMs(r.wall).padEnd(BUS_COLS[0]) + action.padEnd(BUS_COLS[1]) + reg.padEnd(BUS_COLS[2]) + val + mean;
+}
+// Raw bytes of a transaction, with what each part means. The bus is one wire:
+// RX starts with the echo of what the controller sent, then the stove's answer.
+//   read : TX type, address                    RX echo(2) | checksum, value
+//   write: TX 0x80+type, address, value, check RX echo(4) | checksum, value
+//   checksum: read = type + address + value; write answer = 0x80 + type + address + value (mod 256)
+function busRawLines(r) {
+  if (r.lost || (!r.tx && !r.rx)) return [];
+  const bin = $("busBin").checked, bytes = h => (h.match(/../g) || []).map(x => parseInt(x, 16));
+  const fmt = arr => arr.map(b => bin ? b.toString(2).padStart(8, "0") : b.toString(16).toUpperCase().padStart(2, "0")).join(" ");
+  const tx = bytes(r.tx), rx = bytes(r.rx), ind = " ".repeat(BUS_COLS[0]), mem = r.ee ? "EEPROM" : "RAM";
+  const echoN = tx.length, full = echoN + 2, width = bin ? 9 * 6 + 3 : 3 * 6 + 3;   // up to 6 bytes + the " | " separator
+  const txNote = r.w ? t("rawWrite", mem, hex2(tx[1] ?? 0), tx[2] ?? 0, hex2(tx[3] ?? 0)) : t("rawRead", mem, hex2(tx[1] ?? 0));
+  const lines = [ind + "TX → " + fmt(tx).padEnd(width) + "  " + txNote];
+  const echo = rx.slice(0, echoN), ans = rx.slice(echoN);
+  let rxTxt = fmt(echo) + (ans.length ? " | " + fmt(ans) : ""), note;
+  if (rx.length < full) note = t("rawShort", rx.length, full);
+  else {
+    const type = r.ee ? 0x20 : 0x00, chk = ans[0], val = ans[1];
+    const want = r.w ? (0x80 + type + r.a + val) & 0xFF : (type + r.a + val) & 0xFF;
+    note = t("rawEcho") + " | " + t("rawAnswer", hex2(chk), t(chk === want ? "rawOk" : "rawBad"), val + " (" + hex2(val) + ")");
+  }
+  lines.push(ind + "RX ← " + rxTxt.padEnd(width) + "  " + note);
+  return lines;
+}
+function renderLiveLegend() {
+  const host = $("liveLegend"); host.innerHTML = "";
+  const items = liveMode === "bus"
+    ? [["first", "lgFirst"], ["", "lgSame"], ["ch", "lgChanged"], ["w", "lgWrite"], ["err", "lgFailed"], ...($("busRaw").checked ? [["raw", "lgRaw"]] : [])]
+    : [["", "lgInfo"], ["warn", "lgWarn"], ["err", "lgError"], ["lost", "lgBefore"]];
+  for (const [cls, key] of items) {
+    const sp = el("span"), sw = el("i"), probe = el("span", cls);
+    probe.style.display = "none"; $("liveOut").appendChild(probe);
+    sw.style.background = getComputedStyle(probe).color; probe.remove();
+    sp.append(sw, document.createTextNode(t(key))); host.appendChild(sp);
+  }
+}
+// "0x21, 0x6e 33" -> addresses; anything else is a text filter
+function parseBusFilter(q) {
+  const addrs = [], rest = [];
+  for (const tok of q.split(/[\s,;]+/).filter(Boolean)) { if (/^(0x[0-9a-f]{1,2}|\d{1,3})$/i.test(tok) && Number(tok) <= 255) addrs.push(Number(tok)); else rest.push(tok); }
+  return { addrs, text: rest.join(" ") };
+}
+function renderLive() {
+  markSeg($("liveSeg"), liveMode);
+  for (const id of ["busChangesL", "busWritesL", "busErrorsL", "busRawL"]) $(id).hidden = liveMode !== "bus";
+  $("busBinL").hidden = liveMode !== "bus" || !$("busRaw").checked;
+  $("logLvlBox").hidden = liveMode !== "log";
+  $("livePause").textContent = t(livePaused ? "liveResume" : "livePause"); $("livePause").setAttribute("aria-pressed", livePaused);
+  $("liveFilter").placeholder = t(liveMode === "log" ? "liveFilterLog" : "liveFilterBus"); $("liveFilter").setAttribute("aria-label", $("liveFilter").placeholder);
+  if (!debug) return;
+  const out = $("liveOut"), atBottom = out.scrollHeight - out.scrollTop - out.clientHeight < 30;
+  const q = $("liveFilter").value.trim().toLowerCase();
+  let rows;
+  if (liveMode === "log") rows = logLines.filter(l => !q || l.s.toLowerCase().includes(q)).map(l => [l.s, l.c]);
+  else {
+    const { addrs, text } = parseBusFilter(q), onlyCh = $("busChanges").checked, onlyW = $("busWrites").checked, onlyE = $("busErrors").checked;
+    rows = busRows.filter(r => r.lost || ((!addrs.length || addrs.includes(r.a)) && (!onlyCh || r.ch || r.w || r.first || !r.ok) && (!onlyW || r.w) && (!onlyE || !r.ok)))
+      .map(r => [busText(r), r.lost ? "lost" : !r.ok ? "err" : r.w ? "w" : r.ch ? "ch" : r.first ? "first" : "", r])
+      .filter(([txt]) => !text || txt.toLowerCase().includes(text));
+    if ($("busRaw").checked) rows = rows.flatMap(row => [row, ...busRawLines(row[2]).map(l => [l, "raw"])]);
+  }
+  $("liveHdr").hidden = liveMode !== "bus"; $("liveHdr").textContent = busHeader();
+  renderLiveLegend();
+  const frag = document.createDocumentFragment();
+  for (const [txt, c] of rows.slice(-LIVE_SHOW)) frag.appendChild(el("span", c, txt + "\n"));
+  out.replaceChildren(frag);
+  if (atBottom && !livePaused) out.scrollTop = out.scrollHeight;
+  const now = Date.now(), rate = Math.round(busRows.filter(r => r.wall > now - 10000).length / 10);
+  $("liveStat").textContent = liveNA ? t("liveNA") : (liveMode === "log" ? t("liveLines", logLines.length) : t("liveRate", busRows.length, rate)) + (livePaused ? " · " + t("livePaused") : "");
+}
+for (const b of $("liveSeg").children) b.onclick = () => {
+  liveMode = b.dataset.v;
+  if (liveMode === "log" && busOn) busSet(false);   // the bus monitor costs a little on the controller: stop it
+  renderLive(); liveSchedule(0);
+};
+$("livePause").onclick = () => { livePaused = !livePaused; renderLive(); if (!livePaused) liveSchedule(0); };
+$("liveClear").onclick = () => { if (liveMode === "log") logLines = []; else { busRows = []; busLast = {}; } renderLive(); };
+$("liveDl").onclick = () => {
+  const lines = liveMode === "log" ? logLines.map(l => l.s) : busRows.flatMap(r => [busText(r), ...($("busRaw").checked ? busRawLines(r) : [])]);
+  downloadBlob(new Blob([lines.join("\n") + "\n"], { type: "text/plain" }), "openpelletbridge-" + (liveMode === "log" ? "log" : "bus") + "-" + fileStamp() + ".txt");
+};
+$("liveFilter").oninput = renderLive;
+// log level per firmware module (GET/POST /api/loglevel)
+const LOG_LEVELS = ["off", "error", "warn", "info", "debug"];
+async function loadLogLevels() {
+  let d = null; try { d = (await api("GET", "/api/loglevel")).data; } catch (_) {}
+  const host = $("logLvl"); host.innerHTML = "";
+  if (!d || !d.modules) { host.textContent = t("liveNA"); return; }
+  for (const m of d.modules) {
+    const lab = el("label"), name = el("span", "", m.tag), sel = document.createElement("select");
+    name.title = m.what; sel.setAttribute("aria-label", t("logLevels") + " " + m.tag);
+    for (const lv of LOG_LEVELS) { const o = document.createElement("option"); o.value = lv; o.textContent = lv; sel.appendChild(o); }
+    sel.value = m.level;
+    sel.onchange = async () => { try { await api("POST", "/api/loglevel", { [m.tag]: sel.value }); toast(t("logLevelSaved", m.tag, sel.value)); } catch (e) { toast(e.message, true); loadLogLevels(); } };
+    lab.append(name, sel); host.appendChild(lab);
+  }
+}
+$("logLvlBox").addEventListener("toggle", () => { if ($("logLvlBox").open) loadLogLevels(); });
+for (const id of ["busChanges", "busWrites", "busErrors", "busRaw", "busBin"]) $(id).onchange = renderLive;
+document.addEventListener("visibilitychange", () => { if (!document.hidden && debug) liveSchedule(0); });
+liveReady = true; renderLive();   // labels and placeholder before the first poll
+liveSchedule(2000);
+
+// ---------- settings backup / restore ----------
+// Uses the normal API routes: the backup is a JSON file in the browser, restoring
+// writes the chosen parts back. No passwords or API key in the file.
+function downloadBlob(blob, name) {
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+function fileStamp() { const d = new Date(); return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + "-" + pad(d.getHours()) + pad(d.getMinutes()); }
+const lsGet = k => { try { return localStorage.getItem(k); } catch (_) { return null; } };
+const lsSet = (k, v) => { try { if (v === null || v === undefined) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (_) {} };
+$("bkExport").onclick = async () => {
+  const btn = $("bkExport"); btn.disabled = true; busy++;
+  const get = async p => { try { return (await api("GET", p)).data; } catch (_) { return null; } };
+  try {
+    // one after the other: the controller answers one request at a time, timers take a few seconds
+    const st = await get("/api/state"), tm = await get("/api/timers"), mq = await get("/api/mqtt"), wf = await get("/api/wifi");
+    const fw = await get("/api/firmware"), btS = await get("/api/bluetooth"), tn = await get("/api/telnet");
+    const c = st && st.controller || {};
+    const b = { app: "OpenPelletBridge", format: 1, exported: new Date().toISOString(), firmware: c.version || null, stoveModel: c.stoveModel || null, hostname: wf ? wf.hostname : null };
+    if (st) {
+      b.stove = { setpoint: st.temperatures.setPoint, flamePower: st.flame.power, fanSpeed: st.RoomFanSpeed,
+                  energySaving: { start: st.energySaving.start, stop: st.energySaving.stop }, beep: st.stoveBeepEnabled };
+      if (st.burn && st.burn.combustionQuality !== "Unknown") b.stove.combustionQuality = st.burn.combustionQuality;
+      if (st.burn && st.burn.pelletQuality !== "Unknown") b.stove.pelletQuality = st.burn.pelletQuality;
+    }
+    if (tm && tm.timers) { b.timers = {}; for (const [k, v] of Object.entries(tm.timers)) if (v && !v.error) b.timers[k] = v; }
+    if (mq) b.mqtt = { enabled: mq.enabled, host: mq.host, port: mq.port, user: mq.user, prefix: mq.prefix, discovery: mq.discovery, discoveryPrefix: mq.discoveryPrefix };
+    if (wf && wf.saved) { const v = wf.saved; b.network = { hostname: v.hostname, mode: v.mode }; if (v.mode === "static") Object.assign(b.network, { ip: v.ip, netmask: v.netmask, gateway: v.gateway, dns: v.dns }); }
+    b.device = {};
+    if (btS) b.device.bluetooth = !!btS.enabled;
+    if (tn) b.device.telnet = !!tn.enabled;
+    if (fw) b.device.fwAutoCheck = !!fw.autoCheck;
+    b.ui = { expert: lsGet("expert"), debug: lsGet("debug"), histVis: lsGet("histVis"), theme: lsGet("theme") };
+    downloadBlob(new Blob([JSON.stringify(b, null, 2)], { type: "application/json" }), "openpelletbridge-backup-" + (b.hostname || "controller") + "-" + fileStamp() + ".json");
+    toast(t("bkSaved"));
+  } finally { btn.disabled = false; busy--; }
+};
+let bkData = null;
+$("bkImport").onclick = () => $("bkFile").click();
+$("bkFile").onchange = async () => {
+  const file = $("bkFile").files[0]; $("bkFile").value = ""; if (!file) return;
+  let b = null; try { b = JSON.parse(await file.text()); } catch (_) {}
+  if (!b || b.app !== "OpenPelletBridge" || b.format !== 1) { toast(t("bkBad"), true); return; }
+  bkData = b;
+  const d = b.exported ? new Date(b.exported) : null, model = state && state.controller ? state.controller.stoveModel : null;
+  let info = t("bkInfo", b.hostname || "?", b.firmware || "?", d ? fmtDate(d) + " " + fmtHM(d) : "?");
+  if (b.stoveModel && model && b.stoveModel !== model) info += " " + t("bkModelDiff", b.stoveModel, model);
+  $("bkInfo").textContent = info;
+  const host = $("bkSections"); host.innerHTML = "";
+  for (const [k, label, def] of [["stove", "secStove", true], ["timers", "secTimers", true], ["mqtt", "secMqtt", true], ["network", "secNet", false], ["device", "secDevice", false], ["ui", "secUi", true]]) {
+    if (!b[k] || !Object.keys(b[k]).length) continue;
+    const lab = el("label", "bksec"), cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = def; cb.dataset.k = k; cb.dataset.l = label;
+    lab.append(cb, el("span", "", t(label))); host.appendChild(lab);
+  }
+  $("bkApply").disabled = false;
+  $("bkModal").classList.add("show");
+};
+$("bkCancel").onclick = () => $("bkModal").classList.remove("show");
+$("bkApply").onclick = async () => {
+  const b = bkData; if (!b) return;
+  const chosen = [...$("bkSections").querySelectorAll("input:checked")].map(c => c.dataset.k), errs = [];
+  const btn = $("bkApply"); btn.disabled = true; busy++;
+  const step = async (path, params, body) => { try { await api("POST", path, params, body); } catch (e) { errs.push(path + ": " + e.message); } };
+  const section = k => { $("bkInfo").textContent = t("bkBusy", t({ stove: "secStove", timers: "secTimers", mqtt: "secMqtt", network: "secNet", device: "secDevice", ui: "secUi" }[k]).split(":")[0]); };
+  let restartBt = null;
+  try {
+    for (const k of chosen) {
+      section(k);
+      if (k === "stove") {
+        const s = b.stove;
+        if (s.setpoint != null) await step("/api/setpoint", { value: s.setpoint });
+        if (s.flamePower != null) await step("/api/flame", { power: s.flamePower });
+        if (s.fanSpeed != null) await step("/api/fan", { speed: s.fanSpeed });
+        if (s.energySaving) await step("/api/energysaving", { start: s.energySaving.start, stop: s.energySaving.stop });
+        if (s.beep != null) await step("/api/beep", { enabled: s.beep });
+        const burn = {}; if (s.combustionQuality) burn.combustionQuality = s.combustionQuality; if (s.pelletQuality) burn.pelletQuality = s.pelletQuality;
+        if (Object.keys(burn).length) await step("/api/burn", burn);
+      } else if (k === "timers") {
+        await step("/api/timers", null, { timers: b.timers });
+      } else if (k === "mqtt") {
+        await step("/api/mqtt", b.mqtt);   // no password: the current one is kept
+      } else if (k === "network") {
+        await step("/api/wifi", b.network);
+      } else if (k === "device") {
+        if (b.device.telnet != null) await step("/api/telnet", { enabled: b.device.telnet });
+        if (b.device.fwAutoCheck != null) await step("/api/firmware", { autoCheck: b.device.fwAutoCheck });
+        if (b.device.bluetooth != null && (!bt || bt.enabled !== b.device.bluetooth)) restartBt = b.device.bluetooth;   // last: restarts the controller
+      } else if (k === "ui") {
+        for (const key of ["expert", "debug", "histVis", "theme"]) lsSet(key, b.ui[key]);
+        theme = ["light", "dark"].includes(lsGet("theme")) ? lsGet("theme") : "auto";
+        expert = lsGet("expert") === "1"; debug = lsGet("debug") === "1";
+        try { const v = JSON.parse(lsGet("histVis")); if (v) Object.assign(histVis, v); } catch (_) {}
+        applyExpert();
+      }
+    }
+    if (restartBt !== null) await step("/api/bluetooth", { enabled: restartBt, restart: true });
+  } finally {
+    busy--; btn.disabled = false; $("bkModal").classList.remove("show");
+    toast(errs.length ? t("bkDoneErr", errs.join("; ")) : t("bkDone"), errs.length > 0);
+    setTimeout(() => { poll(); loadTimers(); loadMqtt(); loadWifi(); loadFw(); loadBt(); loadSecurity(); renderHistory(); }, 800);
+  }
 };
 
 $("restart").onclick = async () => { if (!confirm(t("confirmRestart"))) return; try { await fetch("/restart", { headers: storedKey() ? { "X-API-Key": storedKey() } : {} }); } catch (_) {} toast(t("restarting")); };
@@ -1242,6 +1675,7 @@ function renderWifi() {
     ["Hostname", w.hostname + ".local"],
     ["MAC", w.mac, true],
     [t("wifiChannel"), w.channel + (w.bssid ? " · " + w.bssid : ""), true],
+    ...(w.disconnects !== undefined ? [[t("wifiDrops"), w.lastDisconnect ? t("wifiDropsVal", w.disconnects, fmtDur(w.lastDisconnect.secondsAgo), w.lastDisconnect.reason) : String(w.disconnects), true]] : []),
   ]);
   const note = $("wifiNote"), msgs = [];
   if (w.restartRequired) msgs.push(t("wifiRestartReq"));
@@ -1479,6 +1913,8 @@ function render(s) {
     [withHelp(t("service"), "h_service"), s.hoursSinceLastService !== undefined
       ? pill(t("serviceOf", s.hoursSinceLastService), s.hoursSinceLastService >= 2000 ? "warn" : "") : "–"],
     [t("uptime"), s.uptime ? s.uptime.human : "–", true],
+    ...(s.controller && s.controller.resetReason ? [[t("lastStart"), s.controller.crashCount && /crash|watchdog|brown/.test(s.controller.resetReason) ? pill(s.controller.resetReason, "warn") : s.controller.resetReason, true],
+      [t("ctrlStarts"), t("ctrlStartsVal", s.controller.bootCount, s.controller.crashCount), true]] : []),
     [t("serialErr"), s.serial ? s.serial.readErrors + " / " + s.serial.writeErrors : "–", "d"], [t("retries"), s.serial ? s.serial.retries : "–", "d"],
   ]);
   renderAlerts(); renderNext(); renderRemote(); renderParams();   // marks the current flame level
@@ -1914,6 +2350,19 @@ function renderLcd() {
   // standby / ENERGY OK screen (seen on the remote 17/11/2026); other phase screens and OFF not checked
   const anyTimer = timersData && Object.values(timersData).some(x => x.enabled);
   const chronoIcon = () => { if (anyTimer) { const c = lcdIcon("alarm", 14); c.classList.add("chr"); lcd.appendChild(c); } };
+  // Standby with energy saving once the stove has cooled down (fume fan stopped): big
+  // "OFF / ENERGY / OK", chrono icon, "E" (photo of the remote, 17/11/2026 16:19, 40 min after
+  // the fume fan stopped). While it still cools down (fume fan running) the phase screen below
+  // is shown - that screen is not checked against the remote yet.
+  if (code === 7 && es.enabled && state.fumeFanRPM === 0) {
+    lcd.appendChild(clockLine());
+    chronoIcon();
+    const b = el("div", "big3");
+    ["OFF", "ENERGY", "OK"].forEach((p, i) => { if (i) b.appendChild(el("br")); b.appendChild(document.createTextNode(p)); });
+    lcd.appendChild(b);
+    lcd.appendChild(el("div", "eco", "E"));
+    return;
+  }
   if (PHASE[code] !== undefined) {
     lcd.appendChild(clockLine());
     if (code === 7) chronoIcon();
@@ -2015,11 +2464,14 @@ const SERIES = [
   // 8 palette slots are taken: the fume fan reuses the fume hue (same exhaust system), dashed, in its own lane
   { key: "fanPower", field: "fanPower", lane: "fanPower", color: "--s6", label: () => t("fanPower"), unit: "", step: true, def: false, x: "d" },   // raw register: debug only
   { key: "fumeFan",  field: "fumeFan",  lane: "fumeFan", color: "--s7", dash: true, label: () => t("fumeFan"), unit: "", def: false },
+  // 7-day view only (hourly records): share of the hour the stove was heating
+  { key: "burn",     field: "burning",  lane: "burn",  color: "--s5", label: () => t("burnPct"),     unit: "%", step: true, def: true },
 ];
 const LANES = [
   { id: "temp",  h: 160, title: () => t("temperatures") },
   { id: "fume",  h: 90,  title: () => t("fumeTemp") },
   { id: "flame", h: 64,  title: () => t("flamePower"), fixed: [0, 4], ticks: [0, 2, 4] },
+  { id: "burn",  h: 56,  title: () => t("burnPct") + " (%)", fixed: [0, 100], ticks: [0, 50, 100] },
   { id: "fan",   h: 56,  title: () => t("tFan"),       fixed: [0, 3], ticks: [0, 3] },
   { id: "auger", h: 70,  title: () => t("auger") + " (rpm)" },
   { id: "fumeFan", h: 70, title: () => t("fumeFan") + " (rpm)" },
@@ -2032,6 +2484,7 @@ let histVis = (() => {
   return o;
 })();
 const seriesOn = s => !s.x || (s.x === "d" ? debug : expert);   // expert / debug only series
+const seriesHasData = s => !hist || !hist.fields || !!s.derive || hist.fields.includes(s.field);   // 24 h and 7 d have different fields
 function saveVis() { try { localStorage.setItem("histVis", JSON.stringify(histVis)); } catch (_) {} }
 function renderToggles() {
   const host = $("histToggles"); host.innerHTML = "";
@@ -2043,7 +2496,7 @@ function renderToggles() {
     b.onclick = () => { histVis[key] = !histVis[key]; saveVis(); renderToggles(); renderHistory(); };
     host.appendChild(b);
   };
-  SERIES.filter(seriesOn).forEach(s => chip(s.key, s.label(), s.color, s.dash));
+  SERIES.filter(s => seriesOn(s) && seriesHasData(s)).forEach(s => chip(s.key, s.label(), s.color, s.dash));
   chip("state", t("stateLines"), null);
 }
 function niceTicks(min, max, count) {
@@ -2056,11 +2509,13 @@ function niceTicks(min, max, count) {
 function fmtVal(s, v) {
   if (v === null || v === undefined || isNaN(v)) return "–";
   if (s.unit === "°") return fmtTemp(v, s.dec);
+  if (s.unit === "%") return Math.round(v) + " %";
   if ((s.key === "fan" || s.key === "fanAct") && v === 0) return t("off");
   return s.dec ? Number(v).toFixed(s.dec) : String(v);
 }
 function renderHistory() {
   markSeg2(); renderToggles();
+  $("histNote").textContent = t(histHours > 24 ? "histWeekNote" : "histNote");
   const empty = $("histEmpty"), charts = $("histCharts");
   // the server works in whole hours: cut shorter ranges (30 min) here
   const now = Math.floor(Date.now() / 1000), fT = hist && hist.fields ? hist.fields.indexOf("t") : 0;
@@ -2073,7 +2528,7 @@ function renderHistory() {
   const f = hist.fields, col = n => f.includes(n) ? samples.map(r => r[f.indexOf(n)]) : samples.map(() => null);
   const times = col("t"), states = col("state");
   const cs = getComputedStyle(document.documentElement), color = n => cs.getPropertyValue(n).trim();
-  const series = SERIES.filter(s => histVis[s.key] && seriesOn(s)).map(s => ({ ...s, values: s.derive ? s.derive(col) : col(s.field), stroke: color(s.color) }));
+  const series = SERIES.filter(s => histVis[s.key] && seriesOn(s) && seriesHasData(s)).map(s => ({ ...s, values: s.derive ? s.derive(col) : col(s.field), stroke: color(s.color) }));
   const lanes = LANES.filter(l => series.some(s => s.lane === l.id));
   const host = $("histChart"), svg = host.querySelector("svg"), tip = host.querySelector(".tip");
   const W = Math.max(280, host.clientWidth), m = { l: 34, r: 58, t: 6, b: 22 }, gap = 26, titleH = 14;
@@ -2089,7 +2544,7 @@ function renderHistory() {
 
   // state change lines first, so data draws on top
   if (histVis.state) {
-    let lastLabelX = -999;
+    let lastLabelX = -999;   // right end of the last label
     // exact changes from the state log (/api/events); older firmware: derive them from the samples
     // Before the log starts (or without it) the changes are derived from the 2-min samples.
     // The first log entry with from = null only marks the start of the log, not a change.
@@ -2102,10 +2557,12 @@ function renderHistory() {
     for (const c of changes) {
       const x = X(c.t), alarm = c.err !== undefined || [8, 9, 10, -1].includes(c.s);
       svg.appendChild(svgEl("line", { x1: x, x2: x, y1: m.t + 10, y2: plotBottom, stroke: alarm ? "var(--err)" : "var(--muted)", "stroke-width": 1, "stroke-dasharray": "2 3", opacity: alarm ? 0.9 : 0.55 }));
-      if (x - lastLabelX > 56) { svg.appendChild(svgEl("text", { x: x + 3, y: m.t + 9, style: alarm ? "fill:var(--err)" : "" }, c.err !== undefined ? c.err : STATE_NAME[lang][c.s] ?? c.s)); lastLabelX = x; }
+      // label only when it fits after the previous one (≈6.5 px per character at 11 px)
+      const label = String(c.err !== undefined ? c.err : STATE_NAME[lang][c.s] ?? c.s);
+      if (x > lastLabelX && x + 3 + label.length * 6.5 < W - 4) { svg.appendChild(svgEl("text", { x: x + 3, y: m.t + 9, style: alarm ? "fill:var(--err)" : "" }, label)); lastLabelX = x + 3 + label.length * 6.5 + 8; }
     }
   }
-  const scales = {};
+  const scales = {}, gapS = (hist.interval || 120) * 5;
   for (const l of laneGeo) {
     const ls = series.filter(s => s.lane === l.id);
     const vals = ls.flatMap(s => s.values).filter(v => v !== null && !isNaN(v));
@@ -2121,7 +2578,7 @@ function renderHistory() {
       let d = "", prevT = null;
       s.values.forEach((v, i) => {
         if (v === null || isNaN(v)) { prevT = null; return; }
-        const brk = prevT === null || times[i] - prevT > 600;              // > 10 min without samples: gap
+        const brk = prevT === null || times[i] - prevT > gapS;             // 5 intervals without samples: gap
         if (s.step && !brk) d += `H${X(times[i]).toFixed(1)}V${Y(v).toFixed(1)}`;
         else d += `${brk ? "M" : "L"}${X(times[i]).toFixed(1)},${Y(v).toFixed(1)}`;
         prevT = times[i];
@@ -2141,11 +2598,21 @@ function renderHistory() {
   // x axis: round times, step depends on the range and the width
   const spanH = (t1 - t0) / 3600, narrow = W < 500;
   const stepMin = spanH > 12 ? (narrow ? 360 : 240) : spanH > 6 ? (narrow ? 240 : 120) : spanH > 1 ? (narrow ? 120 : 60) : spanH > 0.5 ? (narrow ? 20 : 10) : (narrow ? 10 : 5);
-  const first = new Date(t0 * 1000); first.setMinutes(0, 0, 0);
-  for (let m0 = first.getTime() / 1000; m0 < t1; m0 += stepMin * 60) {
-    if (m0 <= t0) continue;
-    const d = new Date(m0 * 1000); if ((d.getHours() * 60 + d.getMinutes()) % stepMin) continue;
-    svg.appendChild(svgEl("text", { x: X(m0), y: H - 6, "text-anchor": "middle" }, fmtHM(d)));
+  if (spanH > 30) {
+    // days: a label at every midnight (every other day on narrow screens)
+    const d = new Date(t0 * 1000); d.setHours(0, 0, 0, 0);
+    for (let k = 0; d.getTime() / 1000 < t1; d.setDate(d.getDate() + 1), k++) {
+      const m0 = d.getTime() / 1000; if (m0 <= t0 || (narrow && k % 2)) continue;
+      svg.appendChild(svgEl("line", { x1: X(m0), x2: X(m0), y1: plotTop, y2: plotBottom, stroke: "var(--grid)", "stroke-width": 1 }));
+      svg.appendChild(svgEl("text", { x: X(m0), y: H - 6, "text-anchor": "middle" }, d.toLocaleDateString(lang === "nl" ? "nl-BE" : "en-GB", { weekday: "short", day: "numeric" })));
+    }
+  } else {
+    const first = new Date(t0 * 1000); first.setMinutes(0, 0, 0);
+    for (let m0 = first.getTime() / 1000; m0 < t1; m0 += stepMin * 60) {
+      if (m0 <= t0) continue;
+      const d = new Date(m0 * 1000); if ((d.getHours() * 60 + d.getMinutes()) % stepMin) continue;
+      svg.appendChild(svgEl("text", { x: X(m0), y: H - 6, "text-anchor": "middle" }, fmtHM(d)));
+    }
   }
   // crosshair + tooltip spanning all lanes
   const cross = svgEl("line", { y1: plotTop, y2: plotBottom, stroke: "var(--muted)", "stroke-width": 1, visibility: "hidden" });
@@ -2175,14 +2642,14 @@ function renderHistory() {
 
   // table view (accessible alternative), newest first, all fields
   const tbl = $("histTable"); tbl.innerHTML = "";
-  const cols = [["t", t("tTime")], ["state", t("status")], ["room", t("room")], ["setpoint", t("setPoint")], ["stove", t("stoveSensor")], ["remote", t("remoteSensor")], ["fume", t("fumes")], ["flame", t("flameSet")], ["flameActual", t("flameActual")], ["fan", t("fanSet")], ["fanActual", t("fanActual")], ["fanPower", t("fanPower")], ["auger", t("auger")], ["fumeFan", t("fumeFan")]];
+  const cols = [["t", t("tTime")], ["state", t("status")], ["room", t("room")], ["setpoint", t("setPoint")], ["stove", t("stoveSensor")], ["remote", t("remoteSensor")], ["fume", t("fumes")], ["flame", t("flameSet")], ["flameActual", t("flameActual")], ["fan", t("fanSet")], ["fanActual", t("fanActual")], ["fanPower", t("fanPower")], ["auger", t("auger")], ["fumeFan", t("fumeFan")], ["fumeMax", t("fumeMax")], ["burning", t("burnPct")]].filter(([n]) => n === "t" || f.includes(n));
   const head = el("tr"); cols.forEach(c => head.appendChild(el("th", "", c[1]))); tbl.appendChild(head);
   for (let i = samples.length - 1; i >= 0; i--) {
     const r = samples[i], tr = el("tr"), get = n => f.includes(n) ? r[f.indexOf(n)] : null;
     cols.forEach(([n]) => {
       const v = get(n);
       const txt = n === "t" ? (d => fmtDate(d) + " " + fmtHM(d))(new Date(v * 1000)) : n === "state" ? (STATE_NAME[lang][v] ?? "–")
-        : ["room", "stove", "remote"].includes(n) ? fmtTemp(v, 1) : ["setpoint", "fume"].includes(n) ? fmtTemp(v)
+        : ["room", "stove", "remote"].includes(n) ? fmtTemp(v, 1) : ["setpoint", "fume", "fumeMax"].includes(n) ? fmtTemp(v) : n === "burning" ? v + " %"
         : n === "fanActual" && v === null && get("fanPower") > 0 ? get("fan") : (v ?? "–");
       tr.appendChild(el("td", "", txt));
     });
@@ -2213,7 +2680,7 @@ function errorTimes(prev) {
 function fmtDur(sec) {
   if (sec < 60) return sec + " s";
   const m = Math.floor(sec / 60); if (m < 60) return m + " min";
-  const h = Math.floor(m / 60); return h < 48 ? h + " u " + pad(m % 60) : Math.floor(h / 24) + " d " + (h % 24) + " u";
+  const h = Math.floor(m / 60), hu = lang === "nl" ? " u" : " h"; return h < 48 ? h + hu + " " + pad(m % 60) : Math.floor(h / 24) + " d " + (h % 24) + hu;
 }
 function renderEvents() {
   const box = $("evtBox"), tbl = $("evtTable");
@@ -2248,11 +2715,26 @@ async function loadHistory() {
   histTimer = setTimeout(loadHistory, HISTORY_MS);
 }
 let resizeT = null; window.addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(renderHistory, 150); });
-matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderHistory);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { applyTheme(); renderHistory(); });
 
 
 // ---------- expert mode ----------
+// ---------- theme: auto (follows the device) / light / dark ----------
+function applyTheme() {
+  const r = document.documentElement;
+  if (theme === "auto") r.removeAttribute("data-theme"); else r.setAttribute("data-theme", theme);
+  const dark = theme === "dark" || (theme === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
+  const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = dark ? "#111418" : "#f4f5f7";
+  const b = $("themeBtn"); b.textContent = { auto: "◐", light: "☀\uFE0E", dark: "☾" }[theme];
+  b.title = t("themeTitle", t("theme_" + theme)); b.setAttribute("aria-label", b.title);
+}
+$("themeBtn").onclick = () => {
+  theme = { auto: "light", light: "dark", dark: "auto" }[theme];
+  try { if (theme === "auto") localStorage.removeItem("theme"); else localStorage.setItem("theme", theme); } catch (_) {}
+  applyTheme(); renderHistory(); toast(t("themeTitle", t("theme_" + theme)).split(" (")[0]);
+};
 function applyExpert() {
+  applyTheme();
   document.body.classList.toggle("expert", expert);
   document.body.classList.toggle("debug", debug);
   $("expertBtn").setAttribute("aria-pressed", expert); $("expertBtn").title = t("expertTitle");
@@ -2264,7 +2746,7 @@ $("expertBtn").onclick = () => {
 };
 $("debugBtn").onclick = () => {
   debug = !debug; try { localStorage.setItem("debug", debug ? "1" : "0"); } catch (_) {}
-  applyExpert(); renderHistory(); renderHyp(); renderParams(); if (debug) { loadHyp(); loadParams(); }
+  applyExpert(); renderHistory(); renderHyp(); renderParams(); if (debug) { loadHyp(); loadParams(); liveSchedule(0); } else if (busOn) busSet(false);
 };
 
 // ---------- reachability ----------

@@ -55,15 +55,20 @@ static void fwBeginHttps(HTTPClient& http, WiFiClientSecure& client, const Strin
 // Latest release from the GitHub API. Returns an error text, or "" when fine.
 static String fwDoCheck()
 {
-    if (!fwTimeValid()) return "no valid time yet (NTP), needed for HTTPS";
+    if (!fwTimeValid()) return "no valid time yet (NTP), needed to check the HTTPS certificate";
+    static const char* apiUrl = "https://api.github.com/repos/" FW_REPO "/releases/latest";
+    LOGD("update", "GET %s (free heap %u bytes, largest block %u)", apiUrl, (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
     WiFiClientSecure client;
     HTTPClient http;
     http.useHTTP10(true);   // no chunked encoding: the JSON is parsed straight from the stream
-    fwBeginHttps(http, client, "https://api.github.com/repos/" FW_REPO "/releases/latest");
+    fwBeginHttps(http, client, apiUrl);
     http.addHeader("Accept", "application/vnd.github+json");
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);   // a renamed repository answers 301 to its new location
+    unsigned long t0 = millis();
     int code = http.GET();
-    if (code == 404) { http.end(); return "no release published yet"; }
+    LOGD("update", "GitHub answered %d (%s) in %lu ms (TLS connection included)", code,
+         code < 0 ? http.errorToString(code).c_str() : "HTTP", millis() - t0);
+    if (code == 404) { http.end(); return "no release published yet on github.com/" FW_REPO " (pre-releases and drafts do not count)"; }
     if (code != 200) {
         String e = code < 0 ? String("connection failed: ") + http.errorToString(code) : String("GitHub answered HTTP ") + code;
         http.end();
@@ -82,11 +87,17 @@ static String fwDoCheck()
     if (de) return String("invalid answer from GitHub: ") + de.c_str();
     const char* tag = doc["tag_name"] | "";
     if (!*tag) return "release without tag";
-    String url; size_t size = 0; int best = 0;
+    String assetUrl, assetName; size_t size = 0; int best = 0;
     for (JsonObject a : doc["assets"].as<JsonArray>()) {
-        int r = pc::firmwareAssetRank(a["name"] | "");
-        if (r > best) { best = r; url = a["browser_download_url"] | ""; size = a["size"] | 0; }
+        const char* n = a["name"] | "";
+        int r = pc::firmwareAssetRank(n);
+        LOGD("update", "release %s asset %s (%u bytes)%s", tag, n, (unsigned)(a["size"] | 0),
+             r == 2 ? " - firmware image" : r == 1 ? " - firmware image (old name)" : "");
+        if (r > best) { best = r; assetUrl = a["browser_download_url"] | ""; size = a["size"] | 0; assetName = n; }
     }
+    LOGI("update", "latest release on GitHub: %s, published %s, %s", tag, (const char*)(doc["published_at"] | "?"),
+         assetName.length() ? (assetName + " " + String(size / 1024) + " KB").c_str() : "no firmware image");
+    const String& url = assetUrl;
     fwLatest = tag;
     fwReleaseUrl = doc["html_url"] | "";
     fwPublished = doc["published_at"] | "";
@@ -108,11 +119,14 @@ static void fwPauseOthers(bool pause)
 static String fwDoInstall()
 {
     if (!fwAssetUrl.length()) return "no firmware asset known, check first";
+    LOGD("update", "download %s", fwAssetUrl.c_str());
     WiFiClientSecure client;
     HTTPClient http;
     fwBeginHttps(http, client, fwAssetUrl);
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);   // github.com -> release-assets.githubusercontent.com
+    unsigned long t0 = millis();
     int code = http.GET();
+    LOGD("update", "download answered %d after %lu ms (redirect to the asset host included)", code, millis() - t0);
     if (code != 200) {
         String e = code < 0 ? String("download failed: ") + http.errorToString(code) : String("download answered HTTP ") + code;
         http.end();
@@ -120,8 +134,10 @@ static String fwDoInstall()
     }
     int len = http.getSize();
     if (len <= 0) { http.end(); return "download has no size"; }
-    if (fwAssetSize && (size_t)len != fwAssetSize) { http.end(); return "download size differs from the release"; }
+    if (fwAssetSize && (size_t)len != fwAssetSize) { http.end(); return String("download size ") + len + " differs from the release (" + (unsigned)fwAssetSize + " bytes)"; }
+    LOGI("update", "downloading %d KB into the free OTA partition (%u KB)", len / 1024, (unsigned)(ESP.getFreeSketchSpace() / 1024));
     fwTotal = len; fwDone = 0;
+    int lastPct = 0;
     fwPauseOthers(true);
     if (!Update.begin(len, U_FLASH)) {
         String e = String("begin failed: ") + Update.errorString();
@@ -140,6 +156,8 @@ static String fwDoInstall()
             if (Update.write(buf, n) != (size_t)n) { err = String("write failed: ") + Update.errorString(); break; }
             fwDone += n;
             lastData = millis();
+            int pct = (int)(fwDone * 100 / fwTotal);
+            if (pct / 10 > lastPct / 10) { LOGI("update", "%d%% (%u KB, %lu KB/s)", pct, (unsigned)(fwDone / 1024), (unsigned long)(fwDone / 1024 * 1000 / (millis() - t0 + 1))); lastPct = pct; }
         } else if (!http.connected() && !s->available()) {
             err = "connection closed during download"; break;
         } else if (millis() - lastData > 20000) {
@@ -150,7 +168,8 @@ static String fwDoInstall()
     }
     http.end();
     if (err.length()) { Update.abort(); fwPauseOthers(false); return err; }
-    if (!Update.end(true)) { err = String("verify failed: ") + Update.errorString(); fwPauseOthers(false); return err; }
+    if (!Update.end(true)) { err = String("image check failed: ") + Update.errorString(); fwPauseOthers(false); return err; }
+    LOGI("update", "download complete: %u bytes in %lu s, image verified and marked bootable", (unsigned)fwDone, (millis() - t0) / 1000);
     return "";
 }
 
@@ -159,10 +178,24 @@ static void fwTask(void* arg)
     bool install = arg != nullptr;
     fwState = FW_CHECKING;
     fwError = "";
+    LOGI("update", "%s: checking GitHub (%s) for a newer release than %s", install ? "install" : "update check", FW_REPO, BUILD_VERSION);
     String err = fwDoCheck();
+    if (!err.length()) {
+        pc::Version cur;
+        bool parsed = pc::parseVersion(BUILD_VERSION, cur);
+        if (pc::updateAvailable(BUILD_VERSION, fwLatest.c_str()))
+            LOGI("update", "update available: %s is newer than %s", fwLatest.c_str(), BUILD_VERSION);
+        else if (!parsed)
+            LOGI("update", "no update offered: this is a development build (%s, not a release tag); %s can be installed with force", BUILD_VERSION, fwLatest.c_str());
+        else if (cur.ahead > 0 || cur.dirty)
+            LOGI("update", "no update: %s is a development build (%d commit(s) after %s%s), newer than the latest release %s; installing %s would go back to that release",
+                 BUILD_VERSION, cur.ahead, fwLatest.c_str(), cur.dirty ? ", with uncommitted changes" : "", fwLatest.c_str(), fwLatest.c_str());
+        else
+            LOGI("update", "up to date: %s is the latest release", BUILD_VERSION);
+    }
     if (!err.length() && install) {
         fwState = FW_DOWNLOADING;
-        Serial.printf("Firmware update: %s -> %s\n", BUILD_VERSION, fwLatest.c_str());
+        LOGI("update", "installing %s -> %s", BUILD_VERSION, fwLatest.c_str());
         err = fwDoInstall();
         if (!err.length()) {
             Preferences p;
@@ -170,12 +203,16 @@ static void fwTask(void* arg)
             p.putString("last", String(BUILD_VERSION) + " -> " + fwLatest);
             p.end();
             fwState = FW_RESTARTING;
-            Serial.println("Firmware update: done, restarting");
+            LOGI("update", "installed, restarting");
             delay(1500);   // let a status poll see "restarting"
-            ESP.restart();
+            restartWith("firmware update from GitHub");
         }
     }
-    if (err.length()) { fwError = err; fwState = FW_ERROR; Serial.printf("Firmware update: %s\n", err.c_str()); }
+    if (err.length()) {
+        fwError = err; fwState = FW_ERROR;
+        if (install) LOGE("update", "install failed: %s", err.c_str());
+        else LOGW("update", "update check failed: %s", err.c_str());
+    }
     else fwState = FW_IDLE;
     fwBusy = false;
     vTaskDelete(nullptr);
@@ -252,7 +289,9 @@ void handleRouteFirmware()
     int st = fwState;
     json["current"] = BUILD_VERSION;
     pc::Version v;
-    json["devBuild"] = !pc::parseVersion(BUILD_VERSION, v) || v.ahead > 0 || v.dirty;
+    bool parsed = pc::parseVersion(BUILD_VERSION, v);
+    json["devBuild"] = !parsed || v.ahead > 0 || v.dirty;
+    if (parsed) { json["ahead"] = v.ahead; json["dirty"] = v.dirty; }
     json["repo"] = FW_REPO;
     json["stoveModel"] = BUILD_STOVE_MODEL;
     json["state"] = FW_STATE_STR[st];
@@ -263,6 +302,12 @@ void handleRouteFirmware()
         json["releaseUrl"] = fwReleaseUrl;
         json["assetAvailable"] = fwAssetUrl.length() > 0;
         json["updateAvailable"] = fwAssetUrl.length() > 0 && pc::updateAvailable(BUILD_VERSION, fwLatest.c_str());
+        // what installing the latest release would do: update (newer), reinstall (same),
+        // downgrade (older than this build, e.g. a development build after the tag),
+        // unknown (this build has no release version to compare with)
+        pc::Version l;
+        if (!parsed || !pc::parseVersion(fwLatest.c_str(), l)) json["install"] = "unknown";
+        else { int c = pc::compareVersion(l, v); json["install"] = c > 0 ? "update" : c == 0 && !v.dirty ? "reinstall" : "downgrade"; }
     } else {
         json["latest"] = nullptr;
         json["updateAvailable"] = false;

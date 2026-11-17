@@ -330,7 +330,7 @@ static void telnetHandleMainMenu(const String& key)
             telnetShowWifiMenu();
             break;
         case 3: telnetShowDebugMenu();   break;
-        case 4: tpl("Rebooting..."); delay(500); ESP.restart(); break;
+        case 4: tpl("Rebooting..."); delay(500); restartWith("telnet menu"); break;
         case 5: tpl("Goodbye."); telnet.disconnectClient(); telnetState = TS_NONE; break;
     }
 }
@@ -1450,7 +1450,7 @@ void telnetHandleInput(const String& rawInput)
 
 void telnetOnConnect(const String& ip)
 {
-    Serial.println("- Telnet: " + ip + " connected");
+    LOGI("sys", "telnet client connected from %s", ip.c_str());
     escState             = 0;
     menuCursor           = 0;
     lastTelnetActivity   = millis();
@@ -1475,7 +1475,7 @@ void telnetMenuLoop()
     // Auto-revert static IP if not confirmed in time
     if (wifiPendingConfirm && millis() > wifiConfirmDeadline) {
         wifiPendingConfirm = false;
-        Serial.println("WiFi confirm timeout — reverting to DHCP");
+        LOGW("wifi", "static IP not confirmed in time (telnet menu) - reverting to DHCP");
         WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
         WiFi.reconnect();
     }
@@ -1483,7 +1483,7 @@ void telnetMenuLoop()
     // Drop stale connections — a client that disappears without TCP FIN (NAT
     // timeout, network blip) would otherwise block new connections indefinitely.
     if (telnetState != TS_NONE && millis() - lastTelnetActivity > 1800000UL) {
-        Serial.println("Telnet: idle timeout — dropping stale connection");
+        LOGI("sys", "telnet: idle timeout - closing the connection");
         telnet.disconnectClient();
         telnetState = TS_NONE;
     }

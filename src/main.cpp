@@ -1,3 +1,4 @@
+#include "liveLog.h"   // first: copies Serial output into the live log (redefines Serial)
 #include <ArduinoJson.h>
 #include <ArduinoOTA.h>
 #include <ota.h>
@@ -47,17 +48,10 @@ void setupTelnet()
 {
     // Menu actions read/write the stove, so hold the bus lock while they run
     telnet.onConnect([](String ip) { StoveBusLock lock; telnetOnConnect(ip); });
-    telnet.onInputReceived([](String str) { StoveBusLock lock; telnetHandleInput(str); });
+    telnet.onInputReceived([](String str) { StoveBusLock lock; CmdSource cs("telnet menu"); telnetHandleInput(str); });
 
-    Serial.print("- Telnet: ");
-    if (telnet.begin())
-    {
-        Serial.println("running");
-    }
-    else
-    {
-        Serial.println("error.");
-    }
+    if (telnet.begin()) LOGI("sys", "telnet running");
+    else LOGE("sys", "telnet could not start");
 }
 
 #include "history.h"
@@ -72,6 +66,8 @@ void setupTelnet()
 
 #include "fwUpdate.h"
 
+#include "liveDebug.h"
+
 // Serialise all stove bus access: HTTP handlers run on the loop task while the
 // sensor task polls the stove from the other core. Without the lock both talk
 // on the bus at the same time and reads return garbage.
@@ -81,10 +77,18 @@ static std::function<void()> withStoveLock(void (*fn)())
         if (!stoveMutex) { fn(); return; }
         if (xSemaphoreTakeRecursive(stoveMutex, pdMS_TO_TICKS(5000)) != pdTRUE)
         {
+            LOGW("http", "503 %s %s: stove bus busy for 5 s", wm.server->method() == HTTP_GET ? "GET" : "POST", wm.server->uri().c_str());
             wm.server->send(503, "application/json", "{\"error\":\"Stove bus busy, try again\"}");
             return;
         }
-        fn();
+        {
+            // writes done by this request are logged with where they came from
+            char src[96];
+            snprintf(src, sizeof(src), "web/API %s (%s %s)", wm.server->client().remoteIP().toString().c_str(),
+                     wm.server->method() == HTTP_GET ? "GET" : wm.server->method() == HTTP_POST ? "POST" : "other", wm.server->uri().c_str());
+            CmdSource cs(src);
+            fn();
+        }
         xSemaphoreGiveRecursive(stoveMutex);
     };
 }
@@ -96,16 +100,22 @@ void setup()
     digitalWrite(ENABLE_RX, HIGH); // The led of the optocoupler is off
 
     Serial.begin(115200);
+    liveLogSetup();   // also capture ESP-IDF log output for /api/log; reset reason, log of the previous run
+    // bus: a transaction that failed for good is a warning; retried attempts and the
+    // frames of the telnet bus debug are debug
+    Stove::writeHook = stoveWriteLogger;   // every write with its source (liveDebug.h)
+    Stove::logger = [](bool failed, const char* line) { if (failed) LOGW("bus", "%s", line); else LOGD("bus", "%s", line); };
     
     spiffsMounted = SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED); // Mount SPIFFS
     if (spiffsMounted)
     {
-        Serial.println("SPIFFS system mounted with success");
+        LOGI("sys", "SPIFFS mounted: %u of %u bytes used", (unsigned)SPIFFS.usedBytes(), (unsigned)SPIFFS.totalBytes());
     }
     else
     {
-        Serial.println("An Error has occurred while mounting SPIFFS");
+        LOGE("sys", "SPIFFS could not be mounted");
     }
+    netEventsSetup();   // log why WiFi drops (before WiFi starts)
     setup_wifi();
     {
         // mDNS name = the configured hostname (IP settings), default openpelletbridge
@@ -133,14 +143,13 @@ void setup()
         // use the radio without the BLE/WiFi coexistence modem sleep.
         esp_bt_controller_mem_release(ESP_BT_MODE_BTDM);
         WiFi.setSleep(false);
-        Serial.println("Bluetooth disabled (setting) - BLE not started");
+        LOGI("sys", "Bluetooth disabled (setting) - BLE not started");
     }
     httpRouteMetrics();
     enableOTA();
     if (spiffsMounted) {
         File configFile = SPIFFS.open("/config.txt", "r");
         if (configFile) {
-            Serial.println("Reading values");
             while (configFile.available())
             {
                 String hydroString = configFile.readStringUntil('\n');
@@ -150,20 +159,18 @@ void setup()
             }
             configFile.close();
         } else {
-            Serial.println("Config file not found, using defaults");
+            LOGI("sys", "no /config.txt: hydro mode off (default)");
         }
     } else {
-        Serial.println("SPIFFS unavailable, using defaults");
+        LOGW("sys", "SPIFFS unavailable: hydro mode off (default)");
     }
 
     resetButton.begin();
     resetButton.onPressedFor(5000, fullReset);
     resetButton.onPressed(buttonPressed);
 
-    Serial.printf("Ready - firmware %s for %s\n", BUILD_VERSION, BUILD_STOVE_MODEL);
+    LOGI("sys", "ready - firmware %s for %s, IP %s", BUILD_VERSION, BUILD_STOVE_MODEL, WiFi.localIP().toString().c_str());
 
-    Serial.print("IP address: ");
-    Serial.println(WiFi.localIP());
     onboardLED.on();
 
     wm.server->on("/on", authed(withStoveLock(setStoveOn)));
@@ -214,19 +221,26 @@ void setup()
     wm.server->on("/api/wifi/scan", authed(handleRouteWifiScan));
     wm.server->on("/api/wifi", authed(handleRouteWifi));
     wm.server->on("/api/firmware", authed(handleRouteFirmware));
+    wm.server->on("/api/log", authed(handleRouteLog));
+    wm.server->on("/api/busmon", authed(handleRouteBusmon));
+    wm.server->on("/api/loglevel", authed(handleRouteLogLevel));
     wm.server->on("/", HTTP_GET, handleRouteWebApp);   // the web app is the start page
     wm.server->on("/device", handleRouteIndex);          // small fallback page with links
+    wm.server->on("/manifest.webmanifest", HTTP_GET, handleRouteManifest);   // home screen install (public)
+    wm.server->on("/icon.svg", HTTP_GET, handleRouteIconSvg);
+    wm.server->on("/icon-180.png", HTTP_GET, handleRouteIcon180);
     wm.server->on("/restart", authed(handleRouteRestart));
     if (wifiConnected && wm.server) {
         authCollectHeaders();
         wm.server->begin();
-        Serial.println("REST server started");
+        LOGI("http", "web server started");
     }
 
     configTzTime(defaultTimezone, ntpServer); // sets TZ and starts NTP sync
     getNTPtime(2);
     eventsLoad();    // restore the stove state change log
     historyLoad();   // restore the persisted history (uses NTP time to drop samples older than 24 h)
+    weekLoad();      // hourly averages of the last 7 days, completed from the 24 h history
 
     if (isConnected() && telnetEnabled)
     {
@@ -266,6 +280,7 @@ void loop()
     mqttLoop();
     netLoop();
     fwLoop();
+    diagTick();   // health line, clock drift, remote control (liveDebug.h)
 
     // Sensor cache is refreshed by a background task on the second core.
 
@@ -294,12 +309,12 @@ void loop()
                 onboardLED.flash();
                 if (bleOwnsRadio())
                 {
-                    Serial.println("WiFi down for 5 min while BLE is active - forcing reconnect (BLE may drop)");
+                    LOGW("wifi", "down for 5 min while BLE is active - forcing reconnect (BLE may drop)");
                     wifiDownSince = currentMillis;  // next forced attempt after another 5 min
                 }
                 else
                 {
-                    Serial.println("Reconnecting to WiFi...");
+                    LOGW("wifi", "not connected - reconnecting");
                 }
                 WiFi.disconnect(false);  // reset state machine, keep credentials
                 WiFi.begin();            // reconnect with stored credentials
@@ -308,7 +323,11 @@ void loop()
         else
         {
             wifiDownSince = 0;
-            getNTPtime(2);      // snapshot of the system clock + DST flag (SNTP syncs it in the background)
+            static bool ntpOk = true;
+            bool ok = getNTPtime(2);      // snapshot of the system clock + DST flag (SNTP syncs it in the background)
+            if (!ok && ntpOk) LOGW("sys", "NTP: no valid time - check internet access / DNS (history, timers and HTTPS need it)");
+            if (ok && !ntpOk) LOGI("sys", "NTP: valid time again");
+            ntpOk = ok;
             onboardLED.on();
         }
         previousMillisNTP = currentMillis;

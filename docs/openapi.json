@@ -2237,9 +2237,10 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 24,
+              "maximum": 168,
               "default": 24
-            }
+            },
+            "description": "1 - 24: the 2-minute samples. 25 - 168: hourly averages of the last 7 days (interval 3600, extra fields fumeMax, burning (% of the hour heating), n; state = most frequent)."
           }
         ],
         "responses": {
@@ -3178,6 +3179,503 @@
           "Device"
         ]
       }
+    },
+    "/api/log": {
+      "get": {
+        "summary": "Live firmware log",
+        "description": "New output of the firmware log (what it writes to its serial port (Serial, UART0), plus ESP-IDF logs), each line with the time, from an 8 KB ring buffer. At most 4 KB per answer.",
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Cursor: the `next` of the previous answer, 0 to start"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Log text since the cursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "integer"
+                    },
+                    "next": {
+                      "type": "integer"
+                    },
+                    "lost": {
+                      "type": "boolean",
+                      "description": "The cursor was older than the buffer"
+                    },
+                    "text": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Diagnostics"
+        ]
+      }
+    },
+    "/api/busmon": {
+      "get": {
+        "summary": "Live stove bus monitor",
+        "description": "Every read and write between the controller and the stove, recorded only while watched: each GET keeps the monitor running for another 60 s. At most 250 events per answer, 600 kept.",
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Cursor: the `next` of the previous answer, 0 to start"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bus events since the cursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "string"
+                    },
+                    "active": {
+                      "type": "boolean"
+                    },
+                    "now": {
+                      "type": "integer",
+                      "description": "Controller uptime in ms"
+                    },
+                    "from": {
+                      "type": "integer"
+                    },
+                    "next": {
+                      "type": "integer"
+                    },
+                    "lost": {
+                      "type": "boolean"
+                    },
+                    "fields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "example": [
+                        "ms",
+                        "write",
+                        "eeprom",
+                        "address",
+                        "value",
+                        "ok",
+                        "attempts",
+                        "text",
+                        "tx",
+                        "rx"
+                      ]
+                    },
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {}
+                      },
+                      "example": [
+                        [
+                          5022050,
+                          0,
+                          0,
+                          33,
+                          4,
+                          1,
+                          1,
+                          "Working",
+                          "0021",
+                          "00212504"
+                        ]
+                      ],
+                      "description": "Per event: ms, write, eeprom, address, value, ok, attempts, text (meaning of the value, empty when unknown), tx (raw bytes sent, hex), rx (raw bytes received, hex: echo of tx + checksum + value; shorter on a timeout)"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Diagnostics"
+        ]
+      },
+      "post": {
+        "summary": "Start or stop the bus monitor",
+        "parameters": [
+          {
+            "name": "enabled",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Cursor: the `next` of the previous answer, 0 to start"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bus events since the cursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "string"
+                    },
+                    "active": {
+                      "type": "boolean"
+                    },
+                    "now": {
+                      "type": "integer",
+                      "description": "Controller uptime in ms"
+                    },
+                    "from": {
+                      "type": "integer"
+                    },
+                    "next": {
+                      "type": "integer"
+                    },
+                    "lost": {
+                      "type": "boolean"
+                    },
+                    "fields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "example": [
+                        "ms",
+                        "write",
+                        "eeprom",
+                        "address",
+                        "value",
+                        "ok",
+                        "attempts",
+                        "text",
+                        "tx",
+                        "rx"
+                      ]
+                    },
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {}
+                      },
+                      "example": [
+                        [
+                          5022050,
+                          0,
+                          0,
+                          33,
+                          4,
+                          1,
+                          1,
+                          "Working",
+                          "0021",
+                          "00212504"
+                        ]
+                      ],
+                      "description": "Per event: ms, write, eeprom, address, value, ok, attempts, text (meaning of the value, empty when unknown), tx (raw bytes sent, hex), rx (raw bytes received, hex: echo of tx + checksum + value; shorter on a timeout)"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "enabled missing or invalid"
+          },
+          "503": {
+            "description": "Not enough memory"
+          }
+        },
+        "tags": [
+          "Diagnostics"
+        ]
+      }
+    },
+    "/api/loglevel": {
+      "get": {
+        "summary": "Log level per firmware module",
+        "responses": {
+          "200": {
+            "description": "Levels per module",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "string"
+                    },
+                    "levels": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string",
+                        "enum": [
+                          "off",
+                          "error",
+                          "warn",
+                          "info",
+                          "debug"
+                        ]
+                      }
+                    },
+                    "modules": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tag": {
+                            "type": "string"
+                          },
+                          "level": {
+                            "type": "string",
+                            "enum": [
+                              "off",
+                              "error",
+                              "warn",
+                              "info",
+                              "debug"
+                            ]
+                          },
+                          "what": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Diagnostics"
+        ]
+      },
+      "post": {
+        "summary": "Change log levels (kept in NVS)",
+        "parameters": [
+          {
+            "name": "sys",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "off",
+                "error",
+                "warn",
+                "info",
+                "debug"
+              ]
+            }
+          },
+          {
+            "name": "wifi",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "off",
+                "error",
+                "warn",
+                "info",
+                "debug"
+              ]
+            }
+          },
+          {
+            "name": "mqtt",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "off",
+                "error",
+                "warn",
+                "info",
+                "debug"
+              ]
+            }
+          },
+          {
+            "name": "stove",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "off",
+                "error",
+                "warn",
+                "info",
+                "debug"
+              ]
+            }
+          },
+          {
+            "name": "bus",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "off",
+                "error",
+                "warn",
+                "info",
+                "debug"
+              ]
+            }
+          },
+          {
+            "name": "update",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "off",
+                "error",
+                "warn",
+                "info",
+                "debug"
+              ]
+            }
+          },
+          {
+            "name": "http",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "off",
+                "error",
+                "warn",
+                "info",
+                "debug"
+              ]
+            }
+          },
+          {
+            "name": "history",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "off",
+                "error",
+                "warn",
+                "info",
+                "debug"
+              ]
+            }
+          },
+          {
+            "name": "ble",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "off",
+                "error",
+                "warn",
+                "info",
+                "debug"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Levels per module",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "string"
+                    },
+                    "levels": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string",
+                        "enum": [
+                          "off",
+                          "error",
+                          "warn",
+                          "info",
+                          "debug"
+                        ]
+                      }
+                    },
+                    "modules": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tag": {
+                            "type": "string"
+                          },
+                          "level": {
+                            "type": "string",
+                            "enum": [
+                              "off",
+                              "error",
+                              "warn",
+                              "info",
+                              "debug"
+                            ]
+                          },
+                          "what": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid level"
+          }
+        },
+        "tags": [
+          "Diagnostics"
+        ]
+      }
     }
   },
   "components": {
@@ -3928,6 +4426,21 @@
               "env": {
                 "type": "string",
                 "description": "PlatformIO environment"
+              },
+              "stoveModel": {
+                "type": "string",
+                "example": "Piazzetta P220 M"
+              },
+              "resetReason": {
+                "type": "string",
+                "example": "software restart – firmware update from GitHub"
+              },
+              "bootCount": {
+                "type": "integer"
+              },
+              "crashCount": {
+                "type": "integer",
+                "description": "Starts after a crash, watchdog or brown-out"
               }
             }
           }
@@ -4272,6 +4785,24 @@
             "type": "string",
             "nullable": true,
             "example": "v1.0.0 -> v1.1.0"
+          },
+          "install": {
+            "type": "string",
+            "enum": [
+              "update",
+              "reinstall",
+              "downgrade",
+              "unknown"
+            ],
+            "description": "What installing the latest release would do"
+          },
+          "ahead": {
+            "type": "integer",
+            "description": "Commits after the release tag (git describe)"
+          },
+          "dirty": {
+            "type": "boolean",
+            "description": "Built with uncommitted changes"
           }
         }
       }

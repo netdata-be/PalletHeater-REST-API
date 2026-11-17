@@ -9,18 +9,17 @@ void fullReset()
 {
     onboardLED.off();
     onboardLED.flash(20, 50, 50, 50, 50);
-    Serial.println("Resetting…");
+    LOGW("sys", "full reset (reset button held 5 s): erasing WiFi settings and SPIFFS");
     wm.resetSettings();
     SPIFFS.format();
-    Serial.println("[DONE]");
     onboardLED.flash();
-    ESP.restart();
+    restartWith("full reset (reset button)");
 }
 
 void buttonPressed()
 {
     led.toggle();
-    Serial.println("Button has been pressed");
+    LOGI("sys", "reset button pressed");
 }
 
 bool setDisplay(int menu)
@@ -42,7 +41,7 @@ bool setEnergySavingStart(int start)
     }
     else
     {
-        log_e("Start not in range, it should be between 0 and 3\n");
+        LOGW("stove", "start not in range, it should be between 0 and 3");
         return false;
     }
 }
@@ -60,7 +59,7 @@ bool setEnergySavingStop(int stop)
     }
     else
     {
-        log_e("Stop not in range, it should be between 0 and 3\n");
+        LOGW("stove", "stop not in range, it should be between 0 and 3");
         return false;
     }
 }
@@ -78,7 +77,7 @@ bool setRoomFanSpeed(int speed)
     }
     else
     {
-        log_e("Speed not in range, it should be between 0-3\n");
+        LOGW("stove", "speed not in range, it should be between 0-3");
         return false;
     }
 }
@@ -121,7 +120,7 @@ bool setFlamePower(int power)
     }
     else
     {
-        log_e("Flamepower not in range, it should be between 0-3\n");
+        LOGW("stove", "flame power %d not in range, it should be between 1 and 4", power);
         return false;
     }
 }

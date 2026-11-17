@@ -411,7 +411,7 @@ static void bleNotifyChanges() {
 // Logs the subscription and immediately pushes the current value so the app
 // does not need to issue a separate readValue for initial population.
 static void handleSubscribe(NimBLECharacteristic* pChar, uint16_t subValue) {
-    Serial.printf("[BLE][+%lums] sub %s sub=%u\n",
+    LOGD("ble", "+%lums subscription %s = %u",
         millis() - bleConnectedAt, pChar->getUUID().toString().c_str(), subValue);
     if (subValue > 0) pChar->notify(); // push current value immediately
 }
@@ -443,10 +443,10 @@ class StoveWriteCB : public NimBLECharacteristicCallbacks {
         else if (pChar == charEnergySavingStop)  kind = BW_ENERGY_SAVING_STOP;
         else return;
 
-        Serial.printf("[BLE] write  uuid=%s  v=%u\n",
+        LOGI("ble", "write received: characteristic %s, value %u",
                       pChar->getUUID().toString().c_str(), v);
         if (!bleWriteQueuePush(kind, v)) {
-            Serial.println("[BLE] write queue full");
+            LOGW("ble", "write queue full: command dropped");
         }
     }
 };
@@ -469,11 +469,11 @@ class TimerWriteCB : public NimBLECharacteristicCallbacks {
         const uint8_t* d = (const uint8_t*)pChar->getValue().data();
         // Reject out-of-range settings: setpoint 7-30, flame 1-4, fan 0-3
         if (d[3] < 7 || d[3] > 30 || d[4] < 1 || d[4] > 4 || d[5] > 3) {
-            Serial.printf("[BLE] timer write idx=%d rejected: setpoint=%u flame=%u fan=%u out of range\n",
+            LOGW("ble", "timer write idx=%d rejected: setpoint=%u flame=%u fan=%u out of range",
                           idx, d[3], d[4], d[5]);
             return;
         }
-        Serial.printf("[BLE] timer write  idx=%d\n", idx);
+        LOGI("ble", "timer write received (index %d)", idx);
         // Update in-memory cache immediately so BLE reads reflect the new value
         // before the EEPROM write completes.
         cachedTimerEnabled[idx]  = d[0] ? 1 : 0;
@@ -521,7 +521,7 @@ class OtaCtrlCB : public NimBLECharacteristicCallbacks {
             otaInProgress   = true;
             otaBytesWritten = 0;
             otaTotalSize    = size;
-            Serial.println("BLE OTA: started");
+            LOGI("ble", "BLE OTA update started");
             otaNotify(0x01);
         }
         else if (cmd == 0x02) {
@@ -531,7 +531,8 @@ class OtaCtrlCB : public NimBLECharacteristicCallbacks {
             if (esp_ota_end(otaHandle) != ESP_OK)              { otaNotify(0xFF); return; }
             if (esp_ota_set_boot_partition(otaPartition) != ESP_OK) { otaNotify(0xFF); return; }
 
-            Serial.println("BLE OTA: complete — rebooting");
+            LOGI("ble", "BLE OTA update complete");
+            markRestart("firmware update (BLE OTA)");
             otaNotify(0x02);
             delay(1000);
             esp_restart();
@@ -590,7 +591,7 @@ static const char* bleDisconnectReasonName(int reason) {
 
 class RestartWriteCB : public NimBLECharacteristicCallbacks {
     void onWrite(NimBLECharacteristic* pChar) override {
-        Serial.println("[BLE] restart requested via BLE");
+        LOGI("ble", "restart requested via BLE");
         bleRestartPending = true;
     }
 };
@@ -616,7 +617,7 @@ class HostnameWriteCB : public NimBLECharacteristicCallbacks {
         prefs.end();
         // Update characteristic so the app can confirm the saved value
         pChar->setValue(name.c_str());
-        Serial.printf("[BLE] hostname set to '%s' (takes effect after restart)\n", name.c_str());
+        LOGI("ble", "hostname set to '%s' (takes effect after restart)", name.c_str());
     }
 };
 static HostnameWriteCB hostnameWriteCB;
@@ -653,7 +654,7 @@ class NetConfigWriteCB : public NimBLECharacteristicCallbacks {
             }
         }
         if (!valid) {
-            Serial.printf("[BLE] netconfig rejected: '%s'\n", cfg.c_str());
+            LOGW("ble", "network config rejected: '%s'", cfg.c_str());
             return;
         }
         Preferences prefs;
@@ -661,7 +662,7 @@ class NetConfigWriteCB : public NimBLECharacteristicCallbacks {
         prefs.putString("netcfg", cfg);
         prefs.end();
         pChar->setValue(cfg.c_str());
-        Serial.printf("[BLE] netconfig saved: '%s' (takes effect after restart)\n", cfg.c_str());
+        LOGI("ble", "network config saved: '%s' (takes effect after a restart)", cfg.c_str());
     }
 };
 static NetConfigWriteCB netConfigWriteCB;
@@ -669,7 +670,7 @@ static NetConfigWriteCB netConfigWriteCB;
 static int bleGapLogger(ble_gap_event* event, void* arg) {
     (void)arg;
     if (event->type == BLE_GAP_EVENT_DISCONNECT) {
-        Serial.printf("[BLE] gap disconnect reason=%d/0x%X hci=0x%02X (%s)\n",
+        LOGI("ble", "link closed: reason %d (0x%X), HCI 0x%02X (%s)",
             event->disconnect.reason,
             event->disconnect.reason,
             bleHciReason(event->disconnect.reason),
@@ -687,8 +688,8 @@ class BLEServerCB : public NimBLEServerCallbacks {
         bleConnHandle         = desc->conn_handle;
         bleConnectedAt        = millis();
         bleLastUpdate         = millis();
-        Serial.printf("[BLE][+0ms] client connected — waiting for subscriptions before force-notify\n");
-        Serial.printf("[BLE] connected  handle=%u  itvl=%u*1.25ms=%.0fms  timeout=%u*10ms=%ums\n",
+        LOGD("ble", "client connected - waiting for subscriptions before sending all values");
+        LOGI("ble", "client connected (handle %u, interval %u x 1.25 = %.0f ms, supervision timeout %u x 10 = %u ms)",
             desc->conn_handle,
             desc->conn_itvl, desc->conn_itvl * 1.25f,
             desc->supervision_timeout, desc->supervision_timeout * 10);
@@ -698,7 +699,7 @@ class BLEServerCB : public NimBLEServerCallbacks {
         NimBLEDevice::getAdvertising()->stop();
         bleAdvPending   = true;
         bleAdvPendingAt = millis();
-        Serial.printf("[BLE] disconnected  handle=%u  itvl=%u*1.25ms=%.0fms  timeout=%u*10ms=%ums  up=%lums\n",
+        LOGI("ble", "client disconnected (handle %u, interval %u x 1.25 = %.0f ms, supervision timeout %u x 10 = %u ms, connected %lu ms)",
             desc->conn_handle,
             desc->conn_itvl, desc->conn_itvl * 1.25f,
             desc->supervision_timeout, desc->supervision_timeout * 10,
@@ -836,7 +837,7 @@ void setupBLE() {
 
     // Enable NimBLE-Arduino info logs so disconnect reason codes are visible.
     esp_log_level_set("NimBLEServer", ESP_LOG_INFO);
-    Serial.println("BLE GATT started — name: OpenPelletBridge");
+    LOGI("ble", "Bluetooth started, advertising as OpenPelletBridge");
 }
 
 // Called from loop() — notifies changed characteristic values every 2 s.
@@ -854,7 +855,7 @@ void bleLoop() {
     // retries from a stale central attempt.
     if (bleAdvPending && now - bleAdvPendingAt >= 1000) {
         bleAdvPending = false;
-        Serial.println("[BLE] restarting advertising");
+        LOGI("ble", "advertising restarted");
         NimBLEDevice::startAdvertising();
     }
 
@@ -864,6 +865,7 @@ void bleLoop() {
     BLEWriteJob job;
     if (bleWriteQueueHasJobs() && !bleStoveUartInQuietWindow(now, 150) && stoveMutex &&
         xSemaphoreTakeRecursive(stoveMutex, pdMS_TO_TICKS(250)) == pdTRUE) {
+        CmdSource cs("Bluetooth app");
         if (!bleWriteQueuePop(&job)) {
             xSemaphoreGiveRecursive(stoveMutex);
         } else {
@@ -901,7 +903,7 @@ void bleLoop() {
                 ok = setEnergySavingStop((int)v);
             }
             bleLastStoveOpAt = millis();
-            Serial.printf("[BLE] write %s  v=%u\n", ok ? "applied" : "failed", v);
+            LOGI("ble", "write %s (value %u)", ok ? "applied" : "failed", v);
             bleForceNotifyPending = true;
             xSemaphoreGiveRecursive(stoveMutex);
         }
@@ -910,6 +912,7 @@ void bleLoop() {
     // Apply pending timer EEPROM write under mutex.
     if (blePendingTimerWrite.ready && !bleStoveUartInQuietWindow(now, 150) && stoveMutex &&
         xSemaphoreTakeRecursive(stoveMutex, pdMS_TO_TICKS(250)) == pdTRUE) {
+        CmdSource cs("Bluetooth app");
         blePendingTimerWrite.ready = false;
         int idx = blePendingTimerWrite.idx;
         const uint8_t* d = blePendingTimerWrite.data;
@@ -928,7 +931,7 @@ void bleLoop() {
         delay(20);
         stove.write(eeprom, base + TIMER_DOW_OFFSET,      d[6]);
         bleLastStoveOpAt = millis();
-        Serial.printf("[BLE] timer write applied  idx=%d\n", idx);
+        LOGI("ble", "timer write applied (index %d)", idx);
         bleForceNotifyPending = true;
         xSemaphoreGiveRecursive(stoveMutex);
     }
@@ -946,10 +949,10 @@ void bleLoop() {
         // iOS also reads each characteristic on subscribe, so values aren't lost.
         if (age >= 4000) {
             bleForceNotifyPending = false;
-            Serial.printf("[BLE][+%lums] force-notify ALL\n", age);
+            LOGD("ble", "+%lums sending all values to the client", age);
             bleForceNotifyAll();
         } else {
-            Serial.printf("[BLE][+%lums] loop tick — holding force-notify (age %lums < 4000)\n", age, age);
+            LOGD("ble", "+%lums waiting before sending all values (connected %lu ms < 4000)", age, age);
             bleNotifyChanges();
         }
     } else {

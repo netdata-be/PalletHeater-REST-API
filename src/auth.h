@@ -32,11 +32,11 @@ void authInit()
     if (apiKey.length() != 32) {
         apiKey = generateApiKey();
         prefs.putString("key", apiKey);
-        Serial.println("API key generated");
+        LOGI("sys", "API key generated");
     }
     apiKeyRequired = prefs.getBool("required", false);
     prefs.end();
-    Serial.printf("API key: %s (%s)\n", apiKey.c_str(), apiKeyRequired ? "required" : "optional");
+    LOGI("sys", "API key %.4s… (%s)", apiKey.c_str(), apiKeyRequired ? "required" : "optional");   // never the whole key in the log
 }
 
 // The web server only exposes headers it was told to collect (call before begin())
@@ -76,10 +76,16 @@ std::function<void()> authed(std::function<void()> fn)
     return [fn]() {
         if (!authOk()) {
             wm.server->sendHeader("WWW-Authenticate", "Bearer");
+            LOGW("http", "401 %s from %s: missing or invalid API key", wm.server->uri().c_str(), wm.server->client().remoteIP().toString().c_str());
             wm.server->send(401, "application/json", "{\"error\":\"Missing or invalid API key (X-API-Key header)\"}");
             return;
         }
+        uint32_t t0 = millis();
         fn();
+        uint32_t d = millis() - t0;
+        const String& uri = wm.server->uri();
+        if (d > 2000) LOGW("http", "slow request: %s took %lu ms", uri.c_str(), (unsigned long)d);
+        else if (uri != "/api/log" && uri != "/api/busmon") LOGD("http", "%s done in %lu ms", uri.c_str(), (unsigned long)d);
     };
 }
 
@@ -93,6 +99,7 @@ void handleRouteAuth()
     if (wm.server->method() == HTTP_POST)
     {
         if (!authorised) {
+            LOGW("http", "401 %s from %s: missing or invalid API key", wm.server->uri().c_str(), wm.server->client().remoteIP().toString().c_str());
             wm.server->send(401, "application/json", "{\"error\":\"Missing or invalid API key (X-API-Key header)\"}");
             return;
         }

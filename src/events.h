@@ -101,6 +101,59 @@ static void eventsLoad()
     }
 }
 
+// Probable cause of a state change, derived from what the controller knows: a
+// recent power command (with its source), a timer program that matches the time,
+// energy saving and the room temperature, the brazier cleaning interval or an
+// error. It is an interpretation, the stove does not report the cause.
+static String stateChangeReason(int from, int to)
+{
+    char b[160] = "";
+    bool recent = lastStateWriteMs && millis() - lastStateWriteMs < 60000;
+    time_t now = time(nullptr); struct tm tm; localtime_r(&now, &tm);
+    int nowMin = tm.tm_hour * 60 + tm.tm_min, dayBit = 1 << ((tm.tm_wday + 6) % 7);   // bit 0 = Monday
+    auto timerAt = [&](bool on) -> int {
+        for (int i = 0; i < 6; i++) {
+            if (!cachedTimerEnabled[i] || !(cachedTimerDowMask[i] & dayBit)) continue;
+            int v = on ? cachedTimerOnVal[i] : cachedTimerOffVal[i];
+            if (v < 0 || v >= 144) continue;              // OFF
+            int m = v * 10;                               // 10-minute steps
+            if (nowMin >= m && nowMin - m <= 10) return i;
+        }
+        return -1;
+    };
+    int esStopAt = (int)setPointTemp + energySavingStop, esStartAt = (int)setPointTemp + energySavingStart;
+    switch (to) {
+    case 1: {
+        int t = timerAt(true);
+        if (recent && lastStateWriteVal == 1) snprintf(b, sizeof(b), "switched on by %s", lastStateWriteSrc);
+        else if (t >= 0) snprintf(b, sizeof(b), "timer PR%d (on at %02d:%02d)", t + 1, cachedTimerOnVal[t] * 10 / 60, cachedTimerOnVal[t] * 10 % 60);
+        else if (from == 7 && energySavingStop) snprintf(b, sizeof(b), "energy saving restart: room %.1f °C, restart at %d °C", ambTemp, esStartAt);
+        else snprintf(b, sizeof(b), "on the remote control or by the stove itself");
+        break;
+    }
+    case 7:
+        if (energySavingStop) snprintf(b, sizeof(b), "energy saving: room %.1f °C, stop at %d °C (set point %d + %d)", ambTemp, esStopAt, (int)setPointTemp, energySavingStop);
+        else snprintf(b, sizeof(b), "standby");
+        break;
+    case 6: case 0: {
+        if (from == 6 && to == 0) break;                  // end of the shut-down: nothing to explain
+        int t = timerAt(false);
+        if (recent && (lastStateWriteVal == 6 || lastStateWriteVal == 0)) snprintf(b, sizeof(b), "switched off by %s", lastStateWriteSrc);
+        else if (t >= 0) snprintf(b, sizeof(b), "timer PR%d (off at %02d:%02d)", t + 1, cachedTimerOffVal[t] * 10 / 60, cachedTimerOffVal[t] * 10 % 60);
+        else snprintf(b, sizeof(b), "on the remote control or by the stove itself");
+        break;
+    }
+    case 5:
+        if (cachedBrazierInterval > 0) snprintf(b, sizeof(b), "periodic brazier cleaning (every %d min of burning)", cachedBrazierInterval);
+        else snprintf(b, sizeof(b), "periodic brazier cleaning");
+        break;
+    case 8: case 9: case 10:
+        if (cachedCurrentError > 0) snprintf(b, sizeof(b), "alarm: %s %s", pc::errorCode(cachedCurrentError), pc::errorDesc(cachedCurrentError));
+        break;
+    }
+    return String(b);
+}
+
 static void evtStore(const StateEvent& e);
 static void eventsTick()
 {
@@ -110,6 +163,14 @@ static void eventsTick()
     if (t < 1700000000) return;                        // no valid time yet: wait, changes are logged once NTP is in
     int s = stoveState;
     if (s >= 0 && s <= 20 && s != evtLastState) {
+        static uint32_t stateSince = 0;   // time of the previous change seen in this run
+        char dur[24] = "";
+        if (stateSince) { uint32_t d = (uint32_t)t - stateSince; snprintf(dur, sizeof(dur), " after %lu min %02lu s", (unsigned long)(d / 60), (unsigned long)(d % 60)); }
+        String why = stateChangeReason(evtLastState, s);
+        if (evtLastState >= 0) LOGI("stove", "state %s -> %s%s%s%s", pc::stoveStateName(evtLastState), pc::stoveStateName(s), dur,
+                                    why.length() ? " - probable cause: " : "", why.c_str());
+        else LOGI("stove", "state %s", pc::stoveStateName(s));
+        stateSince = (uint32_t)t;
         StateEvent e = { (uint32_t)t, EVT_STATE, (int8_t)evtLastState, (int8_t)s, 0 };
         evtLastState = s;
         evtStore(e);
@@ -118,12 +179,16 @@ static void eventsTick()
     const uint8_t pa[2] = { palletSensorAddr, palletLevelAddr };
     for (int k = 0; k < 2; k++) {
         if (pv[k] < 0 || pv[k] > 127 || pv[k] == evtLastPellet[k]) continue;
+        if (evtLastPellet[k] >= 0)
+            LOGI("stove", "pellet reserve %s (RAM 0x%02X) %d -> %d", k == 0 ? "sensor" : "counter", pa[k], evtLastPellet[k], pv[k]);
         StateEvent e = { (uint32_t)t, EVT_PELLET, (int8_t)evtLastPellet[k], (int8_t)pv[k], pa[k] };
         evtLastPellet[k] = pv[k];
         evtStore(e);
     }
     int err = confirmedCurrentError;   // debounced: short pre-warnings are not logged
     if (err >= 0 && err <= 255 && err != evtLastError) {
+        if (err) LOGW("stove", "error %s: %s (state %s)", pc::errorCode(err), pc::errorDesc(err), pc::stoveStateName(stoveState));
+        else if (evtLastError > 0) LOGI("stove", "error %s cleared", pc::errorCode(evtLastError));
         StateEvent e = { (uint32_t)t, EVT_ERROR, -1, -1, (uint8_t)err };
         evtLastError = err;
         evtStore(e);

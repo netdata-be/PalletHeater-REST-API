@@ -47,9 +47,32 @@ static void netRevertWifi(const char* why)
     p.putString("netcfg", oc); p.putBool("wifipend", false);
     p.putString("wifimsg", String(why) + " - back to " + os);
     p.end();
-    Serial.printf("[WiFi] %s - restoring '%s' and restarting\n", why, os.c_str());
+    LOGW("wifi", "%s - restoring '%s' and restarting", why, os.c_str());
     if (os.length()) { WiFi.disconnect(false); WiFi.begin(os.c_str(), op.c_str()); delay(300); }   // stores the old credentials
-    ESP.restart();
+    restartWith("WiFi switch reverted");
+}
+
+// ── WiFi events: why the connection dropped ─────────────────────────────
+// Registered before WiFi starts. A drop of a working connection is counted and
+// logged as a warning; the failed attempts while reconnecting only at debug level.
+// counters: liveLog.h (also used by metrics.h, which is included earlier)
+static void netEventsSetup()
+{
+    WiFi.onEvent([](WiFiEvent_t, WiFiEventInfo_t info) {
+        uint8_t r = info.wifi_sta_disconnected.reason;
+        const char* name = WiFi.disconnectReasonName((wifi_err_reason_t)r);
+        if (wifiWasUp) {
+            wifiWasUp = false;
+            wifiDisconnects++; wifiLastReason = r; wifiLastDisconnectMs = millis();
+            LOGW("wifi", "connection lost: %s (%u)", name, r);
+        } else {
+            LOGD("wifi", "connect attempt failed: %s (%u)", name, r);
+        }
+    }, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
+    WiFi.onEvent([](WiFiEvent_t, WiFiEventInfo_t info) {
+        wifiWasUp = true;
+        LOGI("wifi", "got IP %s", IPAddress(info.got_ip.ip_info.ip.addr).toString().c_str());
+    }, ARDUINO_EVENT_WIFI_STA_GOT_IP);
 }
 
 // Called once in setup() after WiFi is up
@@ -66,7 +89,7 @@ void netSetup()
     }
     if (pend && netGet("netcfg", "dhcp").startsWith("static,")) {
         netPendingConfirm = true; netPendingSince = millis(); netHttpSeen = false;
-        Serial.println("[WiFi] new static IP: waiting up to 5 min for an HTTP request, else back to DHCP");
+        LOGI("wifi", "new static IP: waiting up to 5 min for an HTTP request, else back to DHCP");
     }
 }
 
@@ -77,7 +100,7 @@ static void netSwitchLoop()
     case NS_IDLE: return;
     case NS_START:
         if (now < netSwitchAt) return;   // let the HTTP response go out first
-        Serial.printf("[WiFi] switching to '%s'\n", netNewSsid.c_str());
+        LOGI("wifi", "switching to '%s'", netNewSsid.c_str());
         WiFi.disconnect(false);
         WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);   // DHCP on the new network
         WiFi.begin(netNewSsid.c_str(), netNewPass.c_str());   // also stores the credentials
@@ -85,7 +108,7 @@ static void netSwitchLoop()
         return;
     case NS_CONNECTING:
         if (WiFi.status() == WL_CONNECTED) {
-            Serial.printf("[WiFi] connected to '%s', IP %s - waiting for an HTTP request\n", netNewSsid.c_str(), WiFi.localIP().toString().c_str());
+            LOGI("wifi", "connected to '%s', IP %s - waiting for an HTTP request", netNewSsid.c_str(), WiFi.localIP().toString().c_str());
             netSwitch = NS_CONFIRM; netSwitchAt = now; netHttpSeen = false;
             MDNS.end(); MDNS.begin(WiFi.getHostname()); MDNS.addService("http", "tcp", 80);
         } else if (now - netSwitchAt >= NET_CONNECT_MS) netRevertWifi("could not connect to the new network");
@@ -98,7 +121,7 @@ static void netSwitchLoop()
             p.end();
             netSwitchMsg = "switched to " + WiFi.SSID();
             netSwitch = NS_IDLE;
-            Serial.println("[WiFi] new network confirmed");
+            LOGI("wifi", "new network confirmed");
         } else if (now - netSwitchAt >= NET_CONFIRM_MS) netRevertWifi("nobody reached the controller on the new network");
         return;
     }
@@ -111,14 +134,14 @@ void netLoop()
     if (netHttpSeen) {
         Preferences p; p.begin("net", false); p.putBool("netpend", false); p.end();
         netPendingConfirm = false;
-        Serial.println("[WiFi] static IP confirmed (HTTP request received)");
+        LOGI("wifi", "static IP confirmed (HTTP request received)");
         return;
     }
     if (millis() - netPendingSince >= NET_CONFIRM_MS) {
         Preferences p; p.begin("net", false); p.putString("netcfg", "dhcp"); p.putBool("netpend", false); p.end();
-        Serial.println("[WiFi] static IP not confirmed within 5 min - back to DHCP, restarting");
+        LOGW("wifi", "static IP not confirmed within 5 min - back to DHCP, restarting");
         delay(200);
-        ESP.restart();
+        restartWith("static IP not confirmed - back to DHCP");
     }
 }
 
@@ -217,10 +240,17 @@ void handleRouteWifi()
     if (netPendingConfirm) json["confirmSecondsLeft"] = (NET_CONFIRM_MS - (millis() - netPendingSince)) / 1000;
     if (netSwitch == NS_CONFIRM) json["confirmSecondsLeft"] = (NET_CONFIRM_MS - (millis() - netSwitchAt)) / 1000;
     if (netSwitchMsg.length()) json["lastChange"] = netSwitchMsg;
+    json["disconnects"] = (uint32_t)wifiDisconnects;   // drops of a working connection since the start
+    if (wifiLastDisconnectMs) {
+        JsonObject ld = json.createNestedObject("lastDisconnect");
+        ld["reason"] = WiFi.disconnectReasonName((wifi_err_reason_t)wifiLastReason);
+        ld["code"] = (uint8_t)wifiLastReason;
+        ld["secondsAgo"] = (millis() - wifiLastDisconnectMs) / 1000;
+    } else json["lastDisconnect"] = nullptr;
     String out; serializeJson(json, out);
     if (restart) wm.server->sendHeader("Connection", "close");
     wm.server->send(code, "application/json", out);
-    if (restart) { delay(500); ESP.restart(); }
+    if (restart) { delay(500); restartWith("network settings changed"); }
 }
 
 // GET /api/wifi/scan -> {"scanning":true} while the scan runs (a few seconds), then

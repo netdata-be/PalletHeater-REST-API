@@ -130,7 +130,7 @@ void handleRouteKeyWatch()
         kwStartEpoch = time(nullptr);
         kwStartMs = millis(); kwUntilMs = kwStartMs + secs * 1000UL; kwStoppedMs = 0;
         kwActive = true;
-        Serial.printf("Key watch started: %u addresses, %ld s\n", kwN, secs);
+        LOGI("bus", "key watch started: %u addresses, %ld s", kwN, secs);
         kwSendStatus(200);
     }
     else if (m == HTTP_DELETE)

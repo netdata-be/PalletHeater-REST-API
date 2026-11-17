@@ -111,7 +111,7 @@ unsigned long getStatesUpdatedAt = 0;
 
 long previousMillisNTP;
 
-#define SENSOR_DEBUG 0  // Set to 1 to enable verbose sensor read logging
+// Verbose sensor logging: log module "stove" at level debug (/api/loglevel?stove=debug)
 
 // Memory types
 #define ram   0x00

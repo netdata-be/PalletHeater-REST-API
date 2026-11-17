@@ -152,15 +152,23 @@ static void historyLoad()
     if (!spiffsMounted) return;
     struct { int idx; uint32_t last; int count; } info[2] = { {0, 0, 0}, {1, 0, 0} };
     for (int i = 0; i < 2; i++) {
+        if (!SPIFFS.exists(HIST_FILES[i])) { LOGI("history", "%s: not present", HIST_FILES[i]); continue; }
         File f = SPIFFS.open(HIST_FILES[i], FILE_READ);
-        if (!f) continue;
+        if (!f) { LOGE("history", "%s: exists but cannot be opened", HIST_FILES[i]); continue; }
+        size_t fsize = f.size();
         histFileVersion[i] = histHeaderVersion(f);
-        if (!histFileVersion[i]) { f.close(); SPIFFS.remove(HIST_FILES[i]); continue; }
+        if (!histFileVersion[i]) {
+            LOGW("history", "%s: %u bytes, header not valid - removed", HIST_FILES[i], (unsigned)fsize);
+            f.close(); SPIFFS.remove(HIST_FILES[i]); continue;
+        }
         size_t rs = histRecordSize(histFileVersion[i]);
-        size_t n = (f.size() - HIST_HDR) / rs;
+        size_t n = (fsize - HIST_HDR) / rs;
         info[i].count = (int)n;
         if (n) { f.seek(HIST_HDR + (n - 1) * rs); HistSample s; if (histReadRecord(f, histFileVersion[i], s)) info[i].last = s.t; }
         f.close();
+        char last[24] = "-";
+        if (info[i].last) { time_t lt = info[i].last; strftime(last, sizeof(last), "%d/%m %H:%M", localtime(&lt)); }
+        LOGI("history", "%s: %u bytes, format v%d, %u samples, last %s", HIST_FILES[i], (unsigned)fsize, histFileVersion[i], (unsigned)n, last);
     }
     int newer = info[1].last > info[0].last ? 1 : 0, older = 1 - newer;
     uint32_t cutoff = (uint32_t)time(nullptr) > 1700000000 ? (uint32_t)time(nullptr) - 24UL * 3600UL : 0;
@@ -180,7 +188,101 @@ static void historyLoad()
     }
     histActiveFile  = newer;
     histActiveCount = info[newer].count;
-    Serial.printf("History: loaded %d samples from SPIFFS\n", histCount);
+    LOGI("history", "loaded %d samples from SPIFFS", histCount);
+}
+
+
+// ── Week: hourly averages, 7 days ─────────────────────────────────────
+// The 2-min samples are averaged per clock hour (pc::HourAcc) into a second ring
+// of 168 records, kept in /hist_week.bin (appended once an hour; rewritten with
+// the last 7 days when it grows past 14 days). GET /api/history?hours=25..168
+// serves these, plus the hour in progress.
+static const int   WEEK_SIZE = 168;
+static pc::HourRecord week[WEEK_SIZE];
+static int weekHead = 0, weekCount = 0;
+static pc::HourAcc weekAcc;                         // the hour in progress
+static const char* WEEK_FILE = "/hist_week.bin";
+static const uint8_t WEEK_MAGIC[4] = { 'P', 'H', 'W', '1' };
+static int weekFileCount = 0;
+
+static uint32_t weekLastT() { return weekCount ? week[(weekHead - 1 + WEEK_SIZE) % WEEK_SIZE].t : 0; }
+static void weekPush(const pc::HourRecord& r)
+{
+    week[weekHead] = r;
+    weekHead = (weekHead + 1) % WEEK_SIZE;
+    if (weekCount < WEEK_SIZE) weekCount++;
+}
+static void weekWriteAll()
+{
+    File f = SPIFFS.open(WEEK_FILE, FILE_WRITE);
+    if (!f) return;
+    f.write(WEEK_MAGIC, sizeof(WEEK_MAGIC)); uint8_t sz = sizeof(pc::HourRecord); f.write(&sz, 1);
+    int start = (weekHead - weekCount + WEEK_SIZE) % WEEK_SIZE;
+    for (int i = 0; i < weekCount; i++) f.write((const uint8_t*)&week[(start + i) % WEEK_SIZE], sizeof(pc::HourRecord));
+    f.close();
+    weekFileCount = weekCount;
+}
+static void weekAppend(const pc::HourRecord& r)
+{
+    if (!spiffsMounted) return;
+    if (weekFileCount == 0 || weekFileCount >= 2 * WEEK_SIZE || !SPIFFS.exists(WEEK_FILE)) { weekWriteAll(); return; }
+    File f = SPIFFS.open(WEEK_FILE, FILE_APPEND);
+    if (!f) return;
+    if (f.write((const uint8_t*)&r, sizeof(r)) == sizeof(r)) weekFileCount++;
+    f.close();
+}
+static pc::HourInput weekInput(const HistSample& s)
+{
+    pc::HourInput in = {};
+    in.t = s.t; in.room10 = s.room10; in.stove10 = s.stove10; in.remote10 = s.remote10;
+    in.setpoint = s.setpoint; in.fume = s.fume; in.flame = s.flame; in.flameActual = s.flameActual;
+    in.fan = s.fan; in.fanActual = s.fanActual; in.state = s.state;
+    in.auger10 = s.auger10; in.fumeRpm = s.fumeRpm == 0xFFFF ? -1 : s.fumeRpm;
+    return in;
+}
+// Feed one 2-min sample; closes the previous hour when a new one starts
+static void weekAdd(const HistSample& s, bool persist)
+{
+    uint32_t h = pc::HourAcc::hourOf(s.t);
+    if (!weekAcc.empty() && weekAcc.hour != h) {
+        if (weekAcc.hour > weekLastT()) {
+            pc::HourRecord r = weekAcc.result();
+            weekPush(r);
+            if (persist) weekAppend(r);
+        }
+        weekAcc.reset();
+    }
+    if (h > weekLastT()) weekAcc.add(weekInput(s));
+}
+// At boot, after historyLoad(): read the file, then add the hours from the 24 h
+// history that are missing (first start with this firmware, or hours that ended
+// while the controller was off).
+static void weekLoad()
+{
+    if (spiffsMounted) {
+        File f = SPIFFS.open(WEEK_FILE, FILE_READ);
+        if (f) {
+            uint8_t hdr[5];
+            bool ok = f.read(hdr, 5) == 5 && memcmp(hdr, WEEK_MAGIC, 4) == 0 && hdr[4] == sizeof(pc::HourRecord);
+            uint32_t cutoff = (uint32_t)time(nullptr) > 1700000000 ? (uint32_t)time(nullptr) - 7UL * 24UL * 3600UL : 0;
+            pc::HourRecord r;
+            int n = 0;
+            while (ok && f.read((uint8_t*)&r, sizeof(r)) == sizeof(r)) {
+                n++;
+                if (r.t < 1700000000 || (cutoff && r.t < cutoff) || r.t <= weekLastT()) continue;
+                weekPush(r);
+            }
+            f.close();
+            if (!ok) SPIFFS.remove(WEEK_FILE);
+            weekFileCount = ok ? n : 0;
+        }
+    }
+    int added = weekCount;
+    int start = (histHead - histCount + HIST_SIZE) % HIST_SIZE;
+    for (int i = 0; i < histCount; i++) weekAdd(hist[(start + i) % HIST_SIZE], false);
+    // the hour in progress stays in weekAcc; finished hours that were rebuilt go to the file
+    if (weekCount != added && spiffsMounted) weekWriteAll();
+    LOGI("history", "%d hours of week history", weekCount);
 }
 
 static void historyAppend(const HistSample& s)
@@ -214,6 +316,7 @@ static void historyAppend(const HistSample& s)
     if (!f) return;
     if (fresh) { f.write(HIST_MAGIC, sizeof(HIST_MAGIC)); uint8_t sz = sizeof(HistSample); f.write(&sz, 1); histFileVersion[histActiveFile] = 6; }
     if (f.write((const uint8_t*)&s, sizeof(s)) == sizeof(s)) histActiveCount++;
+    else LOGW("history", "append to %s failed (SPIFFS %u of %u bytes used)", HIST_FILES[histActiveFile], (unsigned)SPIFFS.usedBytes(), (unsigned)SPIFFS.totalBytes());
     f.close();
 }
 
@@ -243,13 +346,49 @@ static void historyTick()
     s.fanPower = cachedRoomFanControl < 0 ? 0xFF : (uint8_t)constrain(cachedRoomFanControl, 0, 254);
     histPush(s);
     historyAppend(s);
+    weekAdd(s, true);
+}
+
+// Hourly records for ranges over 24 h (up to 7 days), same field names as the
+// 2-min samples where they mean the same, plus fumeMax and burning (% of the hour
+// in a heating state). The values are hourly averages; state = most frequent.
+static void handleRouteHistoryWeek(int hours)
+{
+    uint32_t since = (uint32_t)time(nullptr) - (uint32_t)hours * 3600UL;
+    wm.server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+    wm.server->send(200, "application/json", "");
+    String out;
+    out.reserve(1800);
+    out += "{\"interval\":3600,\"fields\":[\"t\",\"room\",\"stove\",\"remote\",\"setpoint\",\"fume\",\"fumeMax\",\"flame\",\"flameActual\",\"fan\",\"fanActual\",\"auger\",\"fumeFan\",\"state\",\"burning\",\"n\"],\"samples\":[";
+    bool first = true;
+    auto row = [&](const pc::HourRecord& r) {
+        if (r.t + 3600 <= since) return;
+        char line[176], fa[8], fna[8], aug[10], rpm[8];
+        if (r.flameAct10 == 0xFF) strcpy(fa, "null"); else snprintf(fa, sizeof(fa), "%.1f", r.flameAct10 / 10.0f);
+        if (r.fanAct10 == 0xFF) strcpy(fna, "null"); else snprintf(fna, sizeof(fna), "%.1f", r.fanAct10 / 10.0f);
+        if (r.auger10 < 0) strcpy(aug, "null"); else snprintf(aug, sizeof(aug), "%.1f", r.auger10 / 10.0f);
+        if (r.fumeRpm == 0xFFFF) strcpy(rpm, "null"); else snprintf(rpm, sizeof(rpm), "%u", r.fumeRpm);
+        snprintf(line, sizeof(line), "%s[%lu,%.1f,%.1f,%.1f,%u,%u,%u,%.1f,%s,%.1f,%s,%s,%s,%d,%u,%u]", first ? "" : ",",
+                 (unsigned long)r.t, r.room10 / 10.0f, r.stove10 / 10.0f, r.remote10 / 10.0f, r.setpoint, r.fume, r.fumeMax,
+                 r.flame10 / 10.0f, fa, r.fan10 / 10.0f, fna, aug, rpm, r.state, r.burnPct, r.n);
+        out += line;
+        first = false;
+        if (out.length() > 1500) { wm.server->sendContent(out); out = ""; }
+    };
+    int start = (weekHead - weekCount + WEEK_SIZE) % WEEK_SIZE;
+    for (int i = 0; i < weekCount; i++) row(week[(start + i) % WEEK_SIZE]);
+    if (!weekAcc.empty()) row(weekAcc.result());   // the hour in progress
+    out += "]}";
+    wm.server->sendContent(out);
+    wm.server->sendContent("");
 }
 
 void handleRouteHistory()
 {
     if (wm.server->method() != HTTP_GET) { wm.server->send(405); return; }
     int hours = wm.server->hasArg("hours") ? wm.server->arg("hours").toInt() : 24;
-    if (hours < 1 || hours > 24) hours = 24;
+    if (hours > 24) { handleRouteHistoryWeek(hours > 168 ? 168 : hours); return; }
+    if (hours < 1) hours = 24;
     uint32_t since = (uint32_t)time(nullptr) - (uint32_t)hours * 3600UL;
 
     wm.server->setContentLength(CONTENT_LENGTH_UNKNOWN);

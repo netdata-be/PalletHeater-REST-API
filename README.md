@@ -46,11 +46,56 @@ Hold the reset button for 5 seconds to wipe the WiFi settings and restart the ca
 
 ## Web app
 
-`http://openpelletbridge.local/` (also `/app`) is a single page web app built into the firmware ([web/app.html](web/app.html)). It has no external dependencies, so it also works without internet access, and adapts to phone and desktop screens and to light/dark mode.
+`http://openpelletbridge.local/` (also `/app`) is a single page web app built into the firmware ([web/app.html](web/app.html)). It has no external dependencies, so it also works without internet access, and adapts to phone and desktop screens and to light/dark mode (automatic, or fixed with the theme button).
+
+### A tour of the app
+
+*The screenshots use sample data; names and addresses are examples.*
+
+**Overview.** The top card shows the state of the stove in words (here: standby because energy saving stopped it, and the temperature at which it starts again), the next timer action, the room temperature, set point and fume temperature, and the power button. Below it: set point, flame power and room fan; energy saving with its stop and restart temperatures; and the status values the stove reports. The *Update* button in the header appears when a newer firmware release is available.
+
+![Overview: stove state, heating controls, energy saving and status](img/app-overview.png)
+
+**History.** One chart with a lane per quantity on a shared time axis: temperatures, flame power (set and actual), room fan and, on request, fume temperature, auger and fume fan speed. The dotted lines mark every change of the stove state (from the event log), labelled where there is room. Hover or tap for the values at that moment. Choose 30 min up to 24 h (a point every 2 minutes)…
+
+![History of the last 24 hours](img/app-history.png)
+
+…or *7 d*: hourly averages of the last week, with *Burning*, the share of each hour the stove was heating.
+
+![History of the last 7 days with the burning share per hour](img/app-week.png)
+
+**Remote control, settings and clock.** A read-only copy of what the remote control shows (here *OFF / ENERGY / OK*: standby by energy saving after the stove has cooled down, with the chrono clock icon and the "E" for energy saving), the combustion and pellet quality corrections and the beep, and the stove clock next to NTP and the browser time with buttons to set it.
+
+![Remote control mirror, settings and clock](img/app-remote.png)
+
+**Timers.** The six chrono programs of the stove: on and off time, days, set point, flame power and room fan per program, with *Copy to…* to reuse a program. Above them: what the next timer will do.
+
+![Timer programs PR1 – PR6](img/app-timers.png)
+
+**Device, network and MQTT** (*Expert* on). Stove and controller firmware, what the firmware is built for, why the controller last (re)started and how often it crashed, Bluetooth and API key, the firmware update from GitHub (*Install vX*), settings backup and restore. *Network (WiFi)* shows the connection and how often it dropped and why; *Other network* and *IP settings* change it. *MQTT* shows the broker connection and opens its settings.
+
+![Device, network and MQTT cards](img/app-device.png)
+
+**Live debugging** (*Debug* on). *Firmware log* shows what the controller writes to its serial port, with the time; warnings are orange, errors red. After a restart it starts with the last lines from before it. *Log levels per module* sets how much each part writes.
+
+![Live firmware log](img/app-livelog.png)
+
+*Stove bus* shows every read and write between the controller and the stove as one line: time, action, register (RAM or EEPROM and address), value (decimal and hex) and what the value means according to the known register table, with the previous value when it changed (*← was 140*). *Changes only* (on by default) shows the first reading of each register and after that only changes, writes and failures. The legend under the output explains the colours. *Raw bytes* adds the bytes of each transaction on the serial line, in hex or (*Binary*) in bits, with what each part is: TX is what the controller sends (read: type, address; write: 0x80 + type, address, value, checksum), RX what it receives: the echo of TX (the bus is one wire), then the stove's answer (checksum, value), with the checksum checked. A timeout shows how many bytes did arrive. Filter on addresses (`0x21, 0x6E`) or text; *Download* saves the lines.
+
+![Live stove bus monitor](img/app-livebus.png)
+
+**Dark mode.** The theme button in the header (◐ automatic, ☀ light, ☾ dark) switches between following your phone or computer and a fixed light or dark theme; the choice is kept per browser and included in a settings backup.
+
+![Overview in dark mode](img/app-dark.png)
+
+### Features
 
 - **Status:** stove state, room / set point / fume temperatures, the sensor the room temperature comes from (derived from the readings), the wireless sensor setting, sensors, fume fan, auger speed, pellet level, error memory, stove vs NTP clock, firmware, starts and working hours. Refreshes every 5 s from `/api/state`.
 - **Alerts:** a banner for alarms (states 8 – 10), an active error code, no answer from the stove, low pellets, stale data and an unreachable controller.
-- **History:** one chart for the last 30 min / 1 / 6 / 12 / 24 h (from `/api/history`) with toggles for room, set point, stove sensor, remote sensor, flame power, room fan, fume temperature, auger speed, fume fan speed and vertical lines at the exact stove state changes (from `/api/events`), plus a list of the state changes with their duration. Each quantity has its own lane and scale on a shared time axis, with one crosshair tooltip and a table view.
+- **Settings backup:** *Back up settings* under *Device* downloads a JSON file with the stove settings, timers, MQTT (without password), network, device options and display choices; *Restore settings* writes the parts you tick back through the normal API (no passwords or API key in the file).
+- **Update badge:** when a newer release is available an *Update* button appears in the header, next to the version.
+- **Home screen:** the app has a web app manifest and icon (`/manifest.webmanifest`, `/icon.svg`, `/icon-180.png`), so *Add to Home Screen* (iOS Safari, Android Chrome) gives it its own icon and a full-screen window. (Installing as a real PWA needs HTTPS, which the controller does not have; the home screen shortcut works over HTTP.)
+- **History:** one chart for the last 30 min / 1 / 6 / 12 / 24 h or 7 days (hourly averages, with the share of each hour the stove was burning) (from `/api/history`) with toggles for room, set point, stove sensor, remote sensor, flame power, room fan, fume temperature, auger speed, fume fan speed and vertical lines at the exact stove state changes (from `/api/events`), plus a list of the state changes with their duration. Each quantity has its own lane and scale on a shared time axis, with one crosshair tooltip and a table view.
 - **Remote control:** a read-only mirror of the remote display (time and date, room temperature, flame power blocks 1 – 4, room fan, "E" for energy saving, OFF screen, error, open menu) plus menu, selected parameter, language and last contact.
 - **Controls:** power on/off, set point, flame power, room fan, energy saving, combustion and pellet quality, beep, clock sync, delete single errors or the whole error memory, restart.
 - **Timers:** edit, enable/disable and copy PR1 – PR6 (to one program or all others), plus the next scheduled timer action. A program that could not be read from the stove is shown as *Read error* and cannot be saved, so a bad read is never written back.
@@ -137,7 +182,10 @@ scrape_configs:
 | `GET` | [`/api/remote`](#get-apiremote) | Current menu on the remote / display |
 | `GET` | [`/api/dump`](#get-apidump) | Raw RAM / EEPROM register dump |
 | `GET` `POST` `DELETE` | [`/api/keywatch`](#apikeywatch) | Fast watch of a few RAM addresses (reverse engineering) |
-| `GET` | [`/api/history`](#get-apihistory) | Last 24 h of temperatures (RAM ring buffer) |
+| `GET` | [`/api/history`](#get-apihistory) | Last 24 h (2-min samples) or 7 days (hourly averages) |
+| `GET` | [`/api/log`](#live-debugging) | Live firmware log (cursor) |
+| `GET` `POST` | [`/api/busmon`](#live-debugging) | Live stove bus monitor (cursor) |
+| `GET` `POST` | [`/api/loglevel`](#live-debugging) | Log level per firmware module |
 | `GET` | [`/api/events`](#get-apievents) | Log of stove state changes and errors with exact times |
 | `GET` `POST` | [`/api/bluetooth`](#apibluetooth) | Enable / disable Bluetooth (BLE) |
 | `GET` `POST` | [`/api/mqtt`](#apimqtt) | MQTT settings and status |
@@ -526,7 +574,7 @@ The controller keeps one sample every 2 minutes for the last 24 hours (720 sampl
 
 | Parameter | Values |
 |---|---|
-| `hours` | `1` – `24` (default `24`) |
+| `hours` | `1` – `24` (default `24`): the 2-minute samples. `25` – `168`: hourly averages of the last 7 days (see below). |
 
 ```bash
 curl "http://openpelletbridge.local/api/history?hours=6"
@@ -541,6 +589,14 @@ curl "http://openpelletbridge.local/api/history?hours=6"
 ```
 
 `t` is Unix time (UTC), temperatures in °C (0.5 °C resolution as reported by the stove), `state` is the stove state code, `fan` the room fan speed, `flame` the set and `flameActual` the actual flame power, `auger` the auger (feed screw) speed in rpm, `fumeFan` the fume fan speed in rpm, `fanActual` the speed the room fan really ran at (0 = stopped), `fanPower` the raw room fan power (RAM 0x0A: 0 off, 21/23/25 at speed 1/2/3) (`null` for samples recorded by older firmware). Each sample is an array in the order of `fields`. Changes shorter than the 2 minute interval are not captured in the samples; use [`/api/events`](#get-apievents) for exact state changes.
+
+**7 days (`hours` 25 – 168):** the 2-minute samples are also averaged per clock hour into 168 hourly records, kept in `/hist_week.bin` (one append per hour). After an update to firmware with this feature the week is filled from the 24 h history. The answer has `"interval": 3600` and the fields `t` (start of the hour), `room`, `stove`, `remote`, `fume`, `flame`, `flameActual`, `fan`, `fanActual`, `auger`, `fumeFan` (hourly averages), `setpoint` (last value), `fumeMax`, `state` (most frequent state), `burning` (% of the hour in a heating state 1 – 5) and `n` (samples in that hour). The hour in progress is included as the last record.
+
+```bash
+curl "http://openpelletbridge.local/api/history?hours=168"
+# {"interval":3600,"fields":["t","room","stove","remote","setpoint","fume","fumeMax","flame","flameActual","fan","fanActual","auger","fumeFan","state","burning","n"],
+#  "samples":[[1794841200,20.6,21.0,20.8,21,118,131,2.0,1.8,1.0,1.0,1.5,2610,4,100,30], …]}
+```
 
 ### `GET /api/events`
 
@@ -672,6 +728,53 @@ Kept for backwards compatibility. Use the `/api/...` routes for new integrations
 | `/cq?s=<raw>` | Write the raw combustion quality value. Use `POST /api/burn`. |
 | `/display?menu=<id>` | Force the display to a menu id. |
 
+### Live debugging
+
+Two cursor based routes behind the web app's *Live debugging* card (Debug mode). Start with `since=0` and pass the `next` of each answer as the next `since`. `lost: true` means the cursor was older than the buffer and entries were overwritten; a cursor from before a restart starts again at the oldest entry.
+
+`GET /api/log` returns the firmware log: everything the firmware writes to its serial port (`Serial`, UART0) (also ESP-IDF log output), each line prefixed with the time, from an 8 KB ring buffer in RAM. Output that precompiled libraries (WiFiManager, NimBLE) write to the UART themselves is not included. At most 4 KB per answer.
+
+```bash
+curl "http://openpelletbridge.local/api/log?since=0"
+# {"from":0,"next":1834,"lost":false,"text":"14:02:11 Ready - firmware v1.1.0 for Piazzetta P220 M\n…"}
+```
+
+`/api/busmon` is the stove bus monitor: every read and write between the controller and the stove. It only records while it is watched: `POST ?enabled=true` starts it, every `GET` keeps it running for another 60 s, and it stops by itself 60 s after the last `GET` (or with `POST ?enabled=false`). At most 250 events per answer, 600 kept (about half a minute of traffic).
+
+```bash
+curl -X POST "http://openpelletbridge.local/api/busmon?enabled=true"
+curl "http://openpelletbridge.local/api/busmon?since=0"
+# {"active":true,"now":5023112,"from":0,"next":42,"lost":false,
+#  "fields":["ms","write","eeprom","address","value","ok","attempts","text","tx","rx"],
+#  "events":[[5022050,0,0,33,4,1,1,"Working","0021","00212504"],[5022101,1,1,125,21,1,1,"21 °C (setpoint room temp)","A07D1532","A07D15323215"], …]}
+```
+
+`ms` is the controller uptime (`now` is the uptime at the answer, to convert to clock time), `write` 1 = write, `eeprom` 1 = EEPROM (0 = RAM), `value` the value read or written, `ok` 0 = failed after all `attempts`, `text` what the value means (the same description as `Value_txt` in `/api/dump`; empty for an unknown register or a failed read), `tx` / `rx` the raw bytes of the (last) attempt as hex: `tx` sent (read `0021` = RAM, address 0x21; write `A07D1532` = 0x80 + EEPROM, address, value, checksum), `rx` received: the echo of `tx` followed by the stove's checksum and value (`00212504`). A shorter `rx` means a timeout.
+
+**Log levels.** Firmware messages are tagged per module and level: `I [mqtt] connected to …`, `W [wifi] connection lost: BEACON_TIMEOUT (200)`. Each module prints up to its level (`off`, `error`, `warn`, `info`, `debug`; default `info`, `bus` `warn`), kept in NVS:
+
+```bash
+curl http://openpelletbridge.local/api/loglevel
+# {"levels":{"sys":"info","wifi":"info","mqtt":"info","stove":"info","bus":"warn","update":"info","http":"info","history":"info"},"modules":[…]}
+curl -X POST "http://openpelletbridge.local/api/loglevel?wifi=debug&bus=debug"
+```
+
+| Module | Messages |
+|---|---|
+| `sys` | start-up, restart reasons, SPIFFS use, clock (daylight saving changes, NTP lost / back; `debug`: every NTP sync), log level changes, telnet. Every 15 min a **health** line: uptime, free heap (lowest, largest block), WiFi signal, stove bus transactions / retries / failures, sensor cycle times and the longest wait for the bus; warnings for low memory, a noisy or failing bus and a weak WiFi signal |
+| `wifi` | connection, IP, drops with the reason (`debug`: every failed reconnect attempt) |
+| `mqtt` | connection with the broker's answer in words (wrong password, not reachable, …), connection lost, the command topic, Home Assistant discovery (number of entities), commands received, failed publishes. `debug`: every published topic and value |
+| `stove` | every **write** to the stove with what it means and **who** did it (web/API with IP and route, MQTT command, Bluetooth app, telnet, or the controller itself); state changes with their duration and **probable cause** (power command and its source, timer program, energy saving with the room temperature, brazier cleaning, error); errors and when they clear; setting changes; low pellets; stove clock more than 60 s off NTP; remote control not heard for 30 min; slow sensor cycles and long waits for the bus. `debug`: measured values when they change (old -> new): temperatures, fumes (steps of 5 °C), actual flame power and room fan, fume fan start / stop / speed, auger, brazier cleaning countdown |
+| `bus` | stove reads / writes that failed after all attempts (`debug`: failed attempts that were retried, and every frame while the telnet bus debug is on) |
+| `update` | firmware updates (GitHub, upload, ArduinoOTA) |
+| `http` | web server; requests refused for a missing API key (401), stove bus busy (503) and slow requests (> 2 s). `debug`: access log (method, path, parameters with secrets masked, client IP) and the duration of each request; the live log's own polling is left out |
+| `history` | history files: what was found at start-up, failed writes |
+| `ble` | Bluetooth: connections, commands received, BLE OTA (`debug`: subscriptions and notifications) |
+
+**Log of the previous run.** The last 2 KB of the log are also kept in RTC memory, which survives a restart, a crash and a watchdog reset (not a power cut). After such a restart the live log starts with `===== log before the restart (<reason>) =====` and those lines, so you can see what happened just before.
+
+**Restart reason.** `/api/state` → `controller.resetReason` says why the controller last started: the ESP32 reset reason (`power on`, `software restart`, `crash (panic)`, `task watchdog`, `brown-out (supply voltage dropped)`, …) plus, for a restart the firmware did itself, what caused it (`firmware update from GitHub`, `restart requested (web app / API)`, `WiFi switch reverted`, …). `controller.bootCount` and `controller.crashCount` (starts after a crash, watchdog or brown-out) are kept in NVS. Metrics: `esp32_boot_count`, `esp32_crash_count`, `esp32_reset_info{reason="…"}`, `esp32_wifi_disconnects_total`. `/api/wifi` has `disconnects` (drops of a working connection since the start) and `lastDisconnect` (`reason`, `code`, `secondsAgo`).
+
 ### `POST /api/update`
 
 Installs new firmware over HTTP. The image is streamed in one request and written to the OTA partition while it arrives, which is several times faster than ArduinoOTA (espota sends 1 KB at a time and waits for an acknowledgement after every block). The controller restarts after a successful update; the stove is not affected.
@@ -709,6 +812,8 @@ curl -X POST "http://openpelletbridge.local/api/firmware?autoCheck=false"
 | `state` | `idle`, `checking`, `downloading`, `restarting` or `error` (`lastError`) |
 | `progress` | `{done,total}` bytes while downloading |
 | `updateAvailable` | `latest` is newer than `current` and has the firmware asset |
+| `install` | What installing `latest` would do: `update` (newer), `reinstall` (same version), `downgrade` (older than this build, e.g. a development build made after that release: the web app then offers *Back to vX*), `unknown` (this build has no release version) |
+| `ahead`, `dirty` | For a version from `git describe`: commits after the release tag, and uncommitted changes in the build |
 | `lastInstall` | Last update through this route, e.g. `v1.0.0 -> v1.1.0` |
 
 `action=install` without `force` is refused (`400`) when there is no newer release; `409` while a check or update is already running. Poll `GET` to follow the progress; the controller is unreachable for about a minute while it restarts. The web app shows this under *Device* → *OpenPelletBridge firmware*.
@@ -849,7 +954,7 @@ pio test -e native
 
 ### Source layout
 
-`src/main.cpp` only holds `setup()`, `loop()` and the route table. The rest is split into headers that main.cpp includes in a fixed order (one translation unit, because [src/constants.h](src/constants.h) defines the globals): `stoveCache.h` (reading the stove, sensor task), `stoveControl.h` (writing settings), `registers.h` (register names, `/api/dump`, `/api/remote`), `stoveClock.h`, `routesBasic.h`, `routesTimers.h`, `routesControl.h`, `status.h` (`/api/state`), `history.h`, `events.h`, `routesDevice.h`, `mqtt.h`, `wifiInfo.h`, `fwUpdate.h` (GitHub update), plus the older `auth.h`, `bleUart.h`, `httpUpdate.h`, `keyWatch.h`, `metrics.h`, `telnetMenu.h`.
+`src/main.cpp` only holds `setup()`, `loop()` and the route table. The rest is split into headers that main.cpp includes in a fixed order (one translation unit, because [src/constants.h](src/constants.h) defines the globals): `stoveCache.h` (reading the stove, sensor task), `stoveControl.h` (writing settings), `registers.h` (register names, `/api/dump`, `/api/remote`), `stoveClock.h`, `routesBasic.h`, `routesTimers.h`, `routesControl.h`, `status.h` (`/api/state`), `history.h`, `events.h`, `routesDevice.h`, `mqtt.h`, `wifiInfo.h`, `fwUpdate.h` (GitHub update), `liveDebug.h` (`/api/log`, `/api/busmon`), plus `liveLog.h` (included first: copies `Serial` output into the live log) and the older `auth.h`, `bleUart.h`, `httpUpdate.h`, `keyWatch.h`, `metrics.h`, `telnetMenu.h`.
 
 ### Updating the API documentation
 

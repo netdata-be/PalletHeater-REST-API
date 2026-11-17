@@ -14,23 +14,20 @@ bool getNTPtime(int sec)
         {
             time(&now);
             localtime_r(&now, &ntp_tm);
-#if SENSOR_DEBUG
-            Serial.print(".");
-#endif
             delay(10);
         } while (((millis() - start) <= (1000 * sec)) && (ntp_tm.tm_year < (2016 - 1900)));
         if (ntp_tm.tm_year <= (2016 - 1900))
             return false; // the NTP call was not successful
 
         currentDst = ntp_tm.tm_isdst;
-#if SENSOR_DEBUG
-        Serial.print("now ");
-        Serial.println(now);
-        char time_output[30];
-        strftime(time_output, 30, "%a  %d-%m-%y %T", localtime(&now));
-        Serial.println(time_output);
-        Serial.println();
-#endif
+        {
+            char time_output[30];
+            strftime(time_output, sizeof(time_output), "%a %d-%m-%y %T", localtime(&now));
+            static int lastDst = -1;
+            if (currentDst != lastDst) LOGI("sys", "clock: %s, daylight saving time %s", time_output, currentDst ? "on" : "off");
+            else LOGD("sys", "clock synced: %s", time_output);
+            lastDst = currentDst;
+        }
     }
     return true;
 }
@@ -54,11 +51,7 @@ unsigned long lastSlowStatesAt = 0;
 
 void getAmbTemp() // Get room temperature
 {
-    if (!readKeep(ambTemp, ram, ambTempAddr, 0.5f)) log_e("Failed to get room temperature");
-#if SENSOR_DEBUG
-    Serial.print("T. amb. ");
-    Serial.println(ambTemp);
-#endif
+    if (!readKeep(ambTemp, ram, ambTempAddr, 0.5f)) LOGW("stove", "room temperature (RAM 0x%02X) could not be read - keeping %.1f °C", ambTempAddr, ambTemp);
 }
 
 void readFirmwareVersion(char* out, size_t len)
@@ -97,20 +90,12 @@ int getRemoteControlLastSeen()
 
 void getAmbTempStove() // Get room temperature from stove sensor
 {
-    if (!readKeep(ambTempStove, ram, ambTempStoveAddr, 0.5f)) log_e("Failed to get stove temperature");
-#if SENSOR_DEBUG
-    Serial.print("T. amb. stove : ");
-    Serial.println(ambTempStove);
-#endif
+    if (!readKeep(ambTempStove, ram, ambTempStoveAddr, 0.5f)) LOGW("stove", "stove sensor temperature (RAM 0x%02X) could not be read - keeping %.1f °C", ambTempStoveAddr, ambTempStove);
 }
 
 void getAmbTempRemoteControl() // Get room temperature from stove sensor
 {
-    if (!readKeep(ambTempRemoteControl, ram, ambTempRemoteAddr, 0.5f)) log_e("Failed to get remote control temperature");
-#if SENSOR_DEBUG
-    Serial.print("T. amb. remote control : ");
-    Serial.println(ambTempRemoteControl);
-#endif
+    if (!readKeep(ambTempRemoteControl, ram, ambTempRemoteAddr, 0.5f)) LOGW("stove", "remote control temperature (RAM 0x%02X) could not be read - keeping %.1f °C", ambTempRemoteAddr, ambTempRemoteControl);
 }
 
 int numberOfStarts()
@@ -141,18 +126,11 @@ int arePalletsLow()
 void getTempSetpoint()
 {
     readKeep(setPointTemp, eeprom, TempSetpointAddr);
-#if SENSOR_DEBUG
-    Serial.print("T. setpoint. ");
-    Serial.println(setPointTemp);
-#endif
 }
 
 void getFumeTemp() // Get flue gas temperature
 {
     readKeep(fumesTemp, ram, fumesTempAddr);
-#if SENSOR_DEBUG
-    Serial.printf("T. fumes %d\n", fumesTemp);
-#endif
 }
 
 // The stove stores its clock in EEPROM as BCD (e.g. 16 -> 0x16).
@@ -190,9 +168,6 @@ void setStoveDateTime()   // sync to NTP time
 void getRoomFanSpeed()
 {
     readKeep(roomFanSpeed, eeprom, roomFanEepromAddr);
-#if SENSOR_DEBUG
-    Serial.printf("Fan speed: %d\n", roomFanSpeed);
-#endif
 }
 
 void getFlamePower() // Get the flame power (1 - 4)
@@ -237,10 +212,92 @@ static bool refreshTimerCache(int i)
     return true;
 }
 
+
+// ── What changed? ─────────────────────────────────────────────────────
+// Logs the stove values when they change (old -> new), not every reading.
+// Settings someone changes (set point, flame, fan, energy saving, ...) are info;
+// measured values (temperatures, actual flame / fan, fume fan, auger) are debug,
+// temperatures only when they move by at least the given step.
+static void logStoveChanges(bool slow)
+{
+    static bool primed = false, primedSlow = false;
+    static float lRoom, lStoveT, lRemote, lAuger;
+    static int lSet, lFlame, lFlameAct, lFan, lFanAct, lFanPwr, lFume, lRpm, lEsStart, lEsStop, lLowPel, lBrazier, lHot, lWireless, lCq, lPq;
+    static bool lBeep;
+    const char* fanName[] = { "off", "1", "2", "3" };
+    auto fanStr = [&](int v) { return v >= 0 && v <= 3 ? fanName[v] : "?"; };
+
+    if (!primed) {
+        lFlame = flamePower; lFlameAct = cachedFlameActual; lFan = roomFanSpeed; lFanAct = roomFanActual();
+        lFanPwr = cachedRoomFanControl; lFume = fumesTemp; lRpm = cachedFumeFanRPM; lBrazier = cachedBrazierCountdown; lHot = cachedHotForFan;
+        primed = true;
+        LOGI("stove", "first reading: %s, flame power %d (actual %d), room fan %s, fumes %d °C, fume fan %d rpm",
+             pc::stoveStateName(stoveState), flamePower, cachedFlameActual, fanStr(roomFanSpeed), (int)fumesTemp, cachedFumeFanRPM);
+    } else {
+        if (flamePower != lFlame) { LOGI("stove", "flame power setting %d -> %d", lFlame, flamePower); lFlame = flamePower; }
+        if (cachedFlameActual != lFlameAct) { LOGD("stove", "flame power actual %d -> %d (setting %d)", lFlameAct, cachedFlameActual, flamePower); lFlameAct = cachedFlameActual; }
+        if (roomFanSpeed != lFan) { LOGI("stove", "room fan setting %s -> %s", fanStr(lFan), fanStr(roomFanSpeed)); lFan = roomFanSpeed; }
+        int fa = roomFanActual();
+        if (fa != lFanAct) { LOGD("stove", "room fan actual %s -> %s (power RAM 0x0A = %d)", fanStr(lFanAct), fanStr(fa), cachedRoomFanControl); lFanAct = fa; }
+        if (cachedRoomFanControl != lFanPwr && fa == lFanAct) { LOGD("stove", "room fan power (RAM 0x0A) %d -> %d", lFanPwr, cachedRoomFanControl); }
+        lFanPwr = cachedRoomFanControl;
+        if (abs((int)fumesTemp - lFume) >= 5) { LOGD("stove", "fume temperature %d -> %d °C", lFume, (int)fumesTemp); lFume = fumesTemp; }
+        if ((cachedFumeFanRPM == 0) != (lRpm == 0) || abs(cachedFumeFanRPM - lRpm) >= 200) {
+            if (cachedFumeFanRPM == 0) LOGD("stove", "fume fan stopped (was %d rpm)", lRpm);
+            else if (lRpm == 0) LOGD("stove", "fume fan started: %d rpm", cachedFumeFanRPM);
+            else LOGD("stove", "fume fan %d -> %d rpm", lRpm, cachedFumeFanRPM);
+            lRpm = cachedFumeFanRPM;
+        }
+        if (cachedHotForFan != lHot && cachedHotForFan >= 0 && lHot >= 0 && (cachedHotForFan == 0) != (lHot == 0)) {
+            LOGD("stove", "stove %s for the room fan (RAM 0x04 %d -> %d)", cachedHotForFan ? "hot enough" : "too cold", lHot, cachedHotForFan);
+        }
+        lHot = cachedHotForFan;
+        if (cachedBrazierCountdown != lBrazier) {
+            if (cachedBrazierCountdown >= 0 && stoveState == 4 && (cachedBrazierCountdown % 10 == 0 || cachedBrazierCountdown <= 3))
+                LOGD("stove", "brazier cleaning in %d min", cachedBrazierCountdown);
+            lBrazier = cachedBrazierCountdown;
+        }
+    }
+    if (!slow) return;
+
+    if (!primedSlow) {
+        lRoom = ambTemp; lStoveT = ambTempStove; lRemote = ambTempRemoteControl; lAuger = cachedAugerSpeed;
+        lSet = (int)setPointTemp; lEsStart = energySavingStart; lEsStop = energySavingStop; lLowPel = cachedLowPallet;
+        lBeep = cachedBeepEnabled; lWireless = cachedWirelessSensor; lCq = cachedCombustionQuality; lPq = cachedPelletQuality;
+        primedSlow = true;
+        LOGI("stove", "settings: set point %d °C, energy saving %s, room %.1f °C (stove sensor %.1f, remote %.1f)",
+             (int)setPointTemp, energySavingStop ? (String("stop +") + energySavingStop + " / restart " + energySavingStart + " °C").c_str() : "off",
+             ambTemp, ambTempStove, ambTempRemoteControl);
+        return;
+    }
+    if ((int)setPointTemp != lSet) { LOGI("stove", "set point %d -> %d °C", lSet, (int)setPointTemp); lSet = (int)setPointTemp; }
+    if (energySavingStop != lEsStop || energySavingStart != lEsStart) {
+        if (!energySavingStop) LOGI("stove", "energy saving off");
+        else LOGI("stove", "energy saving: stop at set point +%d, restart at %d °C", energySavingStop, energySavingStart);
+        lEsStop = energySavingStop; lEsStart = energySavingStart;
+    }
+    if (cachedBeepEnabled != lBeep) { LOGI("stove", "beep %s", cachedBeepEnabled ? "on" : "off"); lBeep = cachedBeepEnabled; }
+    if (cachedWirelessSensor != lWireless && cachedWirelessSensor >= 0) { LOGI("stove", "wireless sensor (INSTELL WIRELESS) %s", cachedWirelessSensor ? "on" : "off"); lWireless = cachedWirelessSensor; }
+    if (cachedCombustionQuality != lCq) { const char* l = pc::combustionQualityLabel(cachedCombustionQuality); LOGI("stove", "combustion quality -> %s", l ? l : "?"); lCq = cachedCombustionQuality; }
+    if (cachedPelletQuality != lPq) { const char* l = pc::pelletQualityLabel(cachedPelletQuality); LOGI("stove", "pellet quality -> %s", l ? l : "?"); lPq = cachedPelletQuality; }
+    if (cachedLowPallet != lLowPel) {
+        if (cachedLowPallet) LOGW("stove", "pellets low - refill the hopper");
+        else LOGI("stove", "pellet level OK again");
+        lLowPel = cachedLowPallet;
+    }
+    if (fabsf(ambTemp - lRoom) >= 0.5f) { LOGD("stove", "room temperature %.1f -> %.1f °C (set point %d)", lRoom, ambTemp, (int)setPointTemp); lRoom = ambTemp; }
+    if (fabsf(ambTempStove - lStoveT) >= 0.5f) { LOGD("stove", "stove sensor %.1f -> %.1f °C", lStoveT, ambTempStove); lStoveT = ambTempStove; }
+    if (fabsf(ambTempRemoteControl - lRemote) >= 0.5f) { LOGD("stove", "remote control sensor %.1f -> %.1f °C", lRemote, ambTempRemoteControl); lRemote = ambTempRemoteControl; }
+    if (fabsf(cachedAugerSpeed - lAuger) >= 0.5f) { LOGD("stove", "auger %.1f -> %.1f rpm", lAuger, cachedAugerSpeed); lAuger = cachedAugerSpeed; }
+}
+
 // Fast-changing values — refreshed every 2 s
 void getFastStates()
 {
+    uint32_t tWait = millis();
     if (stoveMutex) xSemaphoreTakeRecursive(stoveMutex, portMAX_DELAY);
+    uint32_t t0 = millis(), waited = t0 - tWait;
+    if (waited > 3000) LOGW("stove", "sensor task waited %lu ms for the stove bus (held by a web / MQTT / Bluetooth command)", (unsigned long)waited);
 
     getStoveState();
     getFumeTemp();
@@ -256,6 +313,12 @@ void getFastStates()
     readKeep(cachedBrazierCountdown, ram, brazierCountdownAddr);
     cachedRemoteControlLastSeen = getRemoteControlLastSeen();
     lastFastStatesAt = millis();
+    {
+        uint32_t d = lastFastStatesAt - t0;
+        diagCycle(false, waited, d);
+        if (d > 5000) LOGW("stove", "reading the fast values took %lu ms (normally < 1 s): the stove answers slowly or not", (unsigned long)d);
+    }
+    logStoveChanges(false);
 
     if (stoveMutex) xSemaphoreGiveRecursive(stoveMutex);
 }
@@ -263,7 +326,9 @@ void getFastStates()
 // Slow-changing values — refreshed every ~16 s
 void getSlowStates()
 {
+    uint32_t tWait = millis();
     if (stoveMutex) xSemaphoreTakeRecursive(stoveMutex, portMAX_DELAY);
+    uint32_t t0 = millis(), waited = t0 - tWait;
 
     getAmbTemp();
     getAmbTempStove();
@@ -313,6 +378,12 @@ void getSlowStates()
     }
 
     lastSlowStatesAt = millis();
+    {
+        uint32_t d = lastSlowStatesAt - t0;
+        diagCycle(true, waited, d);
+        if (d > 30000) LOGW("stove", "reading the slow values took %lu ms (normally a few s): the stove answers slowly or not", (unsigned long)d);
+    }
+    logStoveChanges(true);
     if (stoveMutex) xSemaphoreGiveRecursive(stoveMutex);
 }
 

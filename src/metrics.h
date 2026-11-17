@@ -44,6 +44,28 @@ static EndpointCounter endpointCounters[] = {
 };
 static const int endpointCountersSize = sizeof(endpointCounters) / sizeof(endpointCounters[0]);
 
+// Access log: every request at level debug of module "http" (method, path,
+// parameters, client). Secrets in parameters are masked. The live log's own
+// polling (/api/log, /api/busmon) is left out, it would only log itself.
+static void httpAccessLog(HTTPMethod method, const String& uri)
+{
+    LogModule* m = logModule("http");
+    if (!m || m->level < LOG_DEBUG) return;
+    if (uri == "/api/log" || uri == "/api/busmon") return;
+    const char* mt = method == HTTP_GET ? "GET" : method == HTTP_POST ? "POST" : method == HTTP_DELETE ? "DELETE" : method == HTTP_PUT ? "PUT" : method == HTTP_PATCH ? "PATCH" : method == HTTP_OPTIONS ? "OPTIONS" : "?";
+    String q;
+    for (int i = 0; i < wm.server->args(); i++) {
+        String k = wm.server->argName(i);
+        if (k == "plain") continue;   // request body
+        String v = wm.server->arg(i);
+        String kl = k; kl.toLowerCase();
+        if (kl.indexOf("pass") >= 0 || kl.indexOf("key") >= 0 || kl.indexOf("token") >= 0) v = "***";
+        if (v.length() > 40) v = v.substring(0, 40) + "…";
+        q += (q.length() ? "&" : "?") + k + "=" + v;
+    }
+    LOGD("http", "%s %s%s from %s", mt, uri.c_str(), q.c_str(), wm.server->client().remoteIP().toString().c_str());
+}
+
 class HttpMetricsHandler : public RequestHandler {
 public:
     unsigned long requests_total = 0;
@@ -61,6 +83,7 @@ public:
             case HTTP_PATCH: requests_patch++; break;
             default:         requests_other++; break;
         }
+        httpAccessLog(method, uri);
         for (int i = 0; i < endpointCountersSize; i++) {
             if (uri == endpointCounters[i].path) {
                 endpointCounters[i].count++;
@@ -108,6 +131,14 @@ String getMetrics() {
   setMetric(&p,  "esp32_heap_size",            "Total heap size in bytes",                         String(ESP.getHeapSize()));
   setMetric(&p,  "esp32_free_heap",            "Free heap in bytes",                               String(ESP.getFreeHeap()));
   setMetric(&p,  "esp32_min_free_heap",        "Minimum free heap since boot in bytes",            String(ESP.getMinFreeHeap()));
+  if (spiffsMounted) {
+    setMetric(&p, "esp32_spiffs_used_bytes",  "SPIFFS bytes used (history, events, settings)", String((unsigned)SPIFFS.usedBytes()));
+    setMetric(&p, "esp32_spiffs_total_bytes", "SPIFFS size in bytes",                         String((unsigned)SPIFFS.totalBytes()));
+  }
+  setCounter(&p, "esp32_boot_count",           "Starts of the controller",                         String(diagBoots));
+  setCounter(&p, "esp32_crash_count",          "Starts after a crash, watchdog or brown-out",      String(diagCrashes));
+  setCounter(&p, "esp32_wifi_disconnects_total", "Drops of a working WiFi connection since start", String((uint32_t)wifiDisconnects));
+  p += String("# HELP esp32_reset_info Reason of the last start\n# TYPE esp32_reset_info gauge\nesp32_reset_info{reason=\"") + resetReasonName(diagReason) + "\"} 1\n";
   setMetric(&p,  "esp32_max_alloc_heap",       "Largest allocatable heap block in bytes",          String(ESP.getMaxAllocHeap()));
 
   // ESP32 flash metrics

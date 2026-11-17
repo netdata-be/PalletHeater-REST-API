@@ -56,7 +56,7 @@ void handleUpdateUpload()
         if (!updAuthorised) { updError = "unauthorised"; return; }
         otaActive = true;                                   // pause the sensor task
         if (bleEnabled) NimBLEDevice::stopAdvertising();    // give WiFi the radio
-        Serial.printf("HTTP update: %s\n", up.filename.c_str());
+        LOGI("update", "upload started: %s", up.filename.c_str());
         if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) { updFail(String("begin failed: ") + Update.errorString()); return; }
         updStarted = true;
         break;
@@ -70,7 +70,7 @@ void handleUpdateUpload()
         if (!updStarted) return;
         if (!Update.end(true)) { updFail(String("end failed: ") + Update.errorString()); return; }
         updStarted = false;
-        Serial.printf("HTTP update: %u bytes written\n", (unsigned)updWritten);
+        LOGI("update", "upload done: %u bytes", (unsigned)updWritten);
         break;
     case UPLOAD_FILE_ABORTED:
         updFail("upload aborted");
@@ -107,5 +107,5 @@ void handleUpdateDone()
     wm.server->sendHeader("Connection", "close");
     wm.server->send(200, "application/json", out);
     delay(500);           // let the response go out
-    ESP.restart();
+    restartWith("firmware upload (/api/update)");
 }

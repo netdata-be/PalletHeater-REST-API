@@ -148,8 +148,11 @@ void getStatus()
     obj_ctrl["branch"]  = BUILD_BRANCH;
     obj_ctrl["env"]     = BUILD_ENV;
     obj_ctrl["stoveModel"] = BUILD_STOVE_MODEL;
+    obj_ctrl["resetReason"] = diagResetText();      // why the controller last (re)started
+    obj_ctrl["bootCount"]   = diagBoots;
+    obj_ctrl["crashCount"]  = diagCrashes;          // starts after a crash, watchdog or brown-out
 
-    if (json.overflowed()) log_e("getStatus: JSON document too small");
+    if (json.overflowed()) LOGE("http", "getStatus: JSON document too small");
     serializeJson(json, buffer);
     wm.server->send(200, "application/json", buffer);
     } else{

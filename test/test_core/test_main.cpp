@@ -350,6 +350,70 @@ static void test_firmware_asset()
     TEST_ASSERT_TRUE(pc::firmwareAssetRank(PC_FW_ASSET) > pc::firmwareAssetRank(PC_FW_ASSET_OLD));
 }
 
+static void test_text_ring()
+{
+    pc::TextRing<8> r; char out[16]; uint32_t from; bool lost;
+    r.write("abc", 3);
+    size_t n = r.read(0, out, sizeof(out), from, lost);
+    TEST_ASSERT_EQUAL(3, n); TEST_ASSERT_EQUAL_MEMORY("abc", out, 3); TEST_ASSERT_FALSE(lost); TEST_ASSERT_EQUAL(0, from);
+    TEST_ASSERT_EQUAL(0, r.read(3, out, sizeof(out), from, lost));          // up to date
+    r.write("defghijk", 8);                                                  // total 11, keeps "defghijk"
+    n = r.read(3, out, sizeof(out), from, lost);
+    TEST_ASSERT_EQUAL(8, n); TEST_ASSERT_EQUAL_MEMORY("defghijk", out, 8); TEST_ASSERT_FALSE(lost);
+    n = r.read(1, out, sizeof(out), from, lost);                             // cursor overwritten
+    TEST_ASSERT_TRUE(lost); TEST_ASSERT_EQUAL(3, from); TEST_ASSERT_EQUAL(8, n);
+    n = r.read(500, out, sizeof(out), from, lost);                           // cursor from before a restart
+    TEST_ASSERT_FALSE(lost); TEST_ASSERT_EQUAL(3, from);
+    n = r.read(3, out, 2, from, lost);                                        // max respected
+    TEST_ASSERT_EQUAL(2, n); TEST_ASSERT_EQUAL_MEMORY("de", out, 2);
+}
+static void test_ring()
+{
+    pc::Ring<int, 4> r; uint32_t from; bool lost;
+    for (int i = 0; i < 6; i++) r.push(i * 10);                              // keeps 20, 30, 40, 50
+    size_t n = r.read(0, 100, from, lost);
+    TEST_ASSERT_EQUAL(4, n); TEST_ASSERT_EQUAL(2, from); TEST_ASSERT_FALSE(lost);   // since 0 = "from the start", not lost
+    TEST_ASSERT_EQUAL(20, r.at(from)); TEST_ASSERT_EQUAL(50, r.at(from + 3));
+    n = r.read(1, 100, from, lost); TEST_ASSERT_TRUE(lost); TEST_ASSERT_EQUAL(4, n);
+    n = r.read(5, 100, from, lost); TEST_ASSERT_EQUAL(1, n); TEST_ASSERT_EQUAL(50, r.at(from));
+    n = r.read(6, 100, from, lost); TEST_ASSERT_EQUAL(0, n);
+    n = r.read(2, 2, from, lost);   TEST_ASSERT_EQUAL(2, n);
+}
+static pc::HourInput hourIn(uint32_t t, int room10, int state, int flameAct, int auger10)
+{
+    pc::HourInput s = {}; s.t = t; s.room10 = room10; s.stove10 = 200; s.remote10 = 205;
+    s.setpoint = 20; s.fume = 100; s.flame = 3; s.flameActual = flameAct; s.fan = 1; s.fanActual = 1;
+    s.state = state; s.auger10 = auger10; s.fumeRpm = 1500;
+    return s;
+}
+static void test_hour_acc()
+{
+    pc::HourAcc a;
+    TEST_ASSERT_TRUE(a.empty());
+    const uint32_t h = 1763380800;                                           // a whole hour
+    a.add(hourIn(h + 60,   200, 4, 3, 62));
+    a.add(hourIn(h + 180,  210, 4, 2, -1));                                  // auger unknown
+    a.add(hourIn(h + 300,  215, 0, -1, 0));                                  // off, flame actual unknown
+    a.add(hourIn(h + 3599, 205, 4, 3, 62));
+    TEST_ASSERT_EQUAL_UINT32(h, a.hour);
+    pc::HourRecord r = a.result();
+    TEST_ASSERT_EQUAL(4, r.n);
+    TEST_ASSERT_EQUAL(208, r.room10);                                        // (200+210+215+205)/4 = 207.5 -> 208
+    TEST_ASSERT_EQUAL(75, r.burnPct);                                        // 3 of 4 in state 4
+    TEST_ASSERT_EQUAL(4, r.state);                                           // most frequent
+    TEST_ASSERT_EQUAL(27, r.flameAct10);                                     // (3+2+3)/3 = 2.67 -> 27
+    TEST_ASSERT_EQUAL(30, r.flame10);
+    TEST_ASSERT_EQUAL(41, r.auger10);                                        // (62+0+62)/3 = 41.3
+    TEST_ASSERT_EQUAL(1500, r.fumeRpm);
+    TEST_ASSERT_EQUAL(100, r.fumeMax);
+    a.reset(); TEST_ASSERT_TRUE(a.empty());
+    a.add(hourIn(h + 7200 + 5, -15, 0, -1, -1));                             // negative temperature, all unknown
+    r = a.result();
+    TEST_ASSERT_EQUAL_UINT32(h + 7200, r.t);
+    TEST_ASSERT_EQUAL(-15, r.room10);
+    TEST_ASSERT_EQUAL(0xFF, r.flameAct10); TEST_ASSERT_EQUAL(-1, r.auger10); TEST_ASSERT_EQUAL(0, r.burnPct);
+}
+
 int main(int, char**)
 {
     UNITY_BEGIN();
@@ -384,5 +448,8 @@ int main(int, char**)
     RUN_TEST(test_stove_state);
     RUN_TEST(test_error_table);
     RUN_TEST(test_firmware_asset);
+    RUN_TEST(test_text_ring);
+    RUN_TEST(test_ring);
+    RUN_TEST(test_hour_acc);
     return UNITY_END();
 }

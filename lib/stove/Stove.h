@@ -14,9 +14,30 @@
 #include <HardwareSerial.h>
 
 
+// Called after every bus transaction (also failed ones) when set: the live bus
+// monitor of the web app. Must be fast and must not touch the bus.
+//   isWrite, type (0x00 RAM / 0x20 EEPROM), address, value (read result or the
+//   value written), ok, attempts used, and the raw bytes of the last attempt:
+//   tx = sent (read: type, address; write: 0x80 + type, address, value, checksum)
+//   rx = received (the bus is one wire: first the echo of tx, then the stove's
+//        2 byte answer: checksum, value). rxLen < full length = timeout.
+typedef void (*StoveMonitorFn)(bool isWrite, uint8_t type, uint8_t address, uint8_t value, bool ok, uint8_t attempts,
+                               const uint8_t* tx, uint8_t txLen, const uint8_t* rx, uint8_t rxLen);
+
+// Receives the library's log lines (errors, and the frames when debug is on);
+// without it they go to Serial. error = a failed attempt.
+typedef void (*StoveLogFn)(bool error, const char* line);
+
+// Called after every write (ok or failed for good), also when the bus monitor is
+// off: logs who changed what (liveDebug.h).
+typedef void (*StoveWriteFn)(uint8_t type, uint8_t address, uint8_t value, bool ok);
+
 class Stove
 {
   public:
+    static StoveMonitorFn monitor;   // nullptr = off
+    static StoveWriteFn   writeHook; // nullptr = off
+    static StoveLogFn     logger;    // nullptr = Serial
     Stove(int uart_nr);
     bool write(byte type, byte address, byte value);
     // Returns the register value (0-255), or -1 on timeout / checksum error.
@@ -28,6 +49,7 @@ class Stove
     volatile uint32_t readErrors  = 0;  // reads that failed after all retries
     volatile uint32_t writeErrors = 0;  // writes that failed after all retries
     volatile uint32_t retries     = 0;  // individual retry attempts
+    volatile uint32_t transactions = 0; // reads + writes (not counting retries)
   private:
     HardwareSerial* StoveSerial;
     void drainRx();

@@ -40,7 +40,7 @@ void handleRouteIndex() {
 void handleRouteRestart() {
     wm.server->send(200, "text/plain", "Restarting...");
     delay(200);
-    ESP.restart();
+    restartWith("restart requested (web app / API)");
 }
 
 void handleRouteSwaggerUI() {
@@ -58,6 +58,28 @@ static void sendGzipped(const char* type, const char* start, const char* end)
     wm.server->sendHeader("Content-Encoding", "gzip");
     wm.server->sendHeader("Cache-Control", "no-cache");
     wm.server->send_P(200, type, start, end - start);
+}
+
+// Home screen install (web app manifest + icons, web/icons/). Public like the app.
+#define EMBED(name, sym) extern const uint8_t name##Start[] asm("_binary_" sym "_start"); extern const uint8_t name##End[] asm("_binary_" sym "_end");
+EMBED(iconSvg, "web_icons_icon_svg")
+EMBED(icon180, "web_icons_icon_180_png")
+static void sendEmbedded(const char* type, const uint8_t* start, const uint8_t* end)
+{
+    wm.server->sendHeader("Cache-Control", "max-age=86400");
+    wm.server->send_P(200, type, (const char*)start, end - start);
+}
+void handleRouteIconSvg() { sendEmbedded("image/svg+xml", iconSvgStart, iconSvgEnd); }
+void handleRouteIcon180() { sendEmbedded("image/png", icon180Start, icon180End); }
+void handleRouteManifest()
+{
+    static const char manifest[] =
+        "{\"name\":\"OpenPelletBridge\",\"short_name\":\"PelletBridge\",\"start_url\":\"/\",\"scope\":\"/\","
+        "\"display\":\"standalone\",\"background_color\":\"#f4f5f7\",\"theme_color\":\"#e8590c\","
+        "\"icons\":[{\"src\":\"/icon.svg\",\"sizes\":\"any\",\"type\":\"image/svg+xml\"},"
+        "{\"src\":\"/icon-180.png\",\"sizes\":\"180x180\",\"type\":\"image/png\"}]}";
+    wm.server->sendHeader("Cache-Control", "max-age=86400");
+    wm.server->send(200, "application/manifest+json", manifest);
 }
 
 void handleRouteWebApp() {

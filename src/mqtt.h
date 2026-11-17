@@ -78,11 +78,35 @@ static void mqttSaveConfig()
 
 static String mqttTopic(const char* kind, const char* name) { return mqttCfg.prefix + "/" + kind + "/" + name; }
 
+// PubSubClient state codes in words
+static const char* mqttStateText(int st)
+{
+    switch (st) {
+    case -4: return "no answer from the broker (timeout)";
+    case -3: return "connection lost";
+    case -2: return "broker not reachable (network / host / port)";
+    case -1: return "disconnected";
+    case 0:  return "connected";
+    case 1:  return "broker refused: protocol version";
+    case 2:  return "broker refused the client id";
+    case 3:  return "broker unavailable";
+    case 4:  return "broker refused: wrong user name or password";
+    case 5:  return "broker refused: not authorised";
+    default: return "unknown state";
+    }
+}
+static int mqttDiscoveryCount = 0;
 static bool mqttPub(const String& topic, const String& payload, bool retain = true)
 {
     if (!mqtt.connected()) return false;
     bool ok = mqtt.publish(topic.c_str(), payload.c_str(), retain);
     if (ok) mqttPublishes++;
+    LogModule* lm = logModule("mqtt");
+    if (lm && lm->level >= LOG_DEBUG) {
+        if (topic.startsWith(mqttCfg.discoveryPrefix + "/")) LOGD("mqtt", "publish %s (discovery, %u bytes)%s", topic.c_str(), payload.length(), ok ? "" : " FAILED");
+        else LOGD("mqtt", "publish %s = %s%s", topic.c_str(), payload.c_str(), ok ? "" : " FAILED");
+    }
+    if (!ok) LOGW("mqtt", "publish to %s failed (%u bytes, buffer 1024)", topic.c_str(), payload.length());
     return ok;
 }
 
@@ -138,6 +162,7 @@ static void mqttPublishStates(bool force)
 static void mqttDiscoveryEntity(const char* component, const char* id, const char* name,
                                 void (*fill)(JsonObject&), bool hasCommand, const char* stateName = nullptr)
 {
+    mqttDiscoveryCount++;
     DynamicJsonDocument d(1024);
     JsonObject o = d.to<JsonObject>();
     o["name"] = name;
@@ -215,6 +240,7 @@ static void mqttCommand(const String& name, const char* payload)
 {
     mqttCommands++;
     StoveBusLock lock;   // same lock as the HTTP handlers and the sensor task
+    CmdSource cs((String("MQTT command ") + name).c_str());
     int v = 0, code = 0;
     bool ok = false;
     String result;
@@ -248,7 +274,7 @@ static void mqttCommand(const String& name, const char* payload)
         else { ok = name == "es_stop" ? setEnergySavingStop(v) : setEnergySavingStart(v); getEnergySaving(); }
     } else result = "unknown command";
     if (!ok && !result.length()) result = "RS232 error";
-    Serial.printf("MQTT command %s = %s: %s\n", name.c_str(), payload, ok ? "ok" : result.c_str());
+    if (ok) LOGI("mqtt", "command %s = %s: ok", name.c_str(), payload); else LOGW("mqtt", "command %s = %s: %s", name.c_str(), payload, result.c_str());
     mqttPub(mqttCfg.prefix + "/result", name + " " + payload + ": " + (ok ? String("ok") : result), false);
     mqttPublishStates(false);
 }
@@ -271,13 +297,21 @@ static void mqttConnect()
     bool ok = mqttCfg.user.length()
         ? mqtt.connect(mqttClientId.c_str(), mqttCfg.user.c_str(), mqttCfg.pass.c_str(), will.c_str(), 1, true, "offline")
         : mqtt.connect(mqttClientId.c_str(), will.c_str(), 1, true, "offline");
-    if (!ok) { mqttLastError = "connect failed, state " + String(mqtt.state()); return; }
+    if (!ok) {
+        String e = String("connect failed: ") + mqttStateText(mqtt.state()) + " (state " + mqtt.state() + ")";
+        if (e != mqttLastError) LOGW("mqtt", "%s:%u: %s", mqttCfg.host.c_str(), mqttCfg.port, e.c_str());   // once, not every retry
+        mqttLastError = e;
+        return;
+    }
     mqttLastError = "";
     mqttPub(will, "online", true);
     mqtt.subscribe((mqttCfg.prefix + "/set/#").c_str());
+    LOGI("mqtt", "listening for commands on %s/set/#", mqttCfg.prefix.c_str());
+    mqttDiscoveryCount = 0;
     mqttPublishDiscovery();
+    if (mqttCfg.discovery) LOGI("mqtt", "Home Assistant discovery published: %d entities under %s/", mqttDiscoveryCount, mqttCfg.discoveryPrefix.c_str());
     mqttNeedFull = true;
-    Serial.printf("MQTT connected to %s:%u\n", mqttCfg.host.c_str(), mqttCfg.port);
+    LOGI("mqtt", "connected to %s:%u as %s", mqttCfg.host.c_str(), mqttCfg.port, mqttClientId.c_str());
 }
 
 void mqttSetup()
@@ -300,8 +334,11 @@ static void mqttRestart()
 
 void mqttLoop()
 {
-    if (!mqttCfg.enabled || !mqttCfg.host.length() || WiFi.status() != WL_CONNECTED || otaActive) return;
+    static bool wasConnected = false;
+    if (!mqttCfg.enabled || !mqttCfg.host.length() || WiFi.status() != WL_CONNECTED || otaActive) { wasConnected = mqtt.connected(); return; }
     unsigned long now = millis();
+    if (wasConnected && !mqtt.connected()) LOGW("mqtt", "connection to %s:%u lost: %s - reconnecting every 15 s", mqttCfg.host.c_str(), mqttCfg.port, mqttStateText(mqtt.state()));
+    wasConnected = mqtt.connected();
     if (!mqtt.connected()) {
         if (mqttLastAttempt && now - mqttLastAttempt < 15000) return;   // retry every 15 s
         mqttLastAttempt = now;

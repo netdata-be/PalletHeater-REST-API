@@ -9,7 +9,9 @@ extern String stoveDebugBuffer;
 
 static void appendDebugLog(const String& line)
 {
-    Serial.println(line);
+    // error = failed for good (all attempts); a failed attempt that is retried is not an error
+    if (Stove::logger) Stove::logger(line.indexOf("FAILED") >= 0, line.c_str());
+    else Serial.println(line);
     stoveDebugBuffer += line + "\n";
     // Keep buffer capped to avoid heap exhaustion
     if (stoveDebugBuffer.length() > 3000) {
@@ -17,6 +19,10 @@ static void appendDebugLog(const String& line)
         stoveDebugBuffer = (cut >= 0) ? stoveDebugBuffer.substring(cut + 1) : "";
     }
 }
+
+StoveMonitorFn Stove::monitor = nullptr;
+StoveLogFn     Stove::logger  = nullptr;
+StoveWriteFn   Stove::writeHook = nullptr;
 
 Stove::Stove(int uart_nr)
 {
@@ -72,6 +78,9 @@ int Stove::read(byte type, byte address)
 {
     const byte message[2] = {type, address};
     char buf[128];
+    transactions++;
+    byte lastRx[4] = {0};
+    uint8_t lastN = 0;
 
     for (uint8_t attempt = 1; attempt <= MAX_ATTEMPTS; attempt++)
     {
@@ -85,6 +94,7 @@ int Stove::read(byte type, byte address)
 
         byte rx[4] = {0};
         int received = transact(message, sizeof(message), rx, sizeof(rx));
+        memcpy(lastRx, rx, sizeof(rx)); lastN = received > 0 ? (uint8_t)received : 0;
         if (received != (int)sizeof(rx)) {
             snprintf(buf, sizeof(buf), "READ  ERR: addr=0x%02X timeout - received %d/4 bytes (attempt %u)",
                      address, received, attempt);
@@ -112,6 +122,7 @@ int Stove::read(byte type, byte address)
                 snprintf(buf, sizeof(buf), "READ  OK: val=0x%02X (%d)", val, val);
                 appendDebugLog(buf);
             }
+            if (monitor) monitor(false, type, address, val, true, attempt, message, sizeof(message), rx, sizeof(rx));
             delay(10);
             return val;
         }
@@ -122,6 +133,10 @@ int Stove::read(byte type, byte address)
     }
 
     readErrors++;
+    snprintf(buf, sizeof(buf), "READ FAILED: %s 0x%02X, no valid answer after %u attempts",
+             type == 0x20 ? "EEPROM" : "RAM", address, MAX_ATTEMPTS);
+    appendDebugLog(buf);
+    if (monitor) monitor(false, type, address, 0, false, MAX_ATTEMPTS, message, sizeof(message), lastRx, lastN);
     return -1;
 }
 
@@ -136,6 +151,9 @@ bool Stove::write(byte type, byte address, byte value)
     uint8_t checksum_calc    = (writeByte + type + address + value) & 0xFF;
     const byte message[4]    = {(byte)(writeByte + type), address, value, checksum_calc};
     char buf[128];
+    transactions++;
+    byte lastRx[6] = {0};
+    uint8_t lastN = 0;
 
     for (uint8_t attempt = 1; attempt <= MAX_ATTEMPTS; attempt++)
     {
@@ -150,6 +168,7 @@ bool Stove::write(byte type, byte address, byte value)
 
         byte rx[6] = {0};
         int received = transact(message, sizeof(message), rx, sizeof(rx));
+        memcpy(lastRx, rx, sizeof(rx)); lastN = received > 0 ? (uint8_t)received : 0;
         if (received != (int)sizeof(rx)) {
             snprintf(buf, sizeof(buf), "WRITE ERR: addr=0x%02X timeout - received %d/6 bytes (attempt %u)",
                      address, received, attempt);
@@ -172,6 +191,8 @@ bool Stove::write(byte type, byte address, byte value)
 
         if (address_resp == address && value_resp == value) {
             if (_debugEnabled) appendDebugLog("WRITE OK: [SUCCESS]");
+            if (monitor) monitor(true, type, address, value, true, attempt, message, sizeof(message), rx, sizeof(rx));
+            if (writeHook) writeHook(type, address, value, true);
             return true;
         }
 
@@ -181,5 +202,10 @@ bool Stove::write(byte type, byte address, byte value)
     }
 
     writeErrors++;
+    snprintf(buf, sizeof(buf), "WRITE FAILED: %s 0x%02X = %u, not confirmed after %u attempts",
+             type == 0x20 ? "EEPROM" : "RAM", address, value, MAX_ATTEMPTS);
+    appendDebugLog(buf);
+    if (monitor) monitor(true, type, address, value, false, MAX_ATTEMPTS, message, sizeof(message), lastRx, lastN);
+    if (writeHook) writeHook(type, address, value, false);
     return false;
 }

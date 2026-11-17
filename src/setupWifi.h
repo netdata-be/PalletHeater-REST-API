@@ -4,15 +4,13 @@
 void saveConfigCallback() // Save params to SPIFFS
 {
     if (!spiffsMounted) {
-        Serial.println("SPIFFS not mounted, skipping config save");
+        LOGW("sys", "SPIFFS not mounted: config portal settings not saved");
         return;
     }
-    Serial.println("Get Params:");
-    Serial.println(custom_hydro_mode.getValue());
-    Serial.println(F("Initializing FS..."));
+    LOGI("sys", "config portal: saving hydro mode '%s'", custom_hydro_mode.getValue());
     File file = SPIFFS.open("/config.txt", "w");
     if (!file) {
-        log_e("Failed to open config file for writing");
+        LOGE("sys", "failed to open config file for writing");
         return;
     }
     file.println(custom_hydro_mode.getValue());
@@ -52,7 +50,7 @@ void setup_wifi() // Setup WiFiManager and connect to WiFi
                     sn.fromString(rest.substring(c2 + 1, c3)) &&
                     dns.fromString(rest.substring(c3 + 1))) {
                     wm.setSTAStaticIPConfig(ip, gw, sn, dns);
-                    Serial.printf("[WiFi] static IP: %s gw:%s sn:%s dns:%s\n",
+                    LOGI("wifi", "static IP: %s gw:%s sn:%s dns:%s",
                         ip.toString().c_str(), gw.toString().c_str(),
                         sn.toString().c_str(), dns.toString().c_str());
                 }
@@ -68,9 +66,7 @@ void setup_wifi() // Setup WiFiManager and connect to WiFi
     if (wm.autoConnect("Pellet heater controller"))
     {
         wifiConnected = true;
-        Serial.println("connected to Wifi");
-        Serial.print("IP address: ");
-        Serial.println(WiFi.localIP());
+        LOGI("wifi", "connected to '%s', IP %s", WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
         onboardLED.on();
         // Do not start WiFiManager's web portal here. On this firmware/library
         // combination it aborts during setupConfigPortal() after STA connect.
@@ -83,6 +79,6 @@ void setup_wifi() // Setup WiFiManager and connect to WiFi
     else
     {
         wifiConnected = false;
-        Serial.println("Configportal running");
+        LOGW("wifi", "no WiFi: config portal running");
     }
 }

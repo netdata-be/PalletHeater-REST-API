@@ -36,7 +36,7 @@ void handleRouteBluetooth()
     json["restartRequired"] = saved != bleEnabled;
     String out; serializeJson(json, out);
     wm.server->send(200, "application/json", out);
-    if (restart) { delay(300); ESP.restart(); }
+    if (restart) { delay(300); restartWith("Bluetooth setting changed"); }
 }
 
 // GET  /api/telnet                   -> { enabled }
@@ -57,7 +57,7 @@ void handleRouteTelnet()
         prefs.putBool("enabled", on);
         prefs.end();
         if (on && !telnetEnabled) { telnetEnabled = true; setupTelnet(); }
-        else if (!on && telnetEnabled) { telnet.stop(); telnetEnabled = false; Serial.println("- Telnet: stopped"); }
+        else if (!on && telnetEnabled) { telnet.stop(); telnetEnabled = false; LOGI("sys", "telnet stopped"); }
     }
     else if (wm.server->method() != HTTP_GET) { wm.server->send(405); return; }
     StaticJsonDocument<96> json;
