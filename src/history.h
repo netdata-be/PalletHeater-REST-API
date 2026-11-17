@@ -146,6 +146,17 @@ static void histPush(const HistSample& s)
     if (histCount < HIST_SIZE) histCount++;
 }
 
+// Oldest time to keep: now - span, or 0 (keep all) while the clock is not set.
+// time_t is 32 bit signed here and is negative before the first NTP sync after
+// some restarts: cast to uint32_t that looked like a time far in the future, and
+// the cutoff dropped every stored sample.
+static uint32_t histCutoff(uint32_t span)
+{
+    time_t n = time(nullptr);
+    if (n <= 1700000000) return 0;
+    return (uint32_t)n - span;
+}
+
 // Load both files at boot, oldest first, keeping only the last 24 h
 static void historyLoad()
 {
@@ -171,7 +182,8 @@ static void historyLoad()
         LOGI("history", "%s: %u bytes, format v%d, %u samples, last %s", HIST_FILES[i], (unsigned)fsize, histFileVersion[i], (unsigned)n, last);
     }
     int newer = info[1].last > info[0].last ? 1 : 0, older = 1 - newer;
-    uint32_t cutoff = (uint32_t)time(nullptr) > 1700000000 ? (uint32_t)time(nullptr) - 24UL * 3600UL : 0;
+    uint32_t cutoff = histCutoff(24UL * 3600UL);
+    if (!cutoff) LOGI("history", "clock not set yet (%ld): loading all stored samples, the chart only shows the last 24 h", (long)time(nullptr));
     for (int k : { older, newer }) {
         File f = SPIFFS.open(HIST_FILES[k], FILE_READ);
         if (!f) continue;
@@ -264,7 +276,7 @@ static void weekLoad()
         if (f) {
             uint8_t hdr[5];
             bool ok = f.read(hdr, 5) == 5 && memcmp(hdr, WEEK_MAGIC, 4) == 0 && hdr[4] == sizeof(pc::HourRecord);
-            uint32_t cutoff = (uint32_t)time(nullptr) > 1700000000 ? (uint32_t)time(nullptr) - 7UL * 24UL * 3600UL : 0;
+            uint32_t cutoff = histCutoff(7UL * 24UL * 3600UL);
             pc::HourRecord r;
             int n = 0;
             while (ok && f.read((uint8_t*)&r, sizeof(r)) == sizeof(r)) {

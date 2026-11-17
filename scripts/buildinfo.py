@@ -13,7 +13,11 @@ def git(*args):
     except Exception:
         return ""
 
-version = git("describe", "--tags", "--always", "--dirty") or "unknown"
+# A CI build of a tag uses that tag: with several tags on one commit (v1.1.3 and
+# v1.1.4) plain git describe may pick the other one.
+tag = os.environ.get("GITHUB_REF_NAME", "") if os.environ.get("GITHUB_REF_TYPE") == "tag" else ""
+version = (tag and git("describe", "--tags", "--always", "--dirty", "--match", tag)) \
+    or git("describe", "--tags", "--always", "--dirty") or "unknown"
 branch = git("rev-parse", "--abbrev-ref", "HEAD") or "unknown"
 built = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 pio_env = env.subst("$PIOENV")

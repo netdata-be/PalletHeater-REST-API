@@ -56,7 +56,13 @@ jobs:
       - name: Version
         id: version
         run: |
-          v=$(git describe --tags --always --dirty)
+          # a tag build matches its own tag: several tags can point to the same
+          # commit (scripts/buildinfo.py does the same for the firmware version)
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            v=$(git describe --tags --always --dirty --match "$GITHUB_REF_NAME")
+          else
+            v=$(git describe --tags --always --dirty)
+          fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "Firmware version: $v"
           if [[ "$GITHUB_REF" == refs/tags/v* && "$v" != "${GITHUB_REF_NAME}" ]]; then
