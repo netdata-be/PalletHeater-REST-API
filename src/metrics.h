@@ -1,16 +1,6 @@
 #include <constants.h>
 #include <WebServer.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-uint8_t temprature_sens_read();
-#ifdef __cplusplus
-}
-#endif
-
-uint8_t temprature_sens_read();
-
 // ---------------------------------------------------------------------------
 // HTTP request tracking
 // ---------------------------------------------------------------------------
@@ -31,6 +21,24 @@ static EndpointCounter endpointCounters[] = {
     { "/api/time",        0 },
     { "/api/remote",      0 },
     { "/api/burn",        0 },
+    { "/api/beep",        0 },
+    { "/api/setpoint",    0 },
+    { "/api/timers",      0 },
+    { "/api/timers/pr1",  0 },
+    { "/api/timers/pr2",  0 },
+    { "/api/timers/pr3",  0 },
+    { "/api/timers/pr4",  0 },
+    { "/api/timers/pr5",  0 },
+    { "/api/timers/pr6",  0 },
+    { "/api/dump",        0 },
+    { "/api-specs.json",  0 },
+    { "/app",             0 },
+    { "/api/history",     0 },
+    { "/api/events",      0 },
+    { "/api/bluetooth",   0 },
+    { "/api/telnet",      0 },
+    { "/api/auth",        0 },
+    { "/api/update",      0 },
     { "/metrics",         0 },
     { "/api",             0 },
 };
@@ -94,8 +102,6 @@ String getMetrics() {
   // ESP32 system metrics
   setMetric(&p,  "esp32_uptime_ms",            "Uptime in milliseconds",                           String(millis()));
   setMetric(&p,  "esp32_cpu_freq_mhz",         "CPU frequency in MHz",                             String(ESP.getCpuFreqMHz()));
-  setMetric(&p,  "esp32_temperature_c",        "ESP32 internal temperature in Celsius",            String((temprature_sens_read() - 32) / 1.8));
-  setMetric(&p,  "esp32_temperature_f",        "ESP32 internal temperature in Fahrenheit",         String(temprature_sens_read()));
 
   // ESP32 memory metrics
   setMetric(&p,  "esp32_heap_size",            "Total heap size in bytes",                         String(ESP.getHeapSize()));
@@ -122,12 +128,13 @@ String getMetrics() {
   setCounter(&p, "http_requests_patch_total",    "Total number of HTTP PATCH requests",    String(httpMetricsHandler.requests_patch));
   setCounter(&p, "http_requests_other_total",    "Total number of other HTTP requests",    String(httpMetricsHandler.requests_other));
 
-  // Per-endpoint counters
+  // Per-endpoint counters (HELP/TYPE must appear only once per metric name)
+  p += "# HELP http_requests_endpoint_total Number of HTTP requests per endpoint\n";
+  p += "# TYPE http_requests_endpoint_total counter\n";
   for (int i = 0; i < endpointCountersSize; i++) {
     String name = "http_requests_endpoint_total{path=\"";
     name += endpointCounters[i].path;
     name += "\"}";
-    p += "# TYPE http_requests_endpoint_total counter\n";
     p += name + " " + String(endpointCounters[i].count) + "\n";
   }
 
@@ -140,10 +147,24 @@ String getMetrics() {
   setMetric(&p, "stove_temp_stove_c",            "Stove sensor ambient temperature in Celsius",     String(ambTempStove));
   setMetric(&p, "stove_temp_remote_c",           "Remote control ambient temperature in Celsius",   String(ambTempRemoteControl));
   setMetric(&p, "stove_temp_setpoint_c",         "Room temperature setpoint in Celsius",            String(setPointTemp));
+  setMetric(&p, "stove_wireless_sensor_enabled", "INSTELL WIRELESS: 1 = external wireless temperature sensor enabled, 0 = off, -1 = unknown", String(cachedWirelessSensor));
   setMetric(&p, "stove_temp_fume_c",             "Fume temperature in Celsius",                     String(fumesTemp));
 
   // Fan & flame
-  setMetric(&p, "stove_flame_power",             "Flame power level (1-4)",                String(flamePower));
+  setMetric(&p, "stove_flame_power",             "Flame power level setting (1-4)",        String(flamePower));
+  p += "# HELP esp32_build_info Controller firmware build (labels), always 1\n# TYPE esp32_build_info gauge\n";
+  p += String("esp32_build_info{version=\"") + BUILD_VERSION + "\",built=\"" + BUILD_TIME + "\",env=\"" + BUILD_ENV + "\"} 1\n";
+  setMetric(&p, "stove_room_fan_actual",          "Speed the room fan really runs at, 0-3 (-1 unknown)", String(roomFanActual()));
+  setMetric(&p, "stove_room_fan_running",         "Room fan turning (power RAM 0x0A > 0, -1 unknown)", String(roomFanIsRunning()));
+  { const char* m = roomFanMode();
+    setMetric(&p, "stove_room_fan_mode",          "Room fan from its power (RAM 0x0A): 0 off, 1 on, -1 unknown",
+              String(!m ? -1 : strcmp(m, "off") == 0 ? 0 : 1)); }
+  setMetric(&p, "stove_room_fan_drive",           "Room fan drive value (RAM 0x0A)", String(cachedRoomFanControl));
+  setMetric(&p, "stove_brazier_cleaning_minutes", "Minutes to the next brazier cleaning (RAM 0x32, -1 when not working)", String(stoveState == 4 ? cachedBrazierCountdown : -1));
+  setMetric(&p, "stove_flame_power_actual",      "Flame power the stove currently runs at (RAM 0x34)", String(cachedFlameActual));
+  setMetric(&p, "esp32_bluetooth_enabled",       "1 if BLE is running",                    String(bleEnabled ? 1 : 0));
+  setMetric(&p, "esp32_telnet_enabled",          "1 if the telnet menu is running",        String(telnetEnabled ? 1 : 0));
+  setMetric(&p, "esp32_api_key_required",        "1 if the HTTP API requires an API key",  String(apiKeyRequired ? 1 : 0));
   setMetric(&p, "stove_room_fan_speed",          "Room fan speed (0-3)",                   String(roomFanSpeed));
   setMetric(&p, "stove_fume_fan_rpm",            "Fume fan RPM",                           String(cachedFumeFanRPM));
   setMetric(&p, "stove_auger_speed",             "Auger speed (raw / 10)",                 String(cachedAugerSpeed));
@@ -199,7 +220,12 @@ String getMetrics() {
 
   // Counters
   setCounter(&p, "stove_number_of_starts",       "Total number of stove starts",           String(cachedNumberOfStarts));
-  setMetric(&p,  "stove_time_delta_seconds",       "Delta in seconds between NTP time and stove internal clock", String(now - stoveTime));
+  // Serial bus health
+  setCounter(&p, "stove_serial_read_errors_total",  "Stove reads that failed after all retries",  String(stove.readErrors));
+  setCounter(&p, "stove_serial_write_errors_total", "Stove writes that failed after all retries", String(stove.writeErrors));
+  setCounter(&p, "stove_serial_retries_total",      "Individual stove read/write retry attempts", String(stove.retries));
+
+  setMetric(&p,  "stove_time_delta_seconds",       "Delta in seconds between NTP time and stove internal clock", String(ntpTimeNow() - stoveTimeNow()));
 
   // Firmware version (info metric — value is always 1, label carries the version string)
   p += "# HELP stove_firmware_info Firmware version of the stove\n";
@@ -218,5 +244,5 @@ void handleMetrics() {
 
 void httpRouteMetrics() {
   wm.server->addHandler(&httpMetricsHandler);
-  wm.server->on("/metrics", handleMetrics);
+  wm.server->on("/metrics", authed(handleMetrics));   // Prometheus can send "Authorization: Bearer <key>"
 }

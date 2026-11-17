@@ -1,0 +1,357 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		06EEAC6395347882DBF02D4B /* TimerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97E8E13C06594E0E8BCE1D2D /* TimerModels.swift */; };
+		0A268E9CC50158DFEFEA12DA /* StoveModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5A1463954E2A4DFB2030B6B /* StoveModels.swift */; };
+		26CA261613262918A1488AB5 /* ScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32C55FDDB092D5F276035095 /* ScanView.swift */; };
+		34EC7AEF6F5BCF0DAC0470A8 /* TimerDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D7E01551554AAF340225B4B /* TimerDetailView.swift */; };
+		3C4C4147C741F2A831E3318C /* ConnectionSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38394DF108494EB4F85FE3DA /* ConnectionSelectionView.swift */; };
+		585AC90A74A7042C97786415 /* ScheduleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 041DA49B9E9258DA5F69E69A /* ScheduleView.swift */; };
+		940786D296247FE75328ADF2 /* ControlsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84F24A5043D71A628AC02CB8 /* ControlsView.swift */; };
+		96F832720AB717802B7CB856 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B5891EA1C6E29804591A016 /* DashboardView.swift */; };
+		A6D92807FC1929F8729C98D9 /* BLEManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E35C6FA023EA7E7B1EA00EE /* BLEManager.swift */; };
+		C2EF6E0D5A99325586313E3A /* PalletHeaterApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80C8CAF96946999C61C0DCEF /* PalletHeaterApp.swift */; };
+		C3750A519E3F29B84764082C /* DashboardConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BAD8E1F48CD16C5DB5519D4 /* DashboardConfig.swift */; };
+		D5DC070F1343A862CD76666C /* NetworkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEA91BCF3AF9A01F7F8A6374 /* NetworkView.swift */; };
+		DFBF726DA354F048E2F192E2 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 735C24F24398A6A806F35A01 /* MainTabView.swift */; };
+		B1C2D3E4F5A6B7C8D9E0F1A2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		041DA49B9E9258DA5F69E69A /* ScheduleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleView.swift; sourceTree = "<group>"; };
+		2E35C6FA023EA7E7B1EA00EE /* BLEManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BLEManager.swift; sourceTree = "<group>"; };
+		32C55FDDB092D5F276035095 /* ScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanView.swift; sourceTree = "<group>"; };
+		38394DF108494EB4F85FE3DA /* ConnectionSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionSelectionView.swift; sourceTree = "<group>"; };
+		4A426A8E99E42DBBB69396B1 /* PalletHeater.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PalletHeater.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4D7E01551554AAF340225B4B /* TimerDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerDetailView.swift; sourceTree = "<group>"; };
+		55709AE3F6F6EC72C5DA31A8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		6BAD8E1F48CD16C5DB5519D4 /* DashboardConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardConfig.swift; sourceTree = "<group>"; };
+		735C24F24398A6A806F35A01 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		80C8CAF96946999C61C0DCEF /* PalletHeaterApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PalletHeaterApp.swift; sourceTree = "<group>"; };
+		84F24A5043D71A628AC02CB8 /* ControlsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlsView.swift; sourceTree = "<group>"; };
+		97E8E13C06594E0E8BCE1D2D /* TimerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerModels.swift; sourceTree = "<group>"; };
+		9B5891EA1C6E29804591A016 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		D5A1463954E2A4DFB2030B6B /* StoveModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoveModels.swift; sourceTree = "<group>"; };
+		FEA91BCF3AF9A01F7F8A6374 /* NetworkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		A23048B5F4CE8CE92072A12C /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				38394DF108494EB4F85FE3DA /* ConnectionSelectionView.swift */,
+				84F24A5043D71A628AC02CB8 /* ControlsView.swift */,
+				9B5891EA1C6E29804591A016 /* DashboardView.swift */,
+				735C24F24398A6A806F35A01 /* MainTabView.swift */,
+				FEA91BCF3AF9A01F7F8A6374 /* NetworkView.swift */,
+				32C55FDDB092D5F276035095 /* ScanView.swift */,
+				041DA49B9E9258DA5F69E69A /* ScheduleView.swift */,
+				4D7E01551554AAF340225B4B /* TimerDetailView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		B26F48BFEEA30C39866FF53D /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				4A426A8E99E42DBBB69396B1 /* PalletHeater.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		F8C9252BAD966F430C0C767C /* PalletHeater */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* Assets.xcassets */,
+				2E35C6FA023EA7E7B1EA00EE /* BLEManager.swift */,
+				6BAD8E1F48CD16C5DB5519D4 /* DashboardConfig.swift */,
+				55709AE3F6F6EC72C5DA31A8 /* Info.plist */,
+				80C8CAF96946999C61C0DCEF /* PalletHeaterApp.swift */,
+				D5A1463954E2A4DFB2030B6B /* StoveModels.swift */,
+				97E8E13C06594E0E8BCE1D2D /* TimerModels.swift */,
+				A23048B5F4CE8CE92072A12C /* Views */,
+			);
+			path = PalletHeater;
+			sourceTree = "<group>";
+		};
+		FC20AFBE5250E2EDA4B8EF9E = {
+			isa = PBXGroup;
+			children = (
+				F8C9252BAD966F430C0C767C /* PalletHeater */,
+				B26F48BFEEA30C39866FF53D /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		FED3C80A8715947840B594BC /* PalletHeater */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F51A642C514031C92A8973B3 /* Build configuration list for PBXNativeTarget "PalletHeater" */;
+			buildPhases = (
+				C1D2E3F4A5B6C7D8E9F0A1B2 /* Resources */,
+				EC36E4E1D8A685B03DB9435D /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PalletHeater;
+			packageProductDependencies = (
+			);
+			productName = PalletHeater;
+			productReference = 4A426A8E99E42DBBB69396B1 /* PalletHeater.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		6E02D8033E1EEA0A7DD4ECD7 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+			};
+			buildConfigurationList = E18D58861FEB7F7320E1F9D1 /* Build configuration list for PBXProject "PalletHeater" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = FC20AFBE5250E2EDA4B8EF9E;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = B26F48BFEEA30C39866FF53D /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				FED3C80A8715947840B594BC /* PalletHeater */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		C1D2E3F4A5B6C7D8E9F0A1B2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B1C2D3E4F5A6B7C8D9E0F1A2 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		EC36E4E1D8A685B03DB9435D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A6D92807FC1929F8729C98D9 /* BLEManager.swift in Sources */,
+				3C4C4147C741F2A831E3318C /* ConnectionSelectionView.swift in Sources */,
+				940786D296247FE75328ADF2 /* ControlsView.swift in Sources */,
+				C3750A519E3F29B84764082C /* DashboardConfig.swift in Sources */,
+				96F832720AB717802B7CB856 /* DashboardView.swift in Sources */,
+				DFBF726DA354F048E2F192E2 /* MainTabView.swift in Sources */,
+				D5DC070F1343A862CD76666C /* NetworkView.swift in Sources */,
+				C2EF6E0D5A99325586313E3A /* PalletHeaterApp.swift in Sources */,
+				26CA261613262918A1488AB5 /* ScanView.swift in Sources */,
+				585AC90A74A7042C97786415 /* ScheduleView.swift in Sources */,
+				0A268E9CC50158DFEFEA12DA /* StoveModels.swift in Sources */,
+				34EC7AEF6F5BCF0DAC0470A8 /* TimerDetailView.swift in Sources */,
+				06EEAC6395347882DBF02D4B /* TimerModels.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		5984D770E74A57E292FEE905 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = T7XCLS6DJG;
+				INFOPLIST_FILE = PalletHeater/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = eu.inuits.PalletHeater;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		9ECDECA344D64B1712F46989 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = T7XCLS6DJG;
+				INFOPLIST_FILE = PalletHeater/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = eu.inuits.PalletHeater;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		CFC918356CC4A16F71773894 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		F031EE16EC3F040A0C27E09E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		E18D58861FEB7F7320E1F9D1 /* Build configuration list for PBXProject "PalletHeater" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CFC918356CC4A16F71773894 /* Debug */,
+				F031EE16EC3F040A0C27E09E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F51A642C514031C92A8973B3 /* Build configuration list for PBXNativeTarget "PalletHeater" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9ECDECA344D64B1712F46989 /* Debug */,
+				5984D770E74A57E292FEE905 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 6E02D8033E1EEA0A7DD4ECD7 /* Project object */;
+}

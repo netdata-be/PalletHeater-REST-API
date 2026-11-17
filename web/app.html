@@ -1,0 +1,2240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111418">
+<title>PalletHeater</title>
+<style>
+:root{
+  --bg:#f4f5f7;--card:#fff;--text:#16191d;--muted:#69707a;--line:#e3e6ea;
+  --accent:#e8590c;--accent-soft:#fff0e6;--ok:#2b8a3e;--warn:#e67700;--err:#c92a2a;
+  --seg:#eef0f3;--shadow:0 1px 2px rgba(0,0,0,.05),0 2px 8px rgba(0,0,0,.04);
+  /* chart series: dataviz palette slots 1-7 in fixed order (validated light + dark) */
+  --s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--s6:#008300;--s7:#6250d6;--s8:#e34948;--grid:#e9ecef;
+  /* virtual remote */
+  --lcd:#dfe5d6;--lcd-ink:#1c2418;--remote:#2a2f36;--remote-btn:#3a4049;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#111418;--card:#1a1e23;--text:#e9ecef;--muted:#9aa2ad;--line:#2b3138;
+  --accent:#ff7a2e;--accent-soft:#3a2416;--ok:#51cf66;--warn:#fcc419;--err:#ff6b6b;
+  --seg:#242a31;--shadow:none;
+  --s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#0ca30c;--s7:#9085e9;--s8:#e66767;--grid:#262c33;
+  --lcd:#b9c4ad;--lcd-ink:#141a10;--remote:#0d1013;--remote-btn:#262b31;
+}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+.bar{max-width:1100px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;gap:12px}
+.bar h1{font-size:17px;margin:0;font-weight:650;flex:1}
+.conn{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
+.dot.ok{background:var(--ok)}.dot.err{background:var(--err)}.dot.warn{background:var(--warn)}
+.lang button{padding:3px 9px;min-width:0;font-size:12px}
+main{max-width:1100px;margin:0 auto;padding:16px;display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow);min-width:0}
+.card h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 12px;font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.card h2 button,.card h2 .seg{text-transform:none;letter-spacing:0}
+.wide{grid-column:1/-1}
+/* two columns inside a full-width card (device: info left, settings right), one column on narrow screens */
+.cols2{display:grid;gap:12px 32px;grid-template-columns:1fr 1fr;align-items:start}
+.cols2 .devfirst{padding-top:0}
+@media (max-width:760px){.cols2{grid-template-columns:1fr}.cols2 .devfirst{border-top:1px solid var(--line);padding-top:12px}}
+/* alerts */
+#alerts{grid-column:1/-1;display:grid;gap:8px}
+#alerts:empty{display:none}
+.alert{display:flex;gap:10px;align-items:flex-start;border-radius:12px;padding:12px 14px;border:1px solid;font-weight:550}
+.alert .ic{font-size:18px;line-height:1.2;flex:none}
+.alert small{display:block;font-weight:400;opacity:.9}
+.alert.critical{background:color-mix(in srgb,var(--err) 12%,var(--card));border-color:color-mix(in srgb,var(--err) 45%,transparent);color:var(--err)}
+.alert.warning{background:color-mix(in srgb,var(--warn) 14%,var(--card));border-color:color-mix(in srgb,var(--warn) 50%,transparent);color:color-mix(in srgb,var(--warn) 70%,var(--text))}
+/* hero */
+.hero{display:flex;flex-wrap:wrap;gap:16px;align-items:center}
+.hero .state{flex:1;min-width:200px}
+.state-label{font-size:26px;font-weight:700;line-height:1.2}
+.state-sub{color:var(--muted);font-size:14px}
+.next{font-size:13px;margin-top:4px;color:var(--muted)}
+.next b{color:var(--text);font-weight:600}
+.big-temps{display:flex;gap:24px;flex-wrap:wrap}
+.big-temps div{min-width:90px}
+.big-temps .v{font-size:28px;font-weight:650;font-variant-numeric:tabular-nums}
+.big-temps .l{font-size:12px;color:var(--muted)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;background:var(--seg);color:var(--muted)}
+.pill.on{background:var(--accent-soft);color:var(--accent)}
+.pill.ok{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok)}
+.pill.err{background:color-mix(in srgb,var(--err) 15%,transparent);color:var(--err)}
+.pill.warn{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+dl{display:grid;grid-template-columns:1fr auto;gap:6px 12px;margin:0}
+dt{color:var(--muted)}dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.row:first-of-type{border-top:0;padding-top:0}
+#esDetails .row:first-of-type{border-top:1px solid var(--line);padding-top:10px}
+.row .lbl{font-weight:500}.row .hint{display:block;font-size:12px;color:var(--muted);font-weight:400}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:8px 14px;font-weight:550}
+button:hover{border-color:var(--muted)}
+button:disabled{opacity:.5;cursor:default}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.danger{color:var(--err)}
+/* power button: green = turn on, red = turn off (fixed shades: white text stays readable in dark mode) */
+button.go{background:#2b8a3e;border-color:#2b8a3e;color:#fff}
+button.stop{background:#c92a2a;border-color:#c92a2a;color:#fff}
+button.go:hover,button.stop:hover{filter:brightness(1.08)}
+button.big{padding:12px 22px;font-size:16px;border-radius:12px}
+.seg{display:inline-flex;background:var(--seg);border-radius:10px;padding:3px;gap:2px}
+.seg button{border:0;background:transparent;padding:6px 12px;border-radius:8px;min-width:40px}
+.seg button.active{background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.15);color:var(--accent)}
+select,input[type=time],input[type=number]{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:7px 10px}
+.stepper{display:inline-flex;align-items:center;gap:6px}
+.stepper button{width:38px;padding:7px 0}
+.stepper .v{min-width:56px;text-align:center;font-size:18px;font-weight:650;font-variant-numeric:tabular-nums}
+.switch{position:relative;width:46px;height:28px;flex:none}
+.switch input{opacity:0;width:0;height:0;position:absolute}
+.switch span{position:absolute;inset:0;background:var(--seg);border:1px solid var(--line);border-radius:999px;transition:.15s;cursor:pointer}
+.switch span:before{content:"";position:absolute;width:22px;height:22px;left:2px;top:2px;background:#fff;border-radius:50%;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:.15s}
+.switch input:checked+span{background:var(--accent);border-color:var(--accent)}
+.switch input:checked+span:before{transform:translateX(18px)}
+/* timers */
+.timers{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.timer{border:1px solid var(--line);border-radius:12px;padding:12px}
+.timer.off .tbody{opacity:.55}
+.timer-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.timer-head b{font-size:16px}
+.tgrid{display:grid;grid-template-columns:auto 1fr;gap:8px 10px;align-items:center}
+.tgrid label{color:var(--muted);font-size:13px}
+.tgrid input,.tgrid select{width:100%}
+.tgrid .seg,.tgrid .stepper{justify-self:start}
+.tpick{display:block}
+.tp-btn{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:7px 12px;border-radius:10px;font-size:17px;font-weight:650;font-variant-numeric:tabular-nums;letter-spacing:.02em;text-align:left}
+.tp-btn svg{width:16px;height:16px;flex:none;color:var(--muted)}
+.tp-btn.off{color:var(--muted);font-weight:500;font-size:15px}
+.tp-btn:hover svg,.tp-btn[aria-expanded=true] svg{color:var(--accent)}
+.tp-btn[aria-expanded=true]{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+#tpPop{position:absolute;z-index:25;display:none;width:288px;max-width:calc(100vw - 24px);background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 16px 40px rgba(0,0,0,.22);padding:14px}
+#tpPop .tp-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+#tpPop .tp-now{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+#tpPop .tp-now span{color:var(--accent)}
+#tpPop .tp-now.off{color:var(--muted);font-size:20px}
+#tpPop .tp-sec{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:0 2px 6px}
+#tpPop .tp-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin-bottom:12px}
+#tpPop .tp-grid button{min-width:0;padding:8px 0;border:0;border-radius:9px;background:var(--seg);font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;transition:background .12s,transform .08s}
+#tpPop .tp-grid button:hover{background:var(--accent-soft);color:var(--accent)}
+#tpPop .tp-grid button:active{transform:scale(.95)}
+#tpPop .tp-grid button.sel{background:var(--accent);color:#fff}
+#tpPop .tp-grid.min button{padding:10px 0;font-size:15px}
+#tpPop .tp-foot{display:flex;justify-content:space-between;gap:8px}
+#tpPop .tp-foot button{flex:1}
+.days{display:flex;gap:4px;flex-wrap:wrap}
+.days button{padding:5px 0;width:38px;font-size:12px;border-radius:8px}
+.days button.active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.timer-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px}
+.timer-foot select{max-width:150px;font-size:13px;padding:6px 8px}
+/* errors */
+.errlist{list-style:none;margin:0;padding:0}
+.errlist li{padding:8px 0;border-top:1px solid var(--line);display:flex;align-items:flex-start;gap:10px}
+.errlist li{align-items:center;flex-wrap:wrap}
+.errlist li .etext{flex:1 1 320px;min-width:0}
+.errlist li .ewhen{flex:none;color:var(--muted);font-size:13px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.errlist li button{padding:4px 10px;font-size:13px;flex:none}
+.errlist li:first-child{border-top:0}
+.errlist b{color:var(--err);margin-right:6px}
+.muted{color:var(--muted)}
+.help{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;min-width:0;padding:0;margin-left:6px;border-radius:50%;font-size:11px;font-weight:700;line-height:1;color:var(--muted);vertical-align:1px;text-transform:none;letter-spacing:0}
+.help:hover,.help[aria-expanded=true]{color:var(--accent);border-color:var(--accent)}
+#pop{position:absolute;z-index:20;max-width:340px;background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.45;box-shadow:0 8px 24px rgba(0,0,0,.18);display:none;white-space:pre-line}
+#pop .src{display:block;margin-top:6px;color:var(--muted);font-size:11px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+a{color:var(--accent)}
+/* charts */
+.chart{position:relative;margin-top:6px}
+.chart + .chart{margin-top:18px}
+.chart-title{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;font-size:13px;color:var(--muted);margin-bottom:4px}
+.chart-title b{color:var(--text);font-weight:600;margin-right:4px}
+.key{display:inline-flex;align-items:center;gap:6px}
+.key i{display:inline-block;width:14px;height:0;border-top:2px solid currentColor}
+.key i.step{border-top-style:dashed}
+.chart svg{display:block;width:100%;height:auto;overflow:visible;touch-action:pan-y}
+.chart svg text{fill:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+.chart svg .lbl{fill:var(--text);font-size:11px;font-weight:600}
+.tip{position:absolute;pointer-events:none;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.15);min-width:130px;display:none;z-index:2}
+.tip .tt{color:var(--muted);margin-bottom:4px}
+.tip .tr{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.tip .tr span{display:inline-flex;align-items:center;gap:6px;color:var(--muted)}
+.tip .tr span i{display:inline-block;width:12px;border-top:2px solid}
+.tip .tr b{font-variant-numeric:tabular-nums}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.chip{display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border-radius:999px;font-size:13px;font-weight:500;color:var(--muted)}
+.chip.on{color:var(--text);border-color:var(--muted)}
+.chip:not(.on) i{opacity:.35}
+.chip i{display:inline-block;width:14px;border-top:2px solid}
+.chip i.vline{width:0;height:12px;border-top:0;border-left:1px dashed var(--muted)}
+.chart svg .lane{fill:var(--text);font-size:12px;font-weight:600}
+details.tbl{margin-top:12px;font-size:13px}
+details.tbl summary{cursor:pointer;color:var(--muted)}
+details.tbl .scroll{max-height:240px;overflow:auto;margin-top:8px;border:1px solid var(--line);border-radius:10px}
+details.tbl table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+details.tbl th,details.tbl td{padding:4px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+details.tbl th{position:sticky;top:0;background:var(--card);color:var(--muted);font-weight:600}
+details.tbl th:first-child,details.tbl td:first-child{text-align:left}
+/* virtual remote */
+.remote-wrap{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap}
+.remote{width:170px;flex:none;background:var(--remote);border-radius:28px 28px 22px 22px;padding:18px 16px 20px;box-shadow:inset 0 0 0 2px rgba(255,255,255,.06)}
+.lcd{background:var(--lcd);color:var(--lcd-ink);border-radius:6px;height:118px;padding:5px 7px;position:relative;font-family:"Courier New",ui-monospace,monospace;font-weight:700;overflow:hidden;box-shadow:inset 0 0 0 2px rgba(0,0,0,.25);text-transform:uppercase}
+.lcd .top{display:flex;justify-content:space-between;font-size:11px;letter-spacing:.02em;padding-right:18px}
+.lcd .ic{display:inline-flex;line-height:0}
+.lcd .cic{display:flex;justify-content:center;margin-top:4px}
+.lcd .chr{position:absolute;right:6px;top:4px}
+.lcd .big{font-size:26px;text-align:center;line-height:1.1;margin-top:4px}
+.lcd .big.huge{font-size:34px}
+.lcd .big.inv{background:var(--lcd-ink);color:var(--lcd);border-radius:3px;margin:4px auto 0;width:max-content;padding:0 6px}
+.lcd .mid{font-size:12px;text-align:center;margin-top:10px;line-height:1.2}
+.lcd .ttl.small{font-size:10px;line-height:1.25}
+.lcd .ttl{font-size:13px;text-align:center;line-height:1.2;margin-top:4px;letter-spacing:.03em}
+.lcd .menuhdr{font-size:11px;letter-spacing:.08em}
+.lcd .mname{position:absolute;left:0;right:0;top:62px;text-align:center;font-size:14px;line-height:1.15;letter-spacing:.03em}
+.lcd .mname.noic{top:34px;bottom:auto}
+.lcd .row1{display:flex;align-items:center;justify-content:center;gap:12px;height:80px}
+.lcd .row2{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:18px;font-size:20px}
+.lcd .row2 .lbl2{font-size:14px}
+.lcd .foot{position:absolute;left:0;right:0;bottom:8px;text-align:center;font-size:13px}
+.lcd .spk{display:flex;justify-content:center;gap:24px;margin-top:4px}
+.lcd .spk .ul{border-bottom:2px solid currentColor}
+.lcd .days7{display:flex;justify-content:center;gap:6px;font-size:12px;margin-top:4px}
+.lcd .days7 .u{text-decoration:underline}
+.lcd .fld{text-align:center;font-size:22px;margin-top:2px}
+.lcd .fld.sm{font-size:14px}
+.lcd .inv{background:var(--lcd-ink);color:var(--lcd);padding:0 2px;border-radius:2px}
+.lcd.list{padding-top:3px}
+.lcd.list .ttl{margin:0 0 2px;font-size:11px}
+.lcd .li.sm{font-size:10px;letter-spacing:-.04em}
+.lcd .li{font-size:11.5px;line-height:1.38;white-space:pre}
+.lcd .bars{position:absolute;left:38px;bottom:24px;display:flex;gap:5px;align-items:flex-end}
+.lcd .bars div{display:flex;flex-direction:column;align-items:center;font-size:9px;line-height:1}
+.lcd .bars span{display:block;width:17px;border:1.5px solid var(--lcd-ink);margin-top:1px}
+.lcd .bars span.f{background:var(--lcd-ink)}
+.lcd .eco{position:absolute;right:7px;top:52px;font-size:14px}
+.lcd .msg{position:absolute;left:0;right:0;bottom:8px;text-align:center;font-size:14px;letter-spacing:.04em}
+.lcd .warnmsg{position:absolute;right:6px;bottom:4px;font-size:10px}
+.lcd .fan{position:absolute;left:6px;bottom:4px;display:flex;align-items:center;gap:3px;font-size:12px}
+/* CHRONO program screen (PR1-PR6), layout as on the GRF remote; sized for the ~138 px wide LCD */
+.lcd.chrono{padding:4px 4px}
+.lcd .chtop{display:flex;align-items:flex-end;gap:3px;height:22px}
+.lcd .chpr{font-size:14px;line-height:1;letter-spacing:-.02em}
+.lcd .chon{font-size:8px;border:1.2px solid var(--lcd-ink);padding:0 1px;line-height:10px;margin-bottom:2px}
+.lcd .chdays{display:flex;gap:1px;margin-left:auto}
+.lcd .chd{display:flex;flex-direction:column;align-items:center;width:8px;font-size:8px;line-height:1}
+.lcd .chd b{display:block;width:8px;text-align:center}
+.lcd .chd i{display:block;width:7px;height:7px;border:1.2px solid var(--lcd-ink);margin-top:1px}
+.lcd .chd i.f{background:var(--lcd-ink)}
+.lcd .chdays.inv{background:none;color:inherit;padding:0;border-radius:0}   /* only the digits are inverted */
+.lcd .chdays.inv .chd b{background:var(--lcd-ink);color:var(--lcd)}
+.lcd .chgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px;margin-top:3px}
+.lcd .chbox{border:1.2px solid var(--lcd-ink);border-radius:3px;height:38px;padding:1px 2px;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}
+.lcd .chbox .chl{font-size:7px;line-height:1}
+.lcd .chbox .chv{font-size:11px;text-align:right;line-height:1.1;letter-spacing:-.03em}
+.lcd .chbox.ci{flex-direction:row;align-items:center;justify-content:space-between}
+.lcd .chbox.ci .chv{font-size:15px}
+.lcd .chbox.inv{background:var(--lcd-ink);color:var(--lcd)}
+.rbtns{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;margin-top:16px;justify-items:center}
+.rbtns span{width:34px;height:30px;border-radius:9px;background:var(--remote-btn);color:#c9cfd6;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;opacity:.7}
+.rbtns span.pw{grid-column:1/-1;border-radius:50%;width:32px;height:32px}
+.remote-info{flex:1;min-width:200px}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;overflow-wrap:anywhere}
+.keybtns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.fwprog{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin:0 0 10px}
+.fwprog div{height:100%;width:0;background:var(--accent);transition:width .2s}
+.keybtns button{padding:5px 10px;font-size:13px}
+#keyModal{position:fixed;inset:0;z-index:30;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);padding:16px}
+#keyModal.show{display:flex}
+#keyModal .mc{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;max-width:380px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+#keyModal h3{margin:0 0 6px;font-size:17px}
+#keyModal p{margin:0 0 12px;color:var(--muted);font-size:14px}
+#keyModal input{width:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font:inherit;color:inherit}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%) translateY(120px);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;transition:transform .2s;max-width:calc(100% - 32px);z-index:10}
+#toast.show{transform:translateX(-50%) translateY(0)}
+#toast.err{background:var(--err);color:#fff}
+/* expert mode: .x elements only show with the Expert toggle */
+body:not(.expert) .x{display:none!important}
+/* debug mode: .d elements (raw registers, research tables) only show with the Debug toggle */
+body:not(.debug) .d{display:none!important}
+.xbtn{padding:4px 11px;font-size:12px;border-radius:999px;min-width:0;color:var(--muted)}
+.xbtn[aria-pressed=true]{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+/* stove (or controller) unreachable: data is old, controls do nothing */
+.card.dim{opacity:.45;filter:grayscale(1);pointer-events:none;user-select:none;transition:opacity .2s}
+/* register hypotheses / parameters (debug) */
+.hypwrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+.hyp{width:100%;border-collapse:collapse;font-size:13px}
+.hyp th,.hyp td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.hyp tr:last-child td{border-bottom:0}
+.hyp tr.cur td{background:var(--accent-soft)}
+.hyp td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tsub{font-size:13px;font-weight:600;margin:4px 0 6px}
+.tsub:not(:first-of-type){margin-top:16px}
+.hyp th{color:var(--muted);font-weight:600;background:var(--card);white-space:nowrap}
+.hyp td.r{white-space:nowrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.hyp td.v{white-space:nowrap;font-weight:650;font-variant-numeric:tabular-nums;text-align:right}
+.hyp td.o{color:var(--muted);min-width:180px}
+.hyp td.h{min-width:200px}
+@media (max-width:420px){main{padding:12px;gap:12px;grid-template-columns:1fr}.big-temps{gap:16px}.big-temps .v{font-size:24px}.bar{gap:8px}.conn span:last-child{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+</style>
+</head>
+<body>
+<header><div class="bar">
+  <h1>PalletHeater</h1>
+  <button id="expertBtn" class="xbtn" type="button" aria-pressed="false" data-i="expert"></button>
+  <button id="debugBtn" class="xbtn" type="button" aria-pressed="false" data-i="debug"></button>
+  <div class="conn"><span class="dot" id="dot"></span><span id="conn">…</span></div>
+</div></header>
+
+<main>
+  <div id="alerts" role="status" aria-live="polite"></div>
+
+  <!-- Overview -->
+  <section class="card wide">
+    <div class="hero">
+      <div class="state">
+        <div class="state-label" id="stateLabel">–</div>
+        <div class="state-sub" id="stateSub">&nbsp;</div>
+        <div class="next" id="nextTimer"></div>
+      </div>
+      <div class="big-temps">
+        <div><div class="v" id="tRoom">–</div><div class="l" id="tRoomLbl"></div></div>
+        <div><div class="v" id="tSet">–</div><div class="l" data-i="setPoint"></div></div>
+        <div><div class="v" id="tFume">–</div><div class="l" data-i="fumes"></div></div>
+      </div>
+      <button class="big go" id="powerBtn" disabled>–</button>
+    </div>
+  </section>
+
+  <!-- Heating controls -->
+  <section class="card">
+    <h2 data-i="heating"></h2>
+    <div class="row">
+      <span class="lbl"><span data-i="setPoint"></span><span data-help="setPoint"></span></span>
+      <span class="stepper">
+        <button data-step="-1" aria-label="−">−</button>
+        <span class="v" id="spVal">–</span>
+        <button data-step="1" aria-label="+">+</button>
+      </span>
+    </div>
+    <div class="row">
+      <span class="lbl"><span data-i="flamePower"></span><span data-help="flame"></span><span class="hint" id="flameHint">&nbsp;</span></span>
+      <span class="seg" id="flameSeg"></span>
+    </div>
+    <div class="row">
+      <span class="lbl"><span data-i="roomFan"></span><span data-help="fan"></span><span class="hint" id="fanHint"></span></span>
+      <span class="seg" id="fanSeg"></span>
+    </div>
+  </section>
+
+  <!-- Energy saving -->
+  <section class="card">
+    <h2 data-i="energySaving"></h2>
+    <div class="row">
+      <span class="lbl"><span data-i="energySaving"></span><span data-help="es"></span><span class="hint" data-i="esHint"></span></span>
+      <label class="switch"><input type="checkbox" id="esEnabled"><span></span></label>
+    </div>
+    <div id="esDetails">
+      <div class="row">
+        <span class="lbl"><span data-i="esStart"></span><span data-help="esStart"></span><span class="hint" id="esStartHint">&nbsp;</span></span>
+        <select id="esStart"><option value="-1">−1 °C</option><option value="-2">−2 °C</option><option value="-3">−3 °C</option><option value="0" data-i="esStartOff"></option></select>
+      </div>
+      <div class="row">
+        <span class="lbl"><span data-i="esStop"></span><span data-help="esStop"></span><span class="hint" id="esStopHint">&nbsp;</span></span>
+        <select id="esStop"><option value="1">+1 °C</option><option value="2">+2 °C</option><option value="3">+3 °C</option></select>
+      </div>
+    </div>
+  </section>
+
+  <!-- Status details -->
+  <section class="card">
+    <h2 data-i="status"></h2>
+    <dl id="statusList"></dl>
+  </section>
+
+  <!-- History -->
+  <section class="card wide">
+    <h2><span data-i="history"></span>
+      <span class="seg" id="rangeSeg"><button data-h="0.5">30 min</button><button data-h="1">1 h</button><button data-h="6">6 h</button><button data-h="12">12 h</button><button data-h="24">24 h</button></span></h2>
+    <div class="chips" id="histToggles"></div>
+    <div id="histEmpty" class="muted" style="display:none"></div>
+    <div id="histCharts">
+      <div class="chart" id="histChart"><svg role="img"></svg><div class="tip"></div></div>
+      <p class="muted" style="font-size:12px;margin:6px 0 0" data-i="histNote"></p>
+      <details class="tbl x"><summary data-i="showTable"></summary><div class="scroll"><table id="histTable"></table></div></details>
+    </div>
+    <details class="tbl" id="evtBox" style="display:none"><summary data-i="evtTitle"></summary><div class="scroll"><table id="evtTable"></table></div></details>
+  </section>
+
+  <!-- Remote control -->
+  <section class="card">
+    <h2 data-i="remoteCard"></h2>
+    <div class="remote-wrap">
+      <div class="remote" aria-hidden="true">
+        <div class="lcd" id="lcd"></div>
+        <div class="rbtns"><span>▲</span><span>OK</span><span>▼</span><span>ESC</span><span class="pw">⏻</span></div>
+      </div>
+      <div class="remote-info">
+        <dl id="remoteList"></dl>
+        <p class="muted" style="font-size:12px;margin:10px 0 0" data-i="remoteNote"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Combustion & settings -->
+  <section class="card">
+    <h2 data-i="settings"></h2>
+    <div class="row">
+      <span class="lbl"><span data-i="combustionQuality"></span><span data-help="cq"></span><span class="hint" id="cqHint">&nbsp;</span></span>
+      <select id="cq"></select>
+    </div>
+    <div class="row">
+      <span class="lbl"><span data-i="pelletQuality"></span><span data-help="pq"></span><span class="hint" id="pqHint">&nbsp;</span></span>
+      <select id="pq"></select>
+    </div>
+    <div class="row">
+      <span class="lbl"><span data-i="beep"></span><span data-help="beep"></span></span>
+      <label class="switch"><input type="checkbox" id="beep"><span></span></label>
+    </div>
+  </section>
+
+  <!-- Clock -->
+  <section class="card">
+    <h2><span><span data-i="clock"></span><span data-help="clock"></span></span></h2>
+    <dl>
+      <dt data-i="stove"></dt><dd id="timeStove">–</dd>
+      <dt>NTP</dt><dd id="timeNtp">–</dd>
+      <dt>Browser</dt><dd id="timeBrowser">–</dd>
+      <dt data-i="difference"></dt><dd id="timeDelta">–</dd>
+    </dl>
+    <div class="actions"><button id="syncTime" data-i="syncClock"></button><button id="syncBrowser" data-i="syncBrowser"></button></div>
+  </section>
+
+  <!-- Errors -->
+  <section class="card wide">
+    <h2><span><span data-i="errorMemory"></span><span data-help="errors"></span></span></h2>
+    <ul class="errlist" id="errList"><li class="muted">–</li></ul>
+    <div class="actions"><button class="danger" id="clearErrors" data-i="clearErrors"></button></div>
+  </section>
+
+  <!-- Timers -->
+  <section class="card wide">
+    <h2><span><span data-i="timers"></span><span data-help="timers"></span></span><button id="reloadTimers" data-i="reload"></button></h2>
+    <div class="next" id="nextTimer2" style="margin:-4px 0 12px"></div>
+    <div class="timers" id="timers"></div>
+  </section>
+
+  <!-- Device -->
+  <section class="card wide" id="devCard">
+    <h2 data-i="device"></h2>
+    <div class="cols2">
+    <dl id="deviceList"></dl>
+    <div>
+    <div class="row devfirst">
+      <span class="lbl"><span data-i="bt"></span><span data-help="bt"></span><span class="hint" id="btHint">&nbsp;</span></span>
+      <label class="switch"><input type="checkbox" id="btToggle"><span></span></label>
+    </div>
+    <div class="row d">
+      <span class="lbl"><span>Telnet</span><span data-help="telnet"></span><span class="hint" data-i="telnetHint"></span></span>
+      <label class="switch"><input type="checkbox" id="telnetToggle"><span></span></label>
+    </div>
+    <div class="row">
+      <span class="lbl"><span data-i="keyRequired"></span><span data-help="apiKey"></span><span class="hint" id="keyReqHint">&nbsp;</span></span>
+      <label class="switch"><input type="checkbox" id="keyReqToggle"><span></span></label>
+    </div>
+    <div class="row" id="keyRow">
+      <span class="lbl">API-key<span class="hint mono" id="keyVal">–</span></span>
+      <span class="keybtns"><button id="keyShow" data-i="keyShow"></button><button id="keyCopy" data-i="keyCopy"></button><button id="keyRotate" data-i="keyRotate"></button></span>
+    </div>
+    <div class="row x" id="fwRow">
+      <span class="lbl"><span data-i="fwUpdate"></span><span data-help="fwUpdate"></span><span class="hint" id="fwHint" data-i="fwHint"></span></span>
+      <span class="keybtns"><input type="file" id="fwFile" accept=".bin,application/octet-stream" hidden><button id="fwPick" data-i="fwPick"></button></span>
+    </div>
+    <div id="fwProg" class="fwprog x" hidden><div id="fwBar"></div></div>
+    </div>
+    </div>
+    <div class="actions">
+      <a class="x" href="/api"><button data-i="apiDocs"></button></a>
+      <a class="x" href="/metrics"><button>Metrics</button></a>
+      <a class="x" href="/"><button data-i="devicePage"></button></a>
+      <button class="danger" id="restart" data-i="restart"></button>
+    </div>
+  </section>
+
+  <!-- Known EEPROM parameters (debug only) -->
+  <section class="card wide d" id="parCard">
+    <h2><span><span data-i="parTitle"></span><span data-help="par"></span></span><span class="keybtns"><span class="muted" id="parAge" style="text-transform:none;letter-spacing:0;font-weight:400;align-self:center"></span><button id="parReload" data-i="reload"></button></span></h2>
+    <div class="tsub" data-i="parPresets"></div>
+    <div class="hypwrap"><table class="hyp" id="parPresetTable"></table></div>
+    <div class="tsub" data-i="parSettings"></div>
+    <div class="hypwrap"><table class="hyp" id="parTable"></table></div>
+    <p class="muted" style="font-size:12px;margin:8px 0 0" data-i="parNote"></p>
+  </section>
+
+  <!-- Register hypotheses (debug only) -->
+  <section class="card wide d" id="hypCard">
+    <h2><span><span data-i="hypTitle"></span><span data-help="hyp"></span></span><span class="muted" id="hypAge" style="text-transform:none;letter-spacing:0;font-weight:400"></span></h2>
+    <div class="hypwrap"><table class="hyp" id="hypTable"></table></div>
+    <p class="muted" style="font-size:12px;margin:8px 0 0" data-i="hypNote"></p>
+  </section>
+</main>
+
+<div id="toast"></div>
+<div id="pop" role="tooltip"></div>
+<div id="tpPop" role="dialog" aria-modal="false"></div>
+<div id="keyModal" role="dialog" aria-modal="true" aria-labelledby="keyModalTitle"><div class="mc">
+  <h3 id="keyModalTitle" data-i="keyModalTitle"></h3>
+  <p data-i="keyModalText"></p>
+  <input id="keyInput" type="password" autocomplete="off" spellcheck="false" placeholder="X-API-Key">
+  <div class="actions" style="justify-content:flex-end"><button class="primary" id="keySave" data-i="save2"></button></div>
+</div></div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const POLL_MS = 5000, REMOTE_MS = 10000, HISTORY_MS = 120000;
+const DAYS = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"];
+const CQ = ["+G","-3","-2","-1","0","1","2","3"];
+const PQ = ["-5","-4","-3","-2","-1","0","1","2","3","4","5"];
+
+// ---------- translations ----------
+const I18N = {
+  en: {
+    heating:"Heating", setPoint:"Set point", fumes:"Fumes", flamePower:"Flame power", roomFan:"Room fan (Multifuoco)", roomFanHint:"Off = NATURAL MODE (fan off)",
+    energySaving:"Energy saving", esHint:"Stop when warm, restart when it cools down", esStart:"Restart below set point", esStop:"Stop above set point",
+    restartsAt:"Restarts at {0}", esRestartAt:"Energy saving · restarts at {0}", esReduced:"Energy saving · reduced power", reducedPower:"Reduced power (set point reached)",
+    ctrlFw:"Controller firmware", ctrlBuilt:"Built on",
+    parTitle:"Parameters (EEPROM)", h_par:"Settings and presets stored in the stove EEPROM, read live (GET /api/dump). 'Verified' = checked on this stove, 'documentation' = from the documentation or other Micronova maps but not checked here. The presets per power level are the values the stove uses at each flame power; the row of the current actual flame power is highlighted.",
+    parPresets:"Presets per power level", parSettings:"Settings and counters", parLevel:"Level", parAuger:"Auger value", parFume:"Fume fan target", parNow:"now",
+    parRaw:"Raw", parName:"Parameter", parMeaning:"Value", stOk:"verified", stDoc:"documentation",
+    parNote:"Read once when debug mode is turned on; 'Reload' reads them again (about 50 EEPROM reads, a few seconds). Fume fan rpm = (value + 25) × 10. The live fume fan target is RAM 0x36, 1 – 2 below the preset (possibly the combustion quality correction).",
+    expert:"Expert", expertTitle:"Show technical details: sensors, brazier cleaning, controller info, firmware upload, API links",
+    debug:"Debug", debugTitle:"Show research and diagnostics: raw RAM / EEPROM registers, parameter and hypothesis tables, serial errors, telnet", hypTitle:"Register hypotheses",
+    h_hyp:"What we think the stove registers mean that are not (fully) verified yet. 'Hypothesis' = there is a suspicion, 'unknown' = only observed. Live values come from the stove (GET /api/dump); several addresses are shown as v1 / v2. Full notes: docs/discovered-values.md.",
+    hypReg:"Register", hypLive:"Now", hypObs:"Observed", hypHyp:"Hypothesis", hypSt:"Status", stHyp:"hypothesis", stUnk:"unknown",
+    hypNote:"Live values are read from the stove every 30 s while debug mode is on. The observations come from dumps on 16 and 17/11/2026 (including a brazier cleaning at flame 3).",
+    brazier:"Brazier cleaning", brazierIn:"in {0} min", brazierEvery:"in {0} min (every {1} min)", brazierNow:"in progress",
+    h_brazier:"While burning the stove cleans the brazier at a fixed interval (EEPROM 0x02, in minutes): the fume fan speeds up and the stove briefly shows 'Brazier cleaning'. RAM 0x32 counts down the minutes to the next cleaning. Only shown while the stove is working.",
+    fwUpdate:"Upload PalletHeater firmware", fwHint:"Upload a firmware.bin (from .pio/build/…)", fwPick:"Choose file…", fwBadFile:"Choose the firmware .bin file",
+    fwConfirm:"Install {0} ({1} MB)? The controller restarts afterwards; the stove keeps running.", fwProgress:"Uploading… {0}% · {1} KB/s",
+    fwRestarting:"Installed – controller restarts…", fwNoAnswer:"No answer after the restart – reload the page", fwFailed:"Update failed: {0}",
+    h_fwUpdate:"This is the firmware of the PalletHeater controller (the ESP32), NOT of the pellet stove itself: the stove firmware cannot be changed this way. Installs it over HTTP (POST /api/update), several times faster than ArduinoOTA. Use the firmware.bin from .pio/build/<environment>/. The controller restarts after the update; the stove itself is not affected. Requires the API key (or the OTA password).", esNoRestartSub:"Energy saving · no automatic restart", stopsAt:"Stops at {0}", useSwitch:"Use the switch to turn energy saving off",
+    status:"Status", history:"History", temperatures:"Temperatures", room:"Room", fumeTemp:"Fume temperature", showTable:"Show as table",
+    histEmpty:"No history yet. The controller records a point every 2 minutes once it has the time (NTP) and stove data.", histErr:"Could not load history: {0}",
+    remoteCard:"Remote control", remoteNote:"Read-only mirror of what the remote shows. Buttons cannot be pressed from here.",
+    settings:"Settings", combustionQuality:"Combustion quality", pelletQuality:"Pellet quality", beep:"Beep (Zoemer)",
+    clock:"Clock", stove:"Stove", difference:"Difference", syncClock:"Sync stove clock to NTP",
+    errorMemory:"Error memory", clearErrors:"Clear error memory", noErrors:"No errors stored", del:"Delete",
+    confirmDelErr:"Delete error {0} from position {1}?", confirmClearErr:"Clear all 5 error memory positions?",
+    errDeleted:"Error {0} deleted", errCleared:"Error memory cleared",
+    timers:"Timers (chrono)", reload:"Reload", loadingTimers:"Loading timers…", timersErr:"Could not load timers: {0}",
+    tOn:"On", tOff:"Off", tDays:"Days", tFlame:"Flame", tFan:"Room fan", save:"Save {0}", saved:"{0} saved", enabledMsg:"{0} enabled", disabledMsg:"{0} disabled",
+    readError:"Read error", readErrorText:"Could not read this program from the stove.", retry:"Retry",
+    copyTo:"Copy to…", copyAll:"All other programs", confirmCopy:"Copy the settings of {0} to {1}? This overwrites them on the stove.", copied:"Copied {0} to {1}",
+    timeStep:"Times must be on a 10 minute boundary (e.g. 06:30)",
+    nextOn:"Next: {0} turns the stove on at {1} ({2})", nextOff:"Next: {0} turns the stove off at {1} ({2})", noTimers:"No timers active", today:"today", tomorrow:"tomorrow",
+    device:"Device", apiDocs:"API docs", devicePage:"Device page", restart:"Restart", confirmRestart:"Restart the PalletHeater controller?", restarting:"Restarting… the page reconnects automatically",
+    turnOn:"Turn on", turnOff:"Turn off", confirmOff:"Turn the stove off?", powerOnSent:"Power on sent", powerOffSent:"Power off sent",
+    failed:"{0} failed: {1}", updated:"Updated {0}", offline:"Offline", waiting:"Waiting for stove data…", stale:"Stove data {0} s old",
+    roomSrc:"Room ({0})", srcRemote:"remote", srcStove:"stove", srcLabel:"Temperature source", srcRemoteLong:"Remote control sensor", srcStoveLong:"Stove sensor", unknown:"Unknown",
+    roomTemp:"Room temperature", stoveSensor:"Stove sensor", remoteSensor:"Remote control sensor", fumeFan:"Fume fan", auger:"Auger speed",
+    pelletLevel:"Pellet level", low:"Low", ok:"OK", remoteSeen:"Remote last seen", secAgo:"{0} s ago", waterPres:"Water pressure", waterTemp:"Water temperature",
+    fw:"Stove firmware", starts:"Number of starts", hours:"Working hours", service:"Hours since service", uptime:"Controller uptime", serialErr:"Serial errors (read / write)", retries:"Serial retries",
+    menu:"Menu", selParam:"Selected parameter", remoteValue:"Value on the remote", language:"Language", mainScreen:"Main screen", none:"none",
+    aAlarm:"Alarm: {0}", aAlarmSub:"Check the stove display and the error memory.", aNoAnswer:"The stove does not answer on the serial bus",
+    aError:"Active error {0}", aLow:"Pellet level is low", aLowSub:"Refill the pellet hopper.", aStale:"Stove data is {0} s old", aStaleSub:"The controller cannot read the stove at the moment.",
+    aOffline:"The controller is not reachable", aOfflineSub:"Check WiFi or wait for a restart to finish.",
+    flameN:"Flame power {0}", fanOff:"Room fan off", fanN:"Room fan {0}", spN:"Set point {0}", esOn:"Energy saving on", esOff:"Energy saving off", esUpd:"Energy saving updated",
+    cqN:"Combustion quality {0}", pqN:"Pellet quality {0}", beepOn:"Beep enabled", beepOff:"Beep disabled", synced:"Stove clock synced", off:"Off",
+    tTime:"Time", stateLines:"Stove state", histNothing:"Select at least one series above.",
+    histNote:"One point every 2 minutes, last 24 hours, stored on the controller (kept across restarts). Temperatures in 0.5 °C steps. State lines are drawn at the exact moment of each change.",
+    evtTitle:"State changes, errors and pellet reserve", pelSensor:"Reserve sensor (0xA4)", pelCounter:"Reserve counter (0x89)",
+    pelReserve:"Pellet reserve", pelReserveVal:"On · sensor {0} · counter {1}", h_pelReserve:"PELLET RESERVE (installer menu, EEPROM 0xC6). How the stove decides the reserve is being investigated: the alarm is assumed when the sensor (RAM 0xA4) is 5 and the counter (RAM 0x89) is 1 or lower. Every change of both is recorded in the state change list.", evtError:"Error", evtErrOn:"{0} occurred", evtErrOff:"Error cleared", errSeen:"occurred {0}", errSeenUnknown:"time unknown (before the log started)", evtWhen:"Time", evtFrom:"From", evtTo:"To", evtDur:"Duration", evtNone:"No state changes recorded yet.", evtNow:"now",
+    syncBrowser:"Set to browser time", browserSet:"Stove clock set to {0}", esStartOff:"OFF (no restart)", esNoRestart:"No automatic restart",
+    wirelessLabel:"Wireless sensor (INSTELL WIRELESS)", on:"On", srcDerived:"Room temperature comes from",
+    manualRef:"Source: stove manuals (FWAR01, P220 M)",
+    cqFactory:"Factory setting", cqG:"+G: not described in the manuals, meaning unknown",
+    cqPlus:"{0}: for very dirty glass, too many pellets in the brazier, a long combustion air duct or a coaxial flue",
+    cqMin:"{0}: for a flame that is too small because of too much draught",
+    pqPlus:"{0}: for a small flame at maximum power, longer pellets or a lower consumption than specified",
+    pqMin:"{0}: for a lot of ash in the brazier or a higher consumption than specified",
+    telnetHint:"Debug menu on port 23, switches immediately", keyRequired:"API key required", keyShow:"Show", keyHide:"Hide", keyCopy:"Copy", keyRotate:"New key",
+    keyOn:"Every API call needs the X-API-Key header", keyOff:"Optional: the API is open on your network", keyCopied:"API key copied", keyNew:"New API key generated",
+    keyConfirmRotate:"Generate a new API key? Other clients (scripts, Home Assistant, Prometheus) then need the new key.",
+    keyConfirmOn:"Require the API key? This browser stores the key. Other clients (scripts, Home Assistant, Prometheus, the iOS app over WiFi) then need the X-API-Key header.",
+    keyConfirmOff:"Make the API key optional again? The API is then open to everyone on your network.",
+    keyModalTitle:"API key required", keyModalText:"This controller requires an API key. Enter it once; this browser remembers it.", save2:"Save", keyNeeded:"API key required",
+    telnetOn:"Telnet on", telnetOff:"Telnet off",
+    h_telnet:"Interactive debug menu over telnet (port 23): live values, settings, raw register access. Telnet has no password and no encryption; switch it off when you do not use it. The change is applied immediately, without a restart.",
+    h_apiKey:"Protects the HTTP API with a key. The key is generated randomly on the first start and kept on the controller. When required, every call needs the header X-API-Key: <key> (or Authorization: Bearer <key>, e.g. for Prometheus). Open without key: the device page, this web app, the API docs and /api/auth. Plain HTTP is not encrypted, so the key protects against other devices and web pages on your network, not against someone sniffing the network. The telnet menu and Bluetooth are not protected by the key.",
+    flameSet:"Flame power (set)", flameActual:"Flame power (actual)",
+    fanPower:"Room fan power", h_fanPower:"Raw power value the stove sends to the room fan (RAM 0x0A): 0 = off, 21 / 23 / 25 at speed 1 / 2 / 3, the value depends on the speed and the actual flame power: flame 1 → 9 / 14 / 19, flame 2 → 21 / 23 / 25 for speed 1 / 2 / 3, flame 3 → 27 at speed 1. Measured on this stove; the unit is not documented.",
+    fanSet:"Room fan (set)", fanActual:"Room fan (actual)", fanRunsAt:"Running at {0}", fanRunsLow:"Running at low power ({0})", fanRunsPower:"Running at {0} (power {1})", fanWaitHeat:"Waiting until the stove is hot enough", fanStopped:"Not running", flameMod:"Modulating: running at {0}", flameNow:"Running at {0}", flameOut:"No flame at the moment",
+    bt:"Bluetooth", btOn:"On – shares the radio with WiFi", btOff:"Off – WiFi has the radio to itself", btRestart:"Restart pending to apply the change",
+    btConfirmOff:"Switch Bluetooth off? The controller restarts and the iOS app can then only connect via WiFi.", btConfirmOn:"Switch Bluetooth on? The controller restarts.",
+    h_bt:"Switching Bluetooth off skips BLE completely when the controller starts: no Bluetooth advertising or connections, the Bluetooth memory is released and WiFi no longer has to share the radio (no power saving mode needed). This usually gives a faster and more stable WiFi connection. The iOS app then only works via WiFi. The change is applied with a restart of the controller; the stove keeps running.",
+    serviceOf:"{0} / 2000 h", tpHour:"Hour", tpMin:"Minutes", tpOff:"OFF", tpDone:"Done",
+    h_service:"After 2000 operating hours the remote shows SERVICE when the stove is off: have the stove serviced by an authorised service centre. The stove can still be used.\nThe scheduled maintenance must also be done at least once a year, and before using the stove after a long period of inactivity.\nYourself: glass and brazier daily, ash pan every 2 days, combustion chamber and remote control batteries yearly.\nDealer (yearly): flue gas chamber, flue and flue system, air supply, ventilation and fans, electrical parts, seals.\nThe value shown is the stove's interval counter; that it is the counter for the SERVICE message is an assumption.",
+    h_setPoint:"When the room reaches this temperature the stove modulates down to minimum power (7 – 30 °C). The temperature is measured by the sensor chosen in the MULTICOMFORT menu on the remote: remote control, stove or wireless sensor.",
+    h_flame:"Flame power 1 – 4. When the set point is reached the stove modulates to minimum power, but the selected level stays on the display. The actual power is read from RAM 0x34 (shown under the buttons and in the history).",
+    h_fan:"Speed of the warm air fan (Multifuoco). 0 = NATURAL MODE: fan off, quieter. For safety the fan cannot be switched off at high power: lower the power to 3 or 2 first. When you raise the power again, the fan starts automatically. Switching off may happen a bit later, when conditions allow it.",
+    h_es:"Switches the stove off and on automatically based on the room temperature.\n• Set point reached: the stove goes to power 1.\n• Room keeps rising to set point + STOP: the stove extinguishes and goes to standby.\n• Room drops below set point + START: the stove restarts at the previous power.\nNot possible together with Multicomfort Plus or external thermostat STOP. If the pause between stopping and restarting is shorter than 90 minutes, the manual advises to switch energy saving off and let the stove modulate. After switching the stove off manually it does not restart automatically.",
+    h_esStart:"Restart when the room drops below set point minus this value (−1 to −3 °C). OFF: after the automatic stop the stove stays off.",
+    h_esStop:"Extinguish when the room reaches set point plus this value (+1 to +3 °C). Switching energy saving off sets STOP to OFF: the stove then only modulates down to power 1.",
+    h_cq:"Combustion air correction. 0 = factory setting.\n• Higher (+): very dirty glass, too many pellets in the brazier, long combustion air duct, coaxial flue.\n• Lower (−): flame too small because of too much draught.\nDo not change together with pellet quality, change one step at a time and wait up to a day to judge the effect. The available values depend on the stove.\n+G is not described in either manual. It corresponds to raw value 76 (0x4C), far outside the normal range (2 – 8 for −3 … +3); its meaning is unknown, so it is better not to select it.",
+    h_pq:"Pellet feed correction. 0 = factory setting.\n• Higher (+): small flame at maximum power, longer pellets, lower consumption than specified.\n• Lower (−): a lot of ash in the brazier, higher consumption than specified.\nDo not change together with combustion quality, change one step at a time. The available values depend on the stove.",
+    h_beep:"Sound signal of the stove for messages. Even when switched off, the buzzer still sounds for safety warnings.",
+    h_timers:"Up to 6 programs, each with one start and stop time (10 minute steps) and the days (1 = Monday). An empty time means OFF: START OFF = no ignition, STOP OFF = no switch-off.\n• Preferably use one program at a time; with combined programs leave at least 2 hours between stopping and starting.\n• With overlapping programs the stove starts at the first start time and stops at the first stop time.\n• With energy saving on, the chrono handles the start and stop times and energy saving the operation in between.\n• The stove clock (including the day of the week) must be correct.",
+    h_clock:"The chrono timers use the stove clock, including the day of the week. The stove has no daylight saving time: set the clock again after the change.",
+    h_errors:"The last 5 safety warnings stored by the stove (HOUR COUNTER MEMORY › MEM-AL). Deleting only clears this memory. Only restart the stove after the cause has been found and solved.",
+    h_wireless:"INSTELL WIRELESS switches the optional external wireless temperature sensor on or off. Which sensor the stove regulates on is chosen in MULTICOMFORT (remote control, stove or wireless). Without contact with the remote or sensor for more than 4 minutes, the stove uses its own sensor.",
+    h_roomSrc:"Derived from the readings: the room temperature (RAM 0x01) equals the sensor shown. The MULTICOMFORT setting itself cannot be read yet.",
+    eh_32:"One of these safety devices tripped: pressure switch, door sensor or pellet hopper lid sensor (lid open longer than about 60 s). The auger stops and the stove shuts down.\nYou can check:\n• Is the brazier clogged with pellets or combustion residue? Clean it.\n• Are the fire door and the ash pan properly closed?\n• Is the pellet hopper lid closed? Refill if needed and close it.\nDealer: blocked flue or too little draught, flue too long, worn door or flue seals, blocked or broken pressure gauge connector or silicone tube, faulty flue gas fan, auger motor, hopper sensor or electronic board. Strong wind or bad weather can also trip the pressure switch.",
+    eh_64:"Pressure switch fault at ignition; the stove shuts down.\nDealer: faulty pressure switch, chimney draws too hard or bad weather, faulty auger motor.",
+    eh_16:"The temperature inside the stove exceeded the limit and the safety thermostat tripped; the auger stops and the stove shuts down.\nYou can check: use suitable pellets (A1, 6 mm, 10 – 30 mm long).\nDealer: blocked flue or too little draught, ventilation or heat dissipation problems (distances, ventilation, parameters, flue too long), faulty thermostat or electronic board. A thermostat with manual reset must be reset.",
+    eh_2:"The flue gas temperature exceeded the safety limit; the auger stops and the stove shuts down.\nYou can check: use suitable pellets.\nDealer: blocked flue or too little draught, ventilation or heat dissipation problems, faulty or badly connected flue gas sensor, wrong parameters, faulty electronic board.",
+    eh_128:"Auger fault during operation: pellets are fed continuously; the stove shuts down.\nDealer: faulty auger or electronic board, wrong parameters.",
+    eh_8:"The flue gas temperature dropped below the minimum for operation; the stove shuts down.\nYou can check:\n• Is the pellet hopper empty or emptying irregularly? Refill.\n• Are suitable pellets used?\n• Is the brazier clean and not clogged?\nDealer: faulty electronic board.",
+    eh_1:"The flue gas sensor is not working correctly.\nDealer: faulty sensor, pulled out of its holder or wrongly connected, or faulty electronic board.",
+    eh_4:"During ignition the stove did not reach the ignition temperature in time.\nYou can check:\n• Pellet hopper empty or emptying irregularly: refill.\n• Unsuitable pellets (type, composition, size): use A1 pellets, 6 mm, 10 – 30 mm long, ≤ 6 % moisture.\n• Auger not completely filled, e.g. after an empty hopper or at first use: run FILL AUGER (only with the stove off and cooled down).\n• Brazier not clean or clogged: clean the brazier and its holes, and push it back towards the ignition hole.\nDealer: faulty or disconnected igniter, faulty electronic board.\nIrregular failed ignitions can also be caused by a too low mains voltage.",
+    eh_129:"The flue gas fan is not working correctly; the stove shuts down.\nDealer: faulty or disconnected encoder, faulty electronic board or fuses.",
+    eh_132:"An external safety device on the N.PEL / PELLET contact tripped; the stove shuts down.\nDealer intervention is required.",
+  },
+  nl: {
+    heating:"Verwarming", setPoint:"Gewenste temp.", fumes:"Rookgas", flamePower:"Vlamvermogen", roomFan:"Ventilator (Multifuoco)", roomFanHint:"Uit = NATURAL MODE (ventilator uit)",
+    energySaving:"Energy saving", esHint:"Stopt als het warm is, herstart als het afkoelt", esStart:"Herstart onder gewenste temp.", esStop:"Stop boven gewenste temp.",
+    restartsAt:"Herstart bij {0}", esRestartAt:"Energy saving · herstart bij {0}", esReduced:"Energy saving · gereduceerd vermogen", reducedPower:"Gereduceerd vermogen (gewenste temperatuur bereikt)",
+    ctrlFw:"Firmware controller", ctrlBuilt:"Gebouwd op",
+    parTitle:"Parameters (EEPROM)", h_par:"Instellingen en presets in het EEPROM van de kachel, live gelezen (GET /api/dump). 'Bevestigd' = nagekeken op deze kachel, 'documentatie' = uit de documentatie of andere Micronova-overzichten maar hier niet nagekeken. De presets per vermogen zijn de waarden die de kachel per vlamvermogen gebruikt; de rij van het huidige werkelijke vlamvermogen is gemarkeerd.",
+    parPresets:"Presets per vermogen", parSettings:"Instellingen en tellers", parLevel:"Niveau", parAuger:"Schroefwaarde", parFume:"Doeltoerental rookgasventilator", parNow:"nu",
+    parRaw:"Ruw", parName:"Parameter", parMeaning:"Waarde", stOk:"bevestigd", stDoc:"documentatie",
+    parNote:"Eén keer gelezen als debug aangezet wordt; 'Herladen' leest ze opnieuw (ongeveer 50 EEPROM-lezingen, enkele seconden). Toerental rookgasventilator = (waarde + 25) × 10. Het live doeltoerental is RAM 0x36, 1 – 2 lager dan de preset (mogelijk de correctie van de verbrandingskwaliteit).",
+    expert:"Expert", expertTitle:"Toon technische details: sensoren, branderreiniging, controllerinfo, firmware-upload, API-links",
+    debug:"Debug", debugTitle:"Toon onderzoek en diagnose: ruwe RAM- / EEPROM-registers, tabellen met parameters en vermoedens, seriële fouten, telnet", hypTitle:"Vermoedens registers",
+    h_hyp:"Wat we denken dat de registers van de kachel betekenen, maar nog niet (volledig) bevestigd is. 'Vermoeden' = er is een vermoeden, 'onbekend' = enkel waargenomen. De live waarden komen van de kachel (GET /api/dump); meerdere adressen staan als w1 / w2. Volledige notities: docs/discovered-values.md.",
+    hypReg:"Register", hypLive:"Nu", hypObs:"Waargenomen", hypHyp:"Vermoeden", hypSt:"Status", stHyp:"vermoeden", stUnk:"onbekend",
+    hypNote:"De live waarden worden elke 30 s van de kachel gelezen zolang debug aan staat. De waarnemingen komen uit dumps van 16 en 17/11/2026 (o.a. een branderreiniging op vlam 3).",
+    brazier:"Branderreiniging", brazierIn:"over {0} min", brazierEvery:"over {0} min (elke {1} min)", brazierNow:"bezig",
+    h_brazier:"Tijdens het branden reinigt de kachel de brander op een vast interval (EEPROM 0x02, in minuten): de rookgasventilator draait harder en de kachel toont kort 'Brander reinigen'. RAM 0x32 telt de minuten af tot de volgende reiniging. Enkel zichtbaar terwijl de kachel brandt.",
+    fwUpdate:"Upload PalletHeater firmware", fwHint:"Upload een firmware.bin (uit .pio/build/…)", fwPick:"Kies bestand…", fwBadFile:"Kies het firmware-bestand (.bin)",
+    fwConfirm:"{0} ({1} MB) installeren? De controller herstart daarna; de kachel blijft gewoon werken.", fwProgress:"Uploaden… {0}% · {1} KB/s",
+    fwRestarting:"Geïnstalleerd – controller herstart…", fwNoAnswer:"Geen antwoord na de herstart – herlaad de pagina", fwFailed:"Update mislukt: {0}",
+    h_fwUpdate:"Dit is de firmware van de PalletHeater-controller (de ESP32), NIET van de pelletkachel zelf: de firmware van de kachel kan je hiermee niet wijzigen. Installeert ze via HTTP (POST /api/update), meerdere keren sneller dan ArduinoOTA. Gebruik firmware.bin uit .pio/build/<omgeving>/. De controller herstart na de update; de kachel zelf merkt er niets van. Vereist de API-key (of het OTA-wachtwoord).", esNoRestartSub:"Energy saving · geen automatische herstart", stopsAt:"Stopt bij {0}", useSwitch:"Gebruik de schakelaar om energy saving uit te zetten",
+    status:"Status", history:"Geschiedenis", temperatures:"Temperaturen", room:"Kamer", fumeTemp:"Rookgastemperatuur", showTable:"Toon als tabel",
+    histEmpty:"Nog geen geschiedenis. De controller bewaart elke 2 minuten een punt zodra hij de tijd (NTP) en gegevens van de kachel heeft.", histErr:"Geschiedenis laden mislukt: {0}",
+    remoteCard:"Afstandsbediening", remoteNote:"Toont enkel wat de afstandsbediening weergeeft. De knoppen werken hier niet.",
+    settings:"Instellingen", combustionQuality:"Verbrandingskwaliteit", pelletQuality:"Pelletkwaliteit", beep:"Zoemer",
+    clock:"Klok", stove:"Kachel", difference:"Verschil", syncClock:"Kachelklok gelijkzetten met NTP",
+    errorMemory:"Foutgeheugen", clearErrors:"Foutgeheugen wissen", noErrors:"Geen fouten opgeslagen", del:"Verwijder",
+    confirmDelErr:"Fout {0} op positie {1} verwijderen?", confirmClearErr:"Alle 5 posities van het foutgeheugen wissen?",
+    errDeleted:"Fout {0} verwijderd", errCleared:"Foutgeheugen gewist",
+    timers:"Timers (chrono)", reload:"Herladen", loadingTimers:"Timers laden…", timersErr:"Timers laden mislukt: {0}",
+    tOn:"Aan", tOff:"Uit", tDays:"Dagen", tFlame:"Vlam", tFan:"Ventilator", save:"{0} opslaan", saved:"{0} opgeslagen", enabledMsg:"{0} ingeschakeld", disabledMsg:"{0} uitgeschakeld",
+    readError:"Leesfout", readErrorText:"Dit programma kon niet van de kachel gelezen worden.", retry:"Opnieuw",
+    copyTo:"Kopieer naar…", copyAll:"Alle andere programma's", confirmCopy:"De instellingen van {0} kopiëren naar {1}? Dit overschrijft ze op de kachel.", copied:"{0} gekopieerd naar {1}",
+    timeStep:"Tijden moeten op 10 minuten vallen (bv. 06:30)",
+    nextOn:"Volgende: {0} zet de kachel aan om {1} ({2})", nextOff:"Volgende: {0} zet de kachel uit om {1} ({2})", noTimers:"Geen timers actief", today:"vandaag", tomorrow:"morgen",
+    device:"Toestel", apiDocs:"API-documentatie", devicePage:"Toestelpagina", restart:"Herstarten", confirmRestart:"De PalletHeater-controller herstarten?", restarting:"Herstarten… de pagina maakt vanzelf opnieuw verbinding",
+    turnOn:"Aanzetten", turnOff:"Uitzetten", confirmOff:"De kachel uitzetten?", powerOnSent:"Aanzetten verstuurd", powerOffSent:"Uitzetten verstuurd",
+    failed:"{0} mislukt: {1}", updated:"Bijgewerkt {0}", offline:"Offline", waiting:"Wachten op gegevens van de kachel…", stale:"Gegevens {0} s oud",
+    roomSrc:"Kamer ({0})", srcRemote:"afstandsbed.", srcStove:"kachel", srcLabel:"Temperatuurbron", srcRemoteLong:"Sensor afstandsbediening", srcStoveLong:"Sensor kachel", unknown:"Onbekend",
+    roomTemp:"Kamertemperatuur", stoveSensor:"Sensor kachel", remoteSensor:"Sensor afstandsbediening", fumeFan:"Rookgasventilator", auger:"Schroef",
+    pelletLevel:"Pelletniveau", low:"Laag", ok:"OK", remoteSeen:"Afstandsbed. laatst gezien", secAgo:"{0} s geleden", waterPres:"Waterdruk", waterTemp:"Watertemperatuur",
+    fw:"Firmware kachel", starts:"Aantal starts", hours:"Werkuren", service:"Uren sinds onderhoud", uptime:"Uptime controller", serialErr:"Seriële fouten (lezen / schrijven)", retries:"Seriële herhalingen",
+    menu:"Menu", selParam:"Geselecteerde parameter", remoteValue:"Waarde op de afstandsbediening", language:"Taal", mainScreen:"Hoofdscherm", none:"geen",
+    aAlarm:"Alarm: {0}", aAlarmSub:"Kijk op het display van de kachel en in het foutgeheugen.", aNoAnswer:"De kachel antwoordt niet op de seriële bus",
+    aError:"Actieve fout {0}", aLow:"Pelletniveau is laag", aLowSub:"Vul de pellettank bij.", aStale:"Gegevens van de kachel zijn {0} s oud", aStaleSub:"De controller kan de kachel momenteel niet uitlezen.",
+    aOffline:"De controller is niet bereikbaar", aOfflineSub:"Controleer de WiFi of wacht tot een herstart klaar is.",
+    flameN:"Vlamvermogen {0}", fanOff:"Ventilator uit", fanN:"Ventilator {0}", spN:"Gewenste temp. {0}", esOn:"Energy saving aan", esOff:"Energy saving uit", esUpd:"Energy saving aangepast",
+    cqN:"Verbrandingskwaliteit {0}", pqN:"Pelletkwaliteit {0}", beepOn:"Zoemer aan", beepOff:"Zoemer uit", synced:"Kachelklok gelijkgezet", off:"Uit",
+    tTime:"Tijd", stateLines:"Toestand kachel", histNothing:"Kies hierboven minstens één reeks.",
+    histNote:"Eén punt per 2 minuten, laatste 24 uur, opgeslagen op de controller (blijft bewaard na een herstart). Temperaturen in stappen van 0,5 °C. Lijnen voor de toestand staan op het exacte moment van elke wissel.",
+    evtTitle:"Toestandswissels, fouten en pelletreserve", pelSensor:"Reservesensor (0xA4)", pelCounter:"Reserveteller (0x89)",
+    pelReserve:"Pelletreserve", pelReserveVal:"Aan · sensor {0} · teller {1}", h_pelReserve:"PELLET RESERVE (installateursmenu, EEPROM 0xC6). Hoe de kachel de reserve bepaalt, wordt nog onderzocht: het alarm wordt verondersteld als de sensor (RAM 0xA4) 5 is en de teller (RAM 0x89) 1 of lager. Elke wijziging van beide wordt bijgehouden in de lijst met toestandswissels.", evtError:"Fout", evtErrOn:"{0} opgetreden", evtErrOff:"Fout opgelost", errSeen:"opgetreden op {0}", errSeenUnknown:"tijdstip onbekend (vóór de start van het logboek)", evtWhen:"Tijdstip", evtFrom:"Van", evtTo:"Naar", evtDur:"Duur", evtNone:"Nog geen toestandswissels geregistreerd.", evtNow:"nu",
+    syncBrowser:"Gelijkzetten met browsertijd", browserSet:"Kachelklok gezet op {0}", esStartOff:"OFF (geen herstart)", esNoRestart:"Geen automatische herstart",
+    wirelessLabel:"Wireless sensor (INSTELL WIRELESS)", on:"Aan", srcDerived:"Kamertemperatuur komt van",
+    manualRef:"Bron: handleidingen van de kachel (FWAR01, P220 M)",
+    cqFactory:"Fabrieksinstelling", cqG:"+G: niet beschreven in de handleidingen, betekenis onbekend",
+    cqPlus:"{0}: voor erg vuil glas, te veel pellets in de brandkorf, een lange luchttoevoer of een coaxiaal rookgaskanaal",
+    cqMin:"{0}: voor een te kleine vlam door te veel trek",
+    pqPlus:"{0}: voor een kleine vlam bij maximumvermogen, langere pellets of een lager verbruik dan vermeld",
+    pqMin:"{0}: voor veel as in de brandkorf of een hoger verbruik dan vermeld",
+    telnetHint:"Debugmenu op poort 23, schakelt meteen", keyRequired:"API-key verplicht", keyShow:"Toon", keyHide:"Verberg", keyCopy:"Kopieer", keyRotate:"Nieuwe key",
+    keyOn:"Elke API-aanroep heeft de header X-API-Key nodig", keyOff:"Optioneel: de API is open op je netwerk", keyCopied:"API-key gekopieerd", keyNew:"Nieuwe API-key aangemaakt",
+    keyConfirmRotate:"Een nieuwe API-key aanmaken? Andere clients (scripts, Home Assistant, Prometheus) hebben dan de nieuwe key nodig.",
+    keyConfirmOn:"De API-key verplicht maken? Deze browser bewaart de key. Andere clients (scripts, Home Assistant, Prometheus, de iOS-app via WiFi) hebben dan de header X-API-Key nodig.",
+    keyConfirmOff:"De API-key weer optioneel maken? De API is dan open voor iedereen op je netwerk.",
+    keyModalTitle:"API-key vereist", keyModalText:"Deze controller vraagt een API-key. Geef ze één keer in; deze browser onthoudt ze.", save2:"Opslaan", keyNeeded:"API-key vereist",
+    telnetOn:"Telnet aan", telnetOff:"Telnet uit",
+    h_telnet:"Interactief debugmenu via telnet (poort 23): live waarden, instellingen, rechtstreekse registertoegang. Telnet heeft geen wachtwoord en geen versleuteling; zet het uit als je het niet gebruikt. De wijziging geldt meteen, zonder herstart.",
+    h_apiKey:"Beveiligt de HTTP-API met een key. De key wordt bij de eerste start willekeurig aangemaakt en blijft op de controller bewaard. Is ze verplicht, dan heeft elke aanroep de header X-API-Key: <key> nodig (of Authorization: Bearer <key>, bv. voor Prometheus). Zonder key bereikbaar: de toestelpagina, deze web-app, de API-documentatie en /api/auth. Gewone HTTP is niet versleuteld: de key beschermt tegen andere toestellen en webpagina's op je netwerk, niet tegen iemand die het netwerkverkeer afluistert. Het telnetmenu en Bluetooth worden niet door de key beschermd.",
+    flameSet:"Vlamvermogen (ingesteld)", flameActual:"Vlamvermogen (werkelijk)",
+    fanPower:"Ventilatorvermogen", h_fanPower:"Ruwe vermogenswaarde die de kachel naar de kamerventilator stuurt (RAM 0x0A): 0 = uit, 21 / 23 / 25 bij stand 1 / 2 / 3, de waarde hangt af van de stand én het werkelijke vlamvermogen: vlam 1 → 9 / 14 / 19, vlam 2 → 21 / 23 / 25 bij stand 1 / 2 / 3, vlam 3 → 27 bij stand 1. Gemeten op deze kachel; de eenheid is niet gedocumenteerd.",
+    fanSet:"Ventilator (ingesteld)", fanActual:"Ventilator (werkelijk)", fanRunsAt:"Draait op {0}", fanRunsLow:"Draait op laag vermogen ({0})", fanRunsPower:"Draait op {0} (vermogen {1})", fanWaitHeat:"Wacht tot de kachel warm genoeg is", fanStopped:"Draait niet", flameMod:"Moduleert: brandt nu op {0}", flameNow:"Brandt nu op {0}", flameOut:"Brandt momenteel niet",
+    bt:"Bluetooth", btOn:"Aan – deelt de radio met WiFi", btOff:"Uit – WiFi heeft de radio voor zich alleen", btRestart:"Herstart nodig om de wijziging toe te passen",
+    btConfirmOff:"Bluetooth uitschakelen? De controller herstart en de iOS-app kan daarna enkel via WiFi verbinden.", btConfirmOn:"Bluetooth inschakelen? De controller herstart.",
+    h_bt:"Bluetooth uitschakelen slaat BLE volledig over bij het opstarten van de controller: geen Bluetooth-advertising of -verbindingen, het Bluetooth-geheugen wordt vrijgegeven en WiFi moet de radio niet meer delen (geen energiebesparende modus nodig). Dat geeft meestal een snellere en stabielere WiFi-verbinding. De iOS-app werkt dan enkel via WiFi. De wijziging wordt toegepast met een herstart van de controller; de kachel blijft gewoon werken.",
+    serviceOf:"{0} / 2000 u", tpHour:"Uur", tpMin:"Minuten", tpOff:"OFF", tpDone:"Klaar",
+    h_service:"Na 2000 werkingsuren toont de afstandsbediening SERVICE wanneer de kachel uit staat: laat de kachel onderhouden door een erkend servicecentrum. De kachel kan wel verder gebruikt worden.\nHet geprogrammeerde onderhoud moet ook minstens één keer per jaar gebeuren, en vóór het opstarten na een lange periode van stilstand.\nZelf: glas en brandkorf dagelijks, aslade om de 2 dagen, verbrandingskamer en batterijen van de afstandsbediening jaarlijks.\nDealer (jaarlijks): rookgaskamer, rookgasafvoer en -systeem, luchttoevoer, ventilatiesysteem en ventilatoren, elektrische onderdelen, afdichtingen.\nDe getoonde waarde is de intervalteller van de kachel; dat het om de teller voor de SERVICE-melding gaat, is een aanname.",
+    h_setPoint:"Bij het bereiken van deze temperatuur schakelt de kachel naar het minimumvermogen (7 – 30 °C). De temperatuur wordt gemeten door de sensor die in het menu MULTICOMFORT van de afstandsbediening gekozen is: afstandsbediening, kachel of wireless sensor.",
+    h_flame:"Brandkracht 1 – 4. Bij het bereiken van de gewenste temperatuur moduleert de kachel naar het minimumvermogen, maar het ingestelde niveau blijft op het display staan. Het werkelijke vermogen wordt uit RAM 0x34 gelezen (getoond onder de knoppen en in de geschiedenis).",
+    h_fan:"Snelheid van de warme-luchtventilator (Multifuoco). 0 = NATURAL MODE: ventilator uit, stiller. Om veiligheidsredenen kan de ventilator bij een hoog vermogen niet uit: verlaag eerst het vermogen naar 3 of 2. Verhoog je daarna het vermogen, dan start de ventilator automatisch. Het uitschakelen kan wat later gebeuren, wanneer de omstandigheden het toelaten.",
+    h_es:"Schakelt de kachel automatisch uit en weer in op basis van de kamertemperatuur.\n• Gewenste temperatuur bereikt: de kachel gaat naar vermogen 1.\n• Stijgt de kamer verder tot gewenste temp. + STOP: de kachel dooft en gaat in stand-by.\n• Daalt de kamer onder gewenste temp. + START: de kachel start opnieuw op het vorige vermogen.\nNiet samen met Multicomfort Plus of externe thermostaat STOP. Is de pauze tussen uitschakelen en herstarten korter dan 90 minuten, dan raadt de handleiding aan energy saving uit te zetten en de kachel te laten moduleren. Na handmatig uitzetten herstart de kachel niet automatisch.",
+    h_esStart:"Herstart wanneer de kamer onder gewenste temp. min deze waarde zakt (−1 tot −3 °C). OFF: na het automatisch doven blijft de kachel uit.",
+    h_esStop:"Doven wanneer de kamer gewenste temp. plus deze waarde bereikt (+1 tot +3 °C). Energy saving uitzetten zet STOP op OFF: de kachel moduleert dan alleen naar vermogen 1.",
+    h_cq:"Correctie van de verbrandingslucht. 0 = fabrieksinstelling.\n• Hoger (+): erg vuil glas, te veel pellets in de brandkorf, lange luchttoevoer, coaxiaal rookgaskanaal.\n• Lager (−): te kleine vlam door te veel trek.\nNiet tegelijk met de pelletkwaliteit wijzigen, één stap per keer, en eventueel een dag wachten om het effect te beoordelen. Welke waarden kunnen, hangt af van het toestel.\n+G staat in geen van beide handleidingen. Het komt overeen met de ruwe waarde 76 (0x4C), ver buiten het normale bereik (2 – 8 voor −3 … +3). De betekenis is onbekend; kies deze waarde daarom beter niet.",
+    h_pq:"Correctie van de pellettoevoer. 0 = fabrieksinstelling.\n• Hoger (+): kleine vlam bij maximumvermogen, langere pellets, lager verbruik dan vermeld.\n• Lager (−): veel as in de brandkorf, hoger verbruik dan vermeld.\nNiet tegelijk met de verbrandingskwaliteit wijzigen, één stap per keer. Welke waarden kunnen, hangt af van het toestel.",
+    h_beep:"Geluidssignaal van de kachel bij meldingen. Ook als de zoemer uit staat, klinkt hij bij veiligheidswaarschuwingen.",
+    h_timers:"Max. 6 programma's met elk één start- en stoptijd (stappen van 10 minuten) en de dagen (1 = maandag). Een lege tijd betekent OFF: START OFF = geen ontsteking, STOP OFF = niet uitschakelen.\n• Gebruik bij voorkeur één programma tegelijk; laat bij gecombineerde programma's minstens 2 uur tussen stoppen en opnieuw starten.\n• Bij overlappende programma's start de kachel op het eerste starttijdstip en stopt ze op het eerste stoptijdstip.\n• Met energy saving regelt de chrono het starten en stoppen op de tijdstippen, energy saving de werking daartussen.\n• De klok van de kachel (ook de dag van de week) moet juist staan.",
+    h_clock:"De chrono-timers gebruiken de klok van de kachel, ook de dag van de week. De kachel kent geen zomer-/wintertijd: zet de klok na de overgang opnieuw gelijk.",
+    h_errors:"De laatste 5 veiligheidswaarschuwingen die de kachel bewaart (UURTELLER GEHEUGEN › MEM-AL). Verwijderen wist alleen dit geheugen. Start de kachel pas opnieuw als de oorzaak gevonden en opgelost is.",
+    h_wireless:"INSTELL WIRELESS schakelt de optionele externe wireless temperatuursensor in of uit. Op welke sensor de kachel regelt, kies je in MULTICOMFORT (afstandsbediening, kachel of wireless). Heeft de kachel langer dan 4 minuten geen contact met de afstandsbediening of sensor, dan gebruikt ze haar eigen sensor.",
+    h_roomSrc:"Afgeleid uit de metingen: de kamertemperatuur (RAM 0x01) is gelijk aan de getoonde sensor. De instelling MULTICOMFORT zelf kan nog niet uitgelezen worden.",
+    eh_32:"Een van deze beveiligingen is ingeschakeld: drukregelaar, sensor geopende deur of sensor deksel pellettank (deksel langer dan ongeveer 60 s open). De schroef stopt en de kachel schakelt uit.\nZelf te controleren:\n• Is de brandkorf verstopt met pellets of verbrandingsresten? Maak hem schoon.\n• Zijn de deur van de vuurhaard en de aslade goed gesloten?\n• Is het deksel van de pellettank dicht? Vul eventueel bij en sluit het deksel.\nDealer: rookgasafvoer verstopt of te weinig trek, te lange rookgasafvoer, versleten afdichtingen van deur of rookgaskanaal, aansluitstuk of siliconenbuis van de drukmeter verstopt of kapot, rookgasafzuiger, schroefmotor, sensor op het reservoir of elektronische kaart defect. Ook harde wind of slecht weer kan de drukregelaar laten aanspreken.",
+    eh_64:"Storing aan de drukschakelaar bij de ontsteking; de kachel schakelt uit.\nDealer: drukschakelaar defect, schoorsteen trekt te hard of slecht weer, schroefmotor defect.",
+    eh_16:"De temperatuur in de kachel overschreed de limiet en de veiligheidsthermostaat sprak aan; de schroef stopt en de kachel schakelt uit.\nZelf te controleren: gebruik geschikte pellets (A1, 6 mm, 10 – 30 mm lang).\nDealer: rookgasafvoer verstopt of te weinig trek, problemen met ventilatie of warmteafvoer (afstanden, verluchting, parameters, te lange afvoer), thermostaat of elektronische kaart defect. Een thermostaat met handmatige reset moet gereset worden.",
+    eh_2:"De rookgastemperatuur overschreed de veiligheidslimiet; de schroef stopt en de kachel schakelt uit.\nZelf te controleren: gebruik geschikte pellets.\nDealer: rookgasafvoer verstopt of te weinig trek, problemen met ventilatie of warmteafvoer, rookgassensor defect of slecht aangesloten, verkeerde parameters, elektronische kaart defect.",
+    eh_128:"Storing aan de schroef tijdens de werking: de pellets worden continu gelost; de kachel schakelt uit.\nDealer: schroef of elektronische kaart defect, verkeerde parameters.",
+    eh_8:"De rookgastemperatuur is onder het minimum voor de werking gedaald; de kachel schakelt uit.\nZelf te controleren:\n• Is de pellettank leeg of loopt hij onregelmatig leeg? Vul bij.\n• Worden geschikte pellets gebruikt?\n• Is de brandkorf schoon en niet verstopt?\nDealer: elektronische kaart defect.",
+    eh_1:"De rookgassensor werkt niet goed.\nDealer: sensor defect, losgekoppeld uit de houder of verkeerd aangesloten, of elektronische kaart defect.",
+    eh_4:"Bij het ontsteken werd de ontstekingstemperatuur niet binnen de voorziene tijd bereikt.\nZelf te controleren:\n• Pellettank leeg of loopt hij onregelmatig leeg: vul bij.\n• Ongeschikte pellets (type, samenstelling, afmetingen): gebruik A1-pellets, 6 mm, 10 – 30 mm lang, ≤ 6 % vocht.\n• Schroef niet volledig gevuld, bv. na een lege tank of bij de eerste ingebruikname: voer SCHROEF VULLEN uit (alleen als de kachel uit en afgekoeld is).\n• Brandkorf niet schoon of verstopt: maak de brandkorf en de gaatjes schoon en duw hem terug richting het ontstekingsgat.\nDealer: ontsteker defect of niet aangesloten, elektronische kaart defect.\nOnregelmatig mislukte ontstekingen kunnen ook komen door een te lage netspanning.",
+    eh_129:"De rookgasafzuiger werkt niet goed; de kachel schakelt uit.\nDealer: encoder defect of niet aangesloten, elektronische kaart of zekeringen defect.",
+    eh_132:"Een externe beveiliging op het contact N.PEL / PELLET is ingeschakeld; de kachel schakelt uit.\nTussenkomst van de dealer is nodig.",
+  }
+};
+const STATE_NAME = {
+  en: { "-1":"No connection", 0:"Off", 1:"Starting", 2:"Pellet loading", 3:"Ignition", 4:"Working", 5:"Brazier cleaning", 6:"Final cleaning", 7:"Standby", 8:"Alarm", 9:"Ignition failure", 10:"Alarm" },
+  nl: { "-1":"Geen verbinding", 0:"Uit", 1:"Start", 2:"Pellets laden", 3:"Ontsteking", 4:"Kachel brandt", 5:"Brander reinigen", 6:"Eindreiniging", 7:"Stand-by", 8:"Alarm", 9:"Ontsteking mislukt", 10:"Alarm" },
+};
+const STATE_HINT = {
+  en: { "-1":"No answer from the stove", 0:"Stove is off", 1:"Starting up", 2:"Loading pellets", 3:"Igniting", 4:"Heating", 5:"Cleaning the brazier", 6:"Shutting down", 7:"Standby (energy saving)", 8:"Alarm – check the stove", 9:"Ignition failed", 10:"Alarm – check the stove" },
+  nl: { "-1":"Geen antwoord van de kachel", 0:"Kachel staat uit", 1:"Opstarten", 2:"Pellets laden", 3:"Ontsteken", 4:"Verwarmt", 5:"Brander wordt gereinigd", 6:"Afsluiten", 7:"Stand-by (energy saving)", 8:"Alarm – controleer de kachel", 9:"Ontsteking mislukt", 10:"Alarm – controleer de kachel" },
+};
+// Error descriptions by id (firmware texts are English only)
+const ERR_NL = { 1:"Fout rookgassensor", 2:"Rookgastemperatuur te hoog", 4:"Ontstekingstemperatuur niet bereikt binnen de tijd", 8:"Rookgastemperatuur te laag",
+  16:"Temperatuur in de kachel te hoog", 32:"Laadklep te lang open of verkeerde luchtdruk in de kachel", 64:"Fout druksensor tijdens ontsteking",
+  128:"Fout schroef – te veel pellets gedoseerd", 129:"Fout rookgasventilator", 130:"Onbekende fout – niet beschreven in de handleiding",
+  132:"Extern contact N.PEL / pellets actief", 136:"Onbekende fout – niet beschreven in de handleiding", 255:"Display toont stroomfout" };
+const DAY_SHORT = { en:["Mo","Tu","We","Th","Fr","Sa","Su"], nl:["Ma","Di","Wo","Do","Vr","Za","Zo"] };
+const DAY_LONG  = { en:["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"], nl:["maandag","dinsdag","woensdag","donderdag","vrijdag","zaterdag","zondag"] };
+
+// Interface language follows the language set on the remote control:
+// NLD -> Dutch, anything else -> English. /app?lang=nl|en overrides it.
+const LANG_OVERRIDE = (q => q === "nl" || q === "en" ? q : null)(new URLSearchParams(location.search).get("lang"));
+let lang = LANG_OVERRIDE || (() => { try { return localStorage.getItem("remoteLang") === "nl" ? "nl" : "en"; } catch (_) { return "en"; } })();
+function langFromRemote(code) { return code === "NLD" ? "nl" : "en"; }
+function setLang(l) {
+  if (LANG_OVERRIDE || l === lang) return;
+  lang = l; try { localStorage.setItem("remoteLang", l); } catch (_) {}   // avoids a flash of the other language on the next load
+  applyStatic(); applyExpert(); if (state) render(state); renderTimers(); renderNext(); renderHistory(); renderEvents(); renderRemote(); renderAlerts(); renderHyp(); renderParams();
+}
+function t(key, ...a) { let s = (I18N[lang][key] ?? I18N.en[key] ?? key); a.forEach((v, i) => s = s.replace("{" + i + "}", v)); return s; }
+function errDesc(e) { return lang === "nl" && ERR_NL[e.id] ? ERR_NL[e.id] : e.desc; }
+
+let state = null, remote = null, timersData = null, hist = null, events = null, histHours = 24, offline = false;
+let busy = 0, spPending = null, spTimer = null;
+let expert = (() => { try { return localStorage.getItem("expert") === "1"; } catch (_) { return false; } })();
+let debug = (() => { try { return localStorage.getItem("debug") === "1"; } catch (_) { return false; } })();
+
+// ---------- helpers ----------
+function toast(msg, isErr) {
+  const el = $("toast"); el.textContent = msg; el.className = "show" + (isErr ? " err" : "");
+  clearTimeout(el._h); el._h = setTimeout(() => el.className = "", isErr ? 5000 : 2200);
+}
+// ---------- API key ----------
+function storedKey() { try { return localStorage.getItem("apiKey") || ""; } catch (_) { return ""; } }
+function storeKey(k) { try { if (k) localStorage.setItem("apiKey", k); else localStorage.removeItem("apiKey"); } catch (_) {} }
+function showKeyDialog() { const m = $("keyModal"); if (m.classList.contains("show")) return; m.classList.add("show"); $("keyInput").value = ""; setTimeout(() => $("keyInput").focus(), 50); }
+$("keySave").onclick = () => {
+  const k = $("keyInput").value.trim(); if (!k) return;
+  storeKey(k); $("keyModal").classList.remove("show");
+  poll(); pollRemote(); loadTimers(); loadHistory(); loadBt(); loadSecurity();
+};
+$("keyInput").addEventListener("keydown", e => { if (e.key === "Enter") $("keySave").click(); });
+
+async function api(method, path, params, body) {
+  const url = new URL(path, location.origin);
+  if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const opts = { method, signal: ctrl.signal, headers: {} };
+    if (body !== undefined) { opts.body = JSON.stringify(body); opts.headers["Content-Type"] = "application/json"; }
+    const key = storedKey(); if (key) opts.headers["X-API-Key"] = key;
+    const res = await fetch(url, opts); const text = await res.text();
+    if (res.status === 401) { showKeyDialog(); throw new Error(t("keyNeeded")); }
+    let data = null; try { data = text ? JSON.parse(text) : null; } catch (_) { data = { result: text }; }
+    if (!res.ok) throw new Error((data && (data.error || data.result)) || ("HTTP " + res.status));
+    return { status: res.status, data };
+  } finally { clearTimeout(to); }
+}
+async function write(label, method, path, params, body) {
+  busy++;
+  try {
+    const r = await api(method, path, params, body);
+    toast(r.data && r.data.result && r.data.result !== "success" ? r.data.result : label);
+    return r.data;
+  } catch (e) { toast(t("failed", label, e.message), true); throw e; }
+  finally { busy--; setTimeout(poll, 800); }
+}
+function fmtTemp(v, digits) {
+  if (v === undefined || v === null || isNaN(v)) return "–";
+  return Number(v).toFixed(digits === undefined ? (Number.isInteger(v) ? 0 : 1) : digits) + "°";
+}
+function fmtDelta(s) {
+  if (s === undefined) return "–";
+  const a = Math.abs(s);
+  return (s < 0 ? "−" : "") + (a < 60 ? a + " s" : a < 3600 ? Math.round(a / 60) + " min" : (a / 3600).toFixed(1) + " h");
+}
+// "2026-11-16 12:53:26" -> Date (stove local time)
+function parseStove(str) { const m = /^(\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d):(\d\d)$/.exec(str || ""); return m ? new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]) : null; }
+const pad = n => String(n).padStart(2, "0");
+function fmtDate(d) { return pad(d.getDate()) + "/" + pad(d.getMonth() + 1) + "/" + d.getFullYear(); }
+function fmtHM(d) { return pad(d.getHours()) + ":" + pad(d.getMinutes()); }
+function fmtStoveTime(str) { const d = parseStove(str); return d ? fmtDate(d) + " " + fmtHM(d) + ":" + pad(d.getSeconds()) : (str || "–"); }
+function setConn(ok, text, warn) { $("dot").className = "dot " + (!ok ? "err" : warn ? "warn" : "ok"); $("conn").textContent = text; }
+function fillDl(el, rows) {
+  el.innerHTML = "";
+  for (const [k, v, x] of rows) {   // x: true / "x" = expert only, "d" = debug only
+    const dt = document.createElement("dt"); if (k instanceof Node) dt.appendChild(k); else dt.textContent = k;
+    const dd = document.createElement("dd"); if (v instanceof Node) dd.appendChild(v); else dd.textContent = v;
+    if (x) { const c = x === "d" ? "d" : "x"; dt.className = c; dd.className = c; }
+    el.append(dt, dd);
+  }
+}
+function pill(text, cls) { const s = document.createElement("span"); s.className = "pill " + (cls || ""); s.textContent = text; return s; }
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+
+// ---------- help popovers (texts from the stove manual) ----------
+const pop = $("pop");
+let popOwner = null;
+function helpBtn(key) {
+  const b = el("button", "help", "i");
+  b.type = "button"; b.setAttribute("aria-label", "?"); b.setAttribute("aria-expanded", "false");
+  b.onclick = ev => {
+    ev.stopPropagation();
+    if (popOwner === b) { hidePop(); return; }
+    hidePop();
+    pop.textContent = t(key); if (key !== "h_hyp") pop.appendChild(el("span", "src", t("manualRef")));   // the hypotheses are not from the manual
+    pop.style.display = "block";
+    const r = b.getBoundingClientRect(), w = Math.min(340, window.innerWidth - 24);
+    pop.style.maxWidth = w + "px";
+    const left = Math.min(Math.max(12, r.left + window.scrollX - 20), window.scrollX + window.innerWidth - pop.offsetWidth - 12);
+    pop.style.left = left + "px"; pop.style.top = (r.bottom + window.scrollY + 8) + "px";
+    popOwner = b; b.setAttribute("aria-expanded", "true");
+  };
+  return b;
+}
+function hidePop() { pop.style.display = "none"; if (popOwner) popOwner.setAttribute("aria-expanded", "false"); popOwner = null; }
+document.addEventListener("click", e => { if (!pop.contains(e.target)) hidePop(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") hidePop(); });
+function withHelp(text, key) { const s = el("span", "", text); s.appendChild(helpBtn(key)); return s; }
+
+// ---------- language ----------
+function applyStatic() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i]").forEach(e => e.textContent = t(e.dataset.i));
+  document.querySelectorAll("[data-help]").forEach(e => { e.textContent = ""; e.appendChild(helpBtn("h_" + e.dataset.help)); });
+  buildSeg($("fanSeg"), [0, 1, 2, 3], v => v === 0 ? t("off") : v, pickFan);
+  if (state) markSeg($("fanSeg"), state.RoomFanSpeed);
+}
+
+
+// ---------- segmented controls ----------
+function buildSeg(host, values, labelFn, onPick) {
+  host.innerHTML = "";
+  for (const v of values) { const b = el("button", "", labelFn(v)); b.dataset.v = v; b.onclick = () => onPick(v, b); host.appendChild(b); }
+}
+function markSeg(host, value) { for (const b of host.children) b.classList.toggle("active", String(b.dataset.v) === String(value)); }
+buildSeg($("flameSeg"), [1, 2, 3, 4], v => v, async v => { markSeg($("flameSeg"), v); try { await write(t("flameN", v), "POST", "/api/flame", { power: v }); } catch (_) {} });
+async function pickFan(v) { markSeg($("fanSeg"), v); try { await write(v === 0 ? t("fanOff") : t("fanN", v), "POST", "/api/fan", { speed: v }); } catch (_) {} }
+for (const v of CQ) $("cq").add(new Option(v === "+G" || v.startsWith("-") || v === "0" ? v : "+" + v, v));
+for (const v of PQ) $("pq").add(new Option(v.startsWith("-") || v === "0" ? v : "+" + v, v));
+for (const b of $("rangeSeg").children) b.onclick = () => { histHours = Number(b.dataset.h); markSeg2(); loadHistory(); };
+function markSeg2() { for (const b of $("rangeSeg").children) b.classList.toggle("active", Number(b.dataset.h) === histHours); }
+
+// ---------- set point (debounced) ----------
+document.querySelectorAll(".stepper button").forEach(b => b.onclick = () => {
+  const cur = spPending !== null ? spPending : (state ? state.temperatures.setPoint : 20);
+  spPending = Math.min(30, Math.max(7, cur + Number(b.dataset.step)));
+  $("spVal").textContent = spPending + "°";
+  clearTimeout(spTimer);
+  spTimer = setTimeout(async () => { const v = spPending; try { await write(t("spN", v + "°"), "POST", "/api/setpoint", { value: v }); } catch (_) {} spPending = null; }, 900);
+});
+
+// ---------- energy saving ----------
+// The stove has no separate on/off flag: "off" means both offsets are 0.
+const ES_DEFAULT = { start: -1, stop: 1 };
+let esLast = (() => { try { return JSON.parse(localStorage.getItem("esLast")) || ES_DEFAULT; } catch (_) { return ES_DEFAULT; } })();
+function rememberEs(start, stop) {
+  if (Number(stop) === 0) return;                      // STOP OFF = energy saving off
+  esLast = { start: Number(start), stop: Number(stop) };
+  try { localStorage.setItem("esLast", JSON.stringify(esLast)); } catch (_) {}
+}
+function showEsDetails(on) { $("esDetails").style.display = on ? "" : "none"; }
+$("esEnabled").onchange = async e => {
+  const on = e.target.checked; showEsDetails(on);
+  try { await write(on ? t("esOn") : t("esOff"), "POST", "/api/energysaving", on ? { start: esLast.start, stop: esLast.stop } : { start: 0, stop: 0 }); }
+  catch (_) { e.target.checked = !on; showEsDetails(!on); }
+};
+function esChanged() {
+  const start = $("esStart").value, stop = $("esStop").value;
+  rememberEs(start, stop);
+  write(t("esUpd"), "POST", "/api/energysaving", { start, stop }).catch(() => {});
+}
+$("esStart").onchange = esChanged; $("esStop").onchange = esChanged;
+
+// ---------- other controls ----------
+// Explain the selected quality value (manual: COMBUSTION / PELLET QUALITY)
+function qualityHint(kind, v) {
+  if (v === undefined || v === null || v === "") return "\u00a0";
+  if (v === "+G") return t("cqG");
+  const n = Number(v), label = n > 0 ? "+" + n : String(n).replace("-", "−");
+  if (n === 0) return "0: " + t("cqFactory");
+  return t(kind + (n > 0 ? "Plus" : "Min"), label);
+}
+function qualityHints() { $("cqHint").textContent = qualityHint("cq", $("cq").value); $("pqHint").textContent = qualityHint("pq", $("pq").value); }
+$("cq").addEventListener("input", qualityHints); $("pq").addEventListener("input", qualityHints);
+$("cq").onchange   = e => write(t("cqN", e.target.value), "POST", "/api/burn", { combustionQuality: e.target.value }).catch(() => {});
+$("pq").onchange   = e => write(t("pqN", e.target.value), "POST", "/api/burn", { pelletQuality: e.target.value }).catch(() => {});
+$("beep").onchange = e => write(e.target.checked ? t("beepOn") : t("beepOff"), "POST", "/api/beep", { enabled: e.target.checked }).catch(() => {});
+$("powerBtn").onclick = async () => {
+  if (!state) return;
+  const on = !state.stoveState.poweredOn;
+  if (!on && !confirm(t("confirmOff"))) return;
+  $("powerBtn").disabled = true;
+  try { await write(on ? t("powerOnSent") : t("powerOffSent"), "POST", "/api/power", { state: on ? "on" : "off" }); } catch (_) {}
+  $("powerBtn").disabled = false;
+};
+$("syncTime").onclick = async () => { try { const d = await write(t("synced"), "PATCH", "/api/time"); if (d && d.time) renderTime(d.time); } catch (_) {} };
+function browserDateTime() { const d = new Date(); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + fmtHM(d) + ":" + pad(d.getSeconds()); }
+$("syncBrowser").onclick = async () => {
+  const dt = browserDateTime(), d0 = new Date();
+  try { const d = await write(t("browserSet", fmtDate(d0) + " " + fmtHM(d0)), "PATCH", "/api/time", { datetime: dt }); if (d && d.time) renderTime(d.time); } catch (_) {}
+};
+// Stove and NTP time are read on every refresh; in between they tick on locally from
+// the moment they were received, so they run along with the browser clock.
+const tickClock = { stove: null, ntp: null, at: 0 };
+const fmtFull = d => fmtDate(d) + " " + fmtHM(d) + ":" + pad(d.getSeconds());
+function renderClocks() {
+  const d = new Date(); $("timeBrowser").textContent = fmtFull(d);
+  const dt = performance.now() - tickClock.at;
+  for (const [k, id] of [["stove", "timeStove"], ["ntp", "timeNtp"]])
+    if (tickClock[k]) $(id).textContent = fmtFull(new Date(tickClock[k].getTime() + dt));
+}
+setInterval(renderClocks, 1000);
+$("clearErrors").onclick = async () => {
+  if (!confirm(t("confirmClearErr"))) return;
+  const p = {}; for (let i = 1; i <= 5; i++) p["MemoryPos_" + i] = 0;
+  try { await write(t("errCleared"), "POST", "/api/errors", p); } catch (_) {}
+};
+// Bluetooth: stored setting, applied by the controller at the next boot
+let bt = null;
+function renderBt() {
+  if (!bt) return;
+  $("btToggle").checked = !!bt.enabled;
+  $("btHint").textContent = bt.restartRequired ? t("btRestart") : bt.active ? t("btOn") : t("btOff");
+}
+async function loadBt() { try { bt = (await api("GET", "/api/bluetooth")).data; renderBt(); } catch (_) {} }
+// Telnet (immediate) and API key settings
+let telnetState = null, auth = null, keyVisible = false;
+function renderSecurity() {
+  if (telnetState) $("telnetToggle").checked = !!telnetState.enabled;
+  if (!auth) return;
+  $("keyReqToggle").checked = !!auth.required;
+  $("keyReqHint").textContent = auth.required ? t("keyOn") : t("keyOff");
+  const k = auth.key || storedKey();
+  $("keyVal").textContent = k ? (keyVisible ? k : k.slice(0, 4) + "••••••••••••••••••••••" + k.slice(-4)) : "–";
+  $("keyShow").textContent = keyVisible ? t("keyHide") : t("keyShow");
+  [$("keyShow"), $("keyCopy"), $("keyRotate")].forEach(b => b.disabled = !k);
+}
+async function loadSecurity() {
+  try { auth = (await api("GET", "/api/auth")).data; if (auth.key && auth.required) storeKey(auth.key); } catch (_) {}
+  try { telnetState = (await api("GET", "/api/telnet")).data; } catch (_) {}
+  renderSecurity();
+}
+$("telnetToggle").onchange = async e => {
+  const on = e.target.checked;
+  try { telnetState = await write(on ? t("telnetOn") : t("telnetOff"), "POST", "/api/telnet", { enabled: on }); } catch (_) { e.target.checked = !on; }
+  renderSecurity();
+};
+$("keyReqToggle").onchange = async e => {
+  const on = e.target.checked;
+  if (!confirm(on ? t("keyConfirmOn") : t("keyConfirmOff"))) { e.target.checked = !on; return; }
+  if (on && auth && auth.key) storeKey(auth.key);              // keep access before enforcing
+  try { auth = await write(t(on ? "keyOn" : "keyOff"), "POST", "/api/auth", { required: on }); } catch (_) { e.target.checked = !on; }
+  renderSecurity();
+};
+$("keyShow").onclick = () => { keyVisible = !keyVisible; renderSecurity(); };
+$("keyCopy").onclick = async () => { const k = (auth && auth.key) || storedKey(); try { await navigator.clipboard.writeText(k); toast(t("keyCopied")); } catch (_) { keyVisible = true; renderSecurity(); } };
+$("keyRotate").onclick = async () => {
+  if (!confirm(t("keyConfirmRotate"))) return;
+  try { const d = await write(t("keyNew"), "POST", "/api/auth", { rotate: true }); auth = d; if (d.key) storeKey(d.key); keyVisible = true; } catch (_) {}
+  renderSecurity();
+};
+
+$("btToggle").onchange = async e => {
+  const on = e.target.checked;
+  if (!confirm(on ? t("btConfirmOn") : t("btConfirmOff"))) { e.target.checked = !on; return; }
+  try { bt = await write(t("restarting"), "POST", "/api/bluetooth", { enabled: on, restart: true }); renderBt(); }
+  catch (_) { e.target.checked = !on; }
+};
+// ---------- firmware update over HTTP (POST /api/update, streamed) ----------
+$("fwPick").onclick = () => $("fwFile").click();
+$("fwFile").onchange = async () => {
+  const file = $("fwFile").files[0]; $("fwFile").value = "";
+  if (!file) return;
+  if (!/\.bin$/i.test(file.name) || file.size < 100000) { toast(t("fwBadFile")); return; }
+  if (!confirm(t("fwConfirm", file.name, (file.size / 1048576).toFixed(2)))) return;
+  // the update always needs the key; when it is not required, /api/auth hands it out
+  let key = storedKey();
+  if (!key) { try { key = (await api("GET", "/api/auth")).data.key || ""; } catch (_) {} }
+  const hint = $("fwHint"), prog = $("fwProg"), bar = $("fwBar"), btn = $("fwPick");
+  btn.disabled = true; prog.hidden = false; bar.style.width = "0";
+  busy++;
+  const fd = new FormData(); fd.append("firmware", file, file.name);
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", "/api/update");
+  if (key) xhr.setRequestHeader("X-API-Key", key);
+  const t0 = Date.now();
+  xhr.upload.onprogress = e => {
+    if (!e.lengthComputable) return;
+    const pct = Math.round(e.loaded / e.total * 100), sec = (Date.now() - t0) / 1000;
+    bar.style.width = pct + "%"; hint.textContent = t("fwProgress", pct, sec > 0 ? Math.round(e.loaded / 1024 / sec) : 0);
+  };
+  const done = (ok, msg) => {
+    busy--; btn.disabled = false;
+    if (!ok) { prog.hidden = true; hint.textContent = msg; toast(msg); return; }
+    hint.textContent = t("fwRestarting"); bar.style.width = "100%";
+    // wait until the controller answers again, then reload the page (new web app)
+    const waitBack = async (n) => {
+      try { const r = await fetch("/api/state", { cache: "no-store" }); if (r.ok || r.status === 401) { location.reload(); return; } } catch (_) {}
+      if (n > 0) setTimeout(() => waitBack(n - 1), 2000); else hint.textContent = t("fwNoAnswer");
+    };
+    setTimeout(() => waitBack(45), 4000);
+  };
+  xhr.onload = () => {
+    let r = null; try { r = JSON.parse(xhr.responseText); } catch (_) {}
+    if (xhr.status === 200) done(true);
+    else if (xhr.status === 401) { showKeyDialog(); done(false, t("keyNeeded")); }
+    else done(false, t("fwFailed", (r && (r.result || r.error)) || "HTTP " + xhr.status));
+  };
+  xhr.onerror = () => done(false, t("fwFailed", t("offline")));
+  xhr.send(fd);
+};
+
+$("restart").onclick = async () => { if (!confirm(t("confirmRestart"))) return; try { await fetch("/restart", { headers: storedKey() ? { "X-API-Key": storedKey() } : {} }); } catch (_) {} toast(t("restarting")); };
+
+// ---------- alerts ----------
+function renderAlerts() {
+  const host = $("alerts"); host.innerHTML = "";
+  const add = (level, title, sub) => {
+    const a = el("div", "alert " + level);
+    a.append(el("span", "ic", level === "critical" ? "⛔" : "⚠"));
+    const tx = el("div", "", title); if (sub) tx.appendChild(el("small", "", sub));
+    a.appendChild(tx); host.appendChild(a);
+  };
+  if (offline) { add("critical", t("aOffline"), t("aOfflineSub")); return; }
+  if (!state) return;
+  const code = state.stoveState ? state.stoveState.stoveState : null;
+  if (code === -1) add("critical", t("aNoAnswer"));
+  else if ([8, 9, 10].includes(code)) add("critical", t("aAlarm", STATE_NAME[lang][code]), t("aAlarmSub"));
+  if (state.currentError) add("critical", t("aError", state.currentError.error),
+    errDesc(state.currentError) + (I18N.en["eh_" + state.currentError.id] ? " — " + t("eh_" + state.currentError.id) : ""));
+  if (state.lowPalletAlarm) add("warning", t("aLow"), t("aLowSub"));
+  const age = state.dataAge ? state.dataAge.fastSeconds : null;
+  if (age !== null && age !== undefined && age > 30) add("warning", t("aStale", age), t("aStaleSub"));
+}
+
+// ---------- main render ----------
+function brazierText(b) {
+  if (!b) return "–";                       // firmware without brazierCleaning
+  if (b.active) return t("brazierNow");
+  if (b.minutesLeft === null || b.minutesLeft === undefined) return "–";   // only counts while burning
+  return b.interval ? t("brazierEvery", b.minutesLeft, b.interval) : t("brazierIn", b.minutesLeft);
+}
+function renderTime(tm) {
+  tickClock.stove = parseStove(tm.stove); tickClock.ntp = parseStove(tm.ntp); tickClock.at = performance.now();
+  $("timeStove").textContent = fmtStoveTime(tm.stove);
+  $("timeNtp").textContent = fmtStoveTime(tm.ntp);
+  const d = $("timeDelta"); d.textContent = ""; d.appendChild(pill(fmtDelta(tm.delta), Math.abs(tm.delta) > 120 ? "warn" : ""));
+}
+function render(s) {
+  const st = s.stoveState || {}, code = st.stoveState;
+  const alarm = [8, 9, 10, -1].includes(code);
+  $("stateLabel").textContent = STATE_NAME[lang][code] ?? st.state ?? "–";
+  $("stateLabel").style.color = alarm ? "var(--err)" : st.poweredOn ? "var(--accent)" : "";
+  {
+    // standby through energy saving: say when the stove restarts (manual §20)
+    const es0 = s.energySaving || {};
+    // burning but turned down because the room reached the set point (the remote then shows the
+    // temperature white on black and the stove runs at flame 1 with the fan at reduced power)
+    const tp0 = s.temperatures || {}, fl0 = s.flame || {};
+    // the actual flame power (RAM 0x34) is the reliable signal: at room == set point the stove was
+    // still at its set power (16/11/2026 18:35-18:51); only without it fall back to room > set point
+    const reduced = code === 4 && (fl0.actual !== undefined && fl0.actual !== null ? fl0.actual < fl0.power
+                                   : tp0.room !== undefined && tp0.setPoint !== undefined && tp0.room > tp0.setPoint);
+    $("stateSub").textContent = code === 7 && es0.enabled
+      ? (es0.start ? t("esRestartAt", fmtTemp(es0.startTemperature)) : t("esNoRestartSub"))
+      : reduced ? (es0.enabled ? t("esReduced") : t("reducedPower"))
+      : STATE_HINT[lang][code] || "";
+  }
+  const pb = $("powerBtn");
+  pb.disabled = code === -1; pb.textContent = st.poweredOn ? t("turnOff") : t("turnOn"); pb.className = "big " + (st.poweredOn ? "stop" : "go");
+
+  // Which sensor does the room temperature (RAM 0x01) come from? The MULTICOMFORT
+  // setting is not readable, so derive it from the readings.
+  const tp = s.temperatures || {};
+  const src = tp.room === undefined ? null
+    : (s.RemoteControlLastSeen >= 0 && tp.room === tp.remoteControl) ? "remote"
+    : tp.room === tp.stove ? "stove" : tp.room === tp.remoteControl ? "remote" : null;
+  $("tRoom").textContent = fmtTemp(tp.room);
+  $("tRoomLbl").textContent = src === "remote" ? t("roomSrc", t("srcRemote")) : src === "stove" ? t("roomSrc", t("srcStove")) : t("room");
+  $("tFume").textContent = fmtTemp(tp.fume);
+  $("tSet").textContent = fmtTemp(spPending !== null ? spPending : tp.setPoint);
+  if (spPending === null) $("spVal").textContent = fmtTemp(tp.setPoint);
+  markSeg($("flameSeg"), s.flame ? s.flame.power : null);
+  {
+    const f = s.flame || {}, running = [3, 4, 5].includes(code);
+    $("flameHint").textContent = f.actual === undefined ? "\u00a0"
+      : !running ? "\u00a0"                          // standby, off, shutting down: no flame, show nothing
+      : f.actual !== f.power ? t("flameMod", f.actual) : t("flameNow", f.actual);
+  }
+  markSeg($("fanSeg"), s.RoomFanSpeed);
+  {
+    // what the fan really does (RAM 0xD3 running, 0x0A drive value), the setting is only the request
+    const rf = s.roomFan || {};
+    $("fanHint").textContent = rf.mode === "off" && s.RoomFanSpeed ? "\u00a0"   // set to a speed but not turning (e.g. standby): show nothing
+      : !s.RoomFanSpeed || rf.running === undefined || rf.running === null ? t("roomFanHint")
+      : rf.running ? t("fanRunsPower", rf.actual ?? s.RoomFanSpeed, rf.drive ?? "?")
+      : rf.hotEnough === false ? t("fanWaitHeat") : t("fanStopped");
+  }
+
+  const es = s.energySaving || {};
+  $("esEnabled").checked = !!es.enabled; showEsDetails(!!es.enabled);
+  if (es.enabled) rememberEs(es.start, es.stop);
+  if (document.activeElement !== $("esStart")) $("esStart").value = String(es.enabled ? es.start : esLast.start);
+  if (document.activeElement !== $("esStop")) $("esStop").value = String(es.enabled ? es.stop : esLast.stop);
+  $("esStartHint").textContent = !es.enabled ? "\u00a0" : es.start ? t("restartsAt", fmtTemp(es.startTemperature)) : t("esNoRestart");
+  $("esStopHint").textContent  = es.enabled ? t("stopsAt", fmtTemp(es.stopTemperature)) : "\u00a0";
+
+  const b = s.burn || {};
+  if (document.activeElement !== $("cq") && CQ.includes(b.combustionQuality)) $("cq").value = b.combustionQuality;
+  if (document.activeElement !== $("pq") && PQ.includes(b.pelletQuality)) $("pq").value = b.pelletQuality;
+  qualityHints();
+  $("beep").checked = !!s.stoveBeepEnabled;
+
+  const SRC = { remote: t("srcRemoteLong"), stove: t("srcStoveLong") };
+  const WS = { on: t("on"), off: t("off") };
+  const rows = [
+    [withHelp(t("srcDerived"), "h_roomSrc"), SRC[src] || t("unknown")],
+    [withHelp(t("wirelessLabel"), "h_wireless"), WS[s.wirelessSensor] || t("unknown"), true],
+    [t("roomTemp"), fmtTemp(tp.room)],
+    [t("stoveSensor"), fmtTemp(tp.stove)],
+    [t("remoteSensor"), fmtTemp(tp.remoteControl)],
+    [t("fumeTemp"), fmtTemp(tp.fume)],
+    [t("flameActual"), s.flame && s.flame.actual !== undefined ? s.flame.actual : "–"],
+    [t("fanActual"), !s.roomFan || s.roomFan.running === null || s.roomFan.running === undefined ? "–"
+      : s.roomFan.mode === "off" ? t("off")
+      : s.roomFan.running ? t("fanRunsPower", s.roomFan.actual ?? s.RoomFanSpeed, s.roomFan.drive ?? "?") : s.roomFan.hotEnough === false && s.RoomFanSpeed ? t("fanWaitHeat") : t("off")],
+    [withHelp(t("fanPower"), "h_fanPower"), s.roomFan && s.roomFan.drive !== null && s.roomFan.drive !== undefined ? String(s.roomFan.drive) : "–", "d"],
+    [t("fumeFan"), (s.fumeFanRPM ?? "–") + " rpm", true],
+    [t("auger"), (s.augerSpeed ?? "–") + " rpm", true],
+    [withHelp(t("brazier"), "h_brazier"), brazierText(s.brazierCleaning), true],
+    [t("pelletLevel"), s.lowPalletAlarm ? pill(t("low"), "err") : pill(t("ok"), "ok")],
+    [withHelp(t("pelReserve"), "h_pelReserve"), !s.pelletReserve ? "–" : (s.pelletReserve.enabled === false ? t("off")
+      : t("pelReserveVal", s.pelletReserve.sensor ?? "–", s.pelletReserve.counter ?? "–")), "d"],
+    [t("remoteSeen"), s.RemoteControlLastSeen >= 0 ? t("secAgo", s.RemoteControlLastSeen) : t("unknown")],
+  ];
+  if (s.hydro) rows.push([t("waterPres"), s.hydro.Pressure], [t("waterTemp"), fmtTemp(s.hydro.Temp)]);
+  fillDl($("statusList"), rows);
+  if (s.time) renderTime(s.time);
+
+  const list = $("errList"); list.innerHTML = "";
+  if (!s.previousErrors) list.appendChild(el("li", "muted", t("noErrors")));
+  else { const when = errorTimes(s.previousErrors); for (const [pos, e] of Object.entries(s.previousErrors)) {
+    const li = el("li"), txt = el("span", "etext"), posTxt = pos.replace("MemoryPos_", "#");
+    txt.append(el("b", "", e.error), document.createTextNode(errDesc(e) + " "), el("span", "muted", "(" + posTxt + ")"));
+    let whenEl = null;
+    if (Array.isArray(events)) {
+      const d = when[pos] ? new Date(when[pos] * 1000) : null;
+      whenEl = el("span", "ewhen", d ? t("errSeen", fmtDate(d) + " " + fmtHM(d)) : t("errSeenUnknown"));
+    }
+    if (I18N.en["eh_" + e.id]) txt.appendChild(helpBtn("eh_" + e.id));
+    const del = el("button", "danger", t("del"));
+    del.onclick = async () => {
+      if (!confirm(t("confirmDelErr", e.error, posTxt))) return;
+      del.disabled = true;
+      try { await write(t("errDeleted", e.error), "POST", "/api/errors", { [pos]: 0 }); } catch (_) { del.disabled = false; }
+    };
+    li.append(txt); if (whenEl) li.appendChild(whenEl); li.appendChild(del); list.appendChild(li);
+  } }
+  fillDl($("deviceList"), [
+    [t("fw"), s.firmwareVersion || "–"],
+    [t("ctrlFw"), s.controller ? s.controller.version : "–", true],
+    [t("ctrlBuilt"), s.controller && s.controller.built ? (d => fmtDate(d) + " " + fmtHM(d))(new Date(s.controller.built)) : "–", true], [t("starts"), s.numberOfStarts ?? "–"], [t("hours"), s.totalRuntime ?? "–"],
+    [withHelp(t("service"), "h_service"), s.hoursSinceLastService !== undefined
+      ? pill(t("serviceOf", s.hoursSinceLastService), s.hoursSinceLastService >= 2000 ? "warn" : "") : "–"],
+    [t("uptime"), s.uptime ? s.uptime.human : "–", true],
+    [t("serialErr"), s.serial ? s.serial.readErrors + " / " + s.serial.writeErrors : "–", "d"], [t("retries"), s.serial ? s.serial.retries : "–", "d"],
+  ]);
+  renderAlerts(); renderNext(); renderRemote(); renderParams();   // marks the current flame level
+}
+
+// ---------- timers ----------
+function timerBodyFrom(div) {
+  const q = s => div.querySelector(s);
+  const on = pickerValue(q(".on")), off = pickerValue(q(".offt"));
+  return {
+    enabled: q(".en").checked, on: on || "off", off: off || "off",
+    enabled_on: Object.fromEntries(DAYS.map(d => [d, q(`[data-day=${d}]`).classList.contains("active")])),
+    settings: { setpoint: Number(q(".sp").dataset.value),
+                flame_power: Number((q(".fp .active") || {}).dataset?.v ?? 2), RoomFanSpeed: Number((q(".fs .active") || {}).dataset?.v ?? 0) },
+  };
+}
+// Time picker in 10 minute steps (the stove stores times as 10 minute slots).
+// A button shows the time; tapping it opens a panel with an hour grid and minute chips.
+const CLOCK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+const tpPop = $("tpPop");
+let tpOwner = null;
+function timePicker(host, value) {
+  const m = /^(\d\d):(\d\d)$/.exec(value || "");
+  host.dataset.value = m ? m[1] + ":" + pad(Math.floor(Number(m[2]) / 10) * 10) : "";
+  host.innerHTML = "";
+  const btn = el("button", "tp-btn"); btn.type = "button"; btn.setAttribute("aria-haspopup", "dialog"); btn.setAttribute("aria-expanded", "false");
+  host.appendChild(btn);
+  const paint = () => {
+    const v = host.dataset.value;
+    btn.className = "tp-btn" + (v ? "" : " off");
+    btn.innerHTML = ""; btn.appendChild(el("span", "", v || "OFF")); btn.insertAdjacentHTML("beforeend", CLOCK_SVG);
+  };
+  host._paint = paint; paint();
+  btn.onclick = ev => { ev.stopPropagation(); tpOwner === host ? closeTp() : openTp(host, btn); };
+}
+function pickerValue(host) { return host.dataset.value || ""; }
+function openTp(host, btn) {
+  closeTp(); hidePop();
+  tpOwner = host; btn.setAttribute("aria-expanded", "true");
+  let [h, mi] = (host.dataset.value || "").split(":");
+  const render = () => {
+    tpPop.innerHTML = "";
+    const head = el("div", "tp-head"), now = el("div", "tp-now" + (h ? "" : " off"));
+    if (h) { now.append(el("span", "", h), document.createTextNode(":" + (mi || "00"))); } else now.textContent = "OFF";
+    head.appendChild(now); tpPop.appendChild(head);
+    tpPop.appendChild(el("div", "tp-sec", t("tpHour")));
+    const hg = el("div", "tp-grid");
+    for (let i = 0; i < 24; i++) {
+      const v = pad(i), b = el("button", v === h ? "sel" : "", v); b.type = "button";
+      b.onclick = e => { e.stopPropagation(); h = v; mi = mi || "00"; render(); };
+      hg.appendChild(b);
+    }
+    tpPop.appendChild(hg);
+    tpPop.appendChild(el("div", "tp-sec", t("tpMin")));
+    const mg = el("div", "tp-grid min");
+    for (let i = 0; i < 60; i += 10) {
+      const v = pad(i), b = el("button", h && v === mi ? "sel" : "", ":" + v); b.type = "button";
+      b.onclick = e => { e.stopPropagation(); mi = v; h = h || pad(new Date().getHours()); commit(); };
+      mg.appendChild(b);
+    }
+    tpPop.appendChild(mg);
+    const foot = el("div", "tp-foot"), off = el("button", "", t("tpOff")), done = el("button", "primary", t("tpDone"));
+    off.type = done.type = "button";
+    off.onclick = e => { e.stopPropagation(); h = ""; mi = ""; commit(); };
+    done.onclick = e => { e.stopPropagation(); commit(); };
+    foot.append(off, done); tpPop.appendChild(foot);
+  };
+  const commit = () => { host.dataset.value = h ? h + ":" + (mi || "00") : ""; host._paint(); closeTp(); };
+  render();
+  tpPop.style.display = "block";
+  const r = btn.getBoundingClientRect();
+  const left = Math.min(Math.max(12, r.left + window.scrollX), window.scrollX + window.innerWidth - tpPop.offsetWidth - 12);
+  let top = r.bottom + window.scrollY + 6;
+  if (r.bottom + tpPop.offsetHeight + 12 > window.innerHeight && r.top > tpPop.offsetHeight + 12) top = r.top + window.scrollY - tpPop.offsetHeight - 6;
+  tpPop.style.left = left + "px"; tpPop.style.top = top + "px";
+}
+function closeTp() {
+  tpPop.style.display = "none";
+  if (tpOwner) { const b = tpOwner.querySelector(".tp-btn"); if (b) b.setAttribute("aria-expanded", "false"); }
+  tpOwner = null;
+}
+document.addEventListener("click", e => { if (tpOwner && !tpPop.contains(e.target)) closeTp(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeTp(); });
+window.addEventListener("resize", closeTp);
+
+function setTimer(name, data) { if (timersData && data) { timersData[name] = data; renderNext(); } }
+function timerCard(name, tm) {
+  const idx = name.toLowerCase(), div = el("div", "timer");
+  if (tm.error) {
+    // Never offer editing for a half-read timer: saving it would write garbage to the stove
+    const head = el("div", "timer-head"); head.append(el("b", "", name), pill(t("readError"), "err"));
+    const foot = el("div", "timer-foot"), retry = el("button", "", t("retry")); foot.append(el("span"), retry);
+    div.append(head, el("p", "muted", t("readErrorText")), foot);
+    retry.onclick = async () => {
+      try { const { data } = await api("GET", "/api/timers/" + idx); setTimer(name, data[name]); div.replaceWith(timerCard(name, data[name])); }
+      catch (e) { toast(name + ": " + e.message, true); }
+    };
+    return div;
+  }
+  if (!tm.enabled) div.classList.add("off");
+  const days = tm.enabled_on || {}, set = tm.settings || {};
+  div.innerHTML = `
+    <div class="timer-head"><b></b><label class="switch"><input type="checkbox" class="en"><span></span></label></div>
+    <div class="tbody">
+      <div class="tgrid">
+        <label class="l-on"></label><span class="tpick on"></span>
+        <label class="l-off"></label><span class="tpick offt"></span>
+        <label class="l-days"></label><div class="days"></div>
+        <label class="l-sp"></label><span class="stepper"><button type="button" class="spm" aria-label="−">−</button><span class="v sp"></span><button type="button" class="spp" aria-label="+">+</button></span>
+        <label class="l-fp"></label><span class="seg fp"></span>
+        <label class="l-fs"></label><span class="seg fs"></span>
+      </div>
+      <div class="timer-foot"><select class="copy"></select><button class="primary save"></button></div>
+    </div>`;
+  const q = s => div.querySelector(s);
+  q(".timer-head b").textContent = name;
+  q(".l-on").textContent = t("tOn"); q(".l-off").textContent = t("tOff"); q(".l-days").textContent = t("tDays");
+  q(".l-sp").textContent = t("setPoint"); q(".l-fp").textContent = t("tFlame"); q(".l-fs").textContent = t("tFan");
+  q(".save").textContent = t("save", name);
+  q(".en").checked = !!tm.enabled;
+  timePicker(q(".on"), tm.on);
+  timePicker(q(".offt"), tm.off);
+  // same controls as the heating card: stepper for the set point, segment buttons for flame and fan
+  const spEl = q(".sp"), setSp = v => { spEl.dataset.value = v; spEl.textContent = fmtTemp(v); };
+  setSp(Math.min(30, Math.max(7, set.setpoint ?? 20)));
+  q(".spm").onclick = () => setSp(Math.max(7, Number(spEl.dataset.value) - 1));
+  q(".spp").onclick = () => setSp(Math.min(30, Number(spEl.dataset.value) + 1));
+  buildSeg(q(".fp"), [1, 2, 3, 4], v => v, v => markSeg(q(".fp"), v));
+  buildSeg(q(".fs"), [0, 1, 2, 3], v => v === 0 ? t("off") : v, v => markSeg(q(".fs"), v));
+  q(".fp").querySelectorAll("button").forEach(b => b.type = "button"); q(".fs").querySelectorAll("button").forEach(b => b.type = "button");
+  markSeg(q(".fp"), set.flame_power ?? 2); markSeg(q(".fs"), set.RoomFanSpeed ?? 0);
+  DAYS.forEach((d, i) => {
+    const b = el("button", "", DAY_SHORT[lang][i]); b.title = DAY_LONG[lang][i]; b.dataset.day = d;
+    b.classList.toggle("active", !!days[d]); b.onclick = () => b.classList.toggle("active");
+    q(".days").appendChild(b);
+  });
+  // copy-to selector
+  const sel = q(".copy");
+  sel.add(new Option(t("copyTo"), ""));
+  for (const other of ["PR1","PR2","PR3","PR4","PR5","PR6"]) if (other !== name) sel.add(new Option(other, other));
+  sel.add(new Option(t("copyAll"), "*"));
+  sel.onchange = async () => {
+    const target = sel.value; sel.value = "";
+    if (!target) return;
+    const body = timerBodyFrom(div); if (!body) return;
+    const targets = target === "*" ? ["PR1","PR2","PR3","PR4","PR5","PR6"].filter(x => x !== name) : [target];
+    if (!confirm(t("confirmCopy", name, targets.join(", ")))) return;
+    sel.disabled = true;
+    try {
+      for (const tg of targets) await write(t("copied", name, tg), "PATCH", "/api/timers/" + tg.toLowerCase(), null, body);
+      await loadTimers();
+    } catch (_) {}
+    sel.disabled = false;
+  };
+  // enable / disable applies immediately
+  q(".en").onchange = async e => {
+    div.classList.toggle("off", !e.target.checked);
+    try {
+      const d = await write(e.target.checked ? t("enabledMsg", name) : t("disabledMsg", name), e.target.checked ? "POST" : "DELETE", "/api/timers/" + idx);
+      if (d && d[name]) { setTimer(name, d[name]); if (e.target.checked) div.replaceWith(timerCard(name, d[name])); }
+    } catch (_) { e.target.checked = !e.target.checked; div.classList.toggle("off", !e.target.checked); }
+  };
+  q(".save").onclick = async () => {
+    const body = timerBodyFrom(div); if (!body) return;
+    q(".save").disabled = true;
+    try { const d = await write(t("saved", name), "PATCH", "/api/timers/" + idx, null, body); if (d && d[name]) { setTimer(name, d[name]); div.replaceWith(timerCard(name, d[name])); } }
+    catch (_) {}
+    q(".save").disabled = false;
+  };
+  return div;
+}
+function renderTimers() {
+  const wrap = $("timers");
+  if (!timersData) { wrap.innerHTML = ""; wrap.appendChild(el("p", "muted", t("loadingTimers"))); return; }
+  wrap.innerHTML = "";
+  for (const [name, tm] of Object.entries(timersData)) wrap.appendChild(timerCard(name, tm));
+}
+async function loadTimers() {
+  try { const { data } = await api("GET", "/api/timers"); timersData = data.timers; renderTimers(); renderNext(); }
+  catch (e) { $("timers").innerHTML = ""; $("timers").appendChild(el("p", "muted", t("timersErr", e.message))); }
+}
+$("reloadTimers").onclick = () => { timersData = null; renderTimers(); loadTimers(); };
+
+// Next timer event, computed from the programs and the stove clock
+function renderNext() {
+  const out = [$("nextTimer"), $("nextTimer2")];
+  const set = (txt, strong) => out.forEach(o => { o.textContent = ""; if (strong) { const parts = txt.split(strong); o.append(document.createTextNode(parts[0]), el("b", "", strong), document.createTextNode(parts.slice(1).join(strong))); } else o.textContent = txt; });
+  if (!timersData || !state) { set(""); return; }
+  const now = parseStove(state.time && state.time.stove) || new Date();
+  let best = null;
+  for (const [name, tm] of Object.entries(timersData)) {
+    if (!tm.enabled || tm.error) continue;
+    for (let d = 0; d < 8; d++) {
+      const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + d);
+      const dow = (day.getDay() + 6) % 7;                       // 0 = Monday
+      if (!tm.enabled_on || !tm.enabled_on[DAYS[dow]]) continue;
+      for (const [kind, hm] of [["on", tm.on], ["off", tm.off]]) {
+        if (!hm || hm === "off") continue;
+        const [h, m] = hm.split(":").map(Number);
+        const at = new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, m);
+        if (at > now && (!best || at < best.at)) best = { at, kind, name, d };
+      }
+    }
+  }
+  if (!best) { set(t("noTimers")); return; }
+  const when = best.d === 0 ? t("today") : best.d === 1 ? t("tomorrow") : DAY_LONG[lang][(best.at.getDay() + 6) % 7];
+  const time = fmtHM(best.at);
+  set(t(best.kind === "on" ? "nextOn" : "nextOff", best.name, time, when), time);
+}
+
+// ---------- virtual remote control (GRF) ----------
+// Screens follow the FWAR01 operating manual: main screen, status/phase screens,
+// menus (MENU + icon + name) and edit screens. Edit screens show the value the
+// remote is currently displaying (RAM 0x19) for the parameter in RAM 0x18.
+const LCD_SVG = {
+  fan: '<path d="M12 10.5c-.5-3.5.5-7 3.5-7s3 3.8-.5 6"/><path d="M13.5 12c3.5-.5 7 .5 7 3.5s-3.8 3-6-.5"/><path d="M12 13.5c.5 3.5-.5 7-3.5 7s-3-3.8.5-6"/><path d="M10.5 12c-3.5.5-7-.5-7-3.5s3.8-3 6 .5"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/>',
+  alarm: '<circle cx="12" cy="13" r="7"/><path d="M12 9v4l2.5 2"/><path d="M4 6l3-2.5M20 6l-3-2.5M8 20l-1.5 2M16 20l1.5 2"/>',
+  flag: '<path d="M4 4v17"/><path d="M4 5c3-2 6 2 9 0s5-1 7 0v9c-2-1-4-2-7 0s-6-2-9 0"/>',
+  clockcal: '<circle cx="8" cy="13" r="6"/><path d="M8 10v3l2 1.5"/><rect x="15" y="6" width="7" height="9" rx="1"/><path d="M15 9h7"/><text x="18.5" y="14.2" font-size="5" text-anchor="middle" fill="currentColor" stroke="none" font-weight="700">5</text>',
+  house: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M12 9v6"/><circle cx="12" cy="16.5" r="1.8" fill="currentColor"/>',
+  eco: '<path d="M6 15a6 6 0 0 1 12 0v2H6z"/><path d="M9.5 13.5q2.5 2 5 0"/><path d="M12 9V7m-2-1h4"/><path d="M5 19h14"/>',
+  beep: '<circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M8 8a5.5 5.5 0 0 0 0 8M16 8a5.5 5.5 0 0 1 0 8M5 5a9.5 9.5 0 0 0 0 14M19 5a9.5 9.5 0 0 1 0 14"/>',
+  display: '<rect x="3" y="4" width="18" height="13" rx="1"/><path d="M8 11l3 3 5-6"/><path d="M8 21h8"/>',
+  tools: '<path d="M14.5 5.5a4 4 0 0 0 4.5 5l-9.5 9.5a2 2 0 0 1-3-3L16 7.5"/><path d="M4 4l6 6M3 8l5-5"/>',
+  stove: '<path d="M6 8.5V20h12V8.5" /><path d="M5.5 8.5c0-2.5 3-4.5 6.5-4.5s6.5 2 6.5 4.5z" /><path d="M6 17.5h12"/><path d="M12 9.5c-2.2 1.8-2.6 3.6-1.2 5.2 1.4 1 3.2 0 3.1-1.8-.1-1.4-1-2.4-1.9-3.4z"/><path d="M12.6 11.4c-.6.9-.7 1.8-.2 2.6"/><path d="M8 20v1.2M16 20v1.2"/>',
+  exit: '<path d="M14 4H6v16h8"/><path d="M10 12h11M17 8l4 4-4 4"/>',
+  hash: '<path d="M9 3l-2 18M17 3l-2 18M4 9h17M3 15h17"/>',
+  gauge: '<path d="M4 18a8 8 0 0 1 16 0"/><path d="M12 18l5-6"/><text x="5" y="22" font-size="5" fill="currentColor" stroke="none">E</text><text x="17" y="22" font-size="5" fill="currentColor" stroke="none">F</text>',
+  contact: '<path d="M2 14h7M15 14h7"/><circle cx="9" cy="14" r="1.3"/><circle cx="15" cy="14" r="1.3"/><path d="M10 13.5l5-5"/>',
+  thermo: '<path d="M9 4a2 2 0 0 1 4 0v9a4 4 0 1 1-4 0z"/><circle cx="11" cy="16" r="1.6" fill="currentColor"/><path d="M16 10l3 3M19 10l-3 3"/>',
+  hourglass: '<path d="M6 3h12M6 21h12"/><path d="M7 3c0 5 10 5 10 9s-10 4-10 9M17 3c0 5-10 5-10 9s10 4 10 9"/>',
+  pqs: '<text x="12" y="16" font-size="9.5" text-anchor="middle" fill="currentColor" stroke="none" font-weight="800">PQS</text>',
+  flameair: '<path d="M2 9h6M2 12h7M2 15h6"/><path d="M15 4c-4 4-5 7-3 11 1 2 3 3 4 3s4-2 4-6c0-3-3-5-5-8z" fill="currentColor"/>',
+  flame: '<path d="M12 3c-4 5-6 8-4 12 1 2 3 3 4 3s3-1 4-3c1-3 0-5-2-7 0 2-1 3-2 3 1-3 0-6 0-8z" fill="currentColor"/>',
+  warn: '<path d="M12 3L2 20h20z"/><path d="M12 9v6"/><circle cx="12" cy="17.5" r=".8" fill="currentColor"/>',
+  lock: '<rect x="5" y="11" width="14" height="10" rx="1.5" fill="currentColor"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  spk: '<path d="M4 10h3l4-4v12l-4-4H4z" fill="currentColor"/><path d="M14.5 9.5a3.5 3.5 0 0 1 0 5M17 7a7 7 0 0 1 0 10"/>',
+  mute: '<path d="M4 10h3l4-4v12l-4-4H4z" fill="currentColor"/><path d="M15 9l6 6M21 9l-6 6"/>',
+  signal: '<path d="M2 11a14 14 0 0 1 20 0" stroke-dasharray="1.6 1"/><path d="M5.5 14.5a9 9 0 0 1 13 0" stroke-dasharray="1.6 1"/><path d="M9 18a4 4 0 0 1 6 0" stroke-dasharray="1.6 1"/><circle cx="12" cy="21" r="1.8" fill="currentColor" stroke="none"/>',
+  thermom: '<path d="M10 4a2 2 0 0 1 4 0v9a4 4 0 1 1-4 0z"/><circle cx="12" cy="16" r="1.6" fill="currentColor"/>',
+};
+function lcdIcon(name, size) {
+  const d = el("div", "ic");
+  d.innerHTML = '<svg viewBox="0 0 24 24" width="' + (size || 30) + '" height="' + (size || 30) + '" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' + (LCD_SVG[name] || "") + "</svg>";
+  return d;
+}
+// Menu ids (RAM 0x1A) -> remote texts (NL / EN) and icon. "sub" = installer item (no MENU header)
+const LCD_MENU = {
+  1: ["MULTIFUOCO", "MULTIFUOCO", "fan"], 2: ["CHRONO", "CHRONO", "alarm"], 3: ["TAAL", "LANGUAGE", "flag"],
+  5: ["KLOK", "CLOCK", "clockcal"], 7: ["MULTICOMFORT", "MULTICOMFORT", "house"], 8: ["MULTICOMFORT PLUS", "MULTICOMFORT PLUS", "house"],
+  9: ["ENERGY SAVING", "ENERGY SAVING", "eco"], 11: ["ZOEMER", "BEEP", "beep"], 12: ["DISPLAY", "DISPLAY", "display"],
+  13: ["INSTALLATEUR", "INSTALLER", "tools"], 14: ["STAAT KACHEL", "STOVE STATUS", "stove"], 15: ["AFSLUITEN", "EXIT", "exit"],
+  39: ["SCHROEF VULLEN", "FILL AUGER", "hash", 1], 40: ["PELLET RESERVE", "LOW FUEL", "gauge", 1],
+  41: ["CONTACT|N.PEL / PELLET", "CONTACT|N.PEL / PELLET", "contact", 1], 42: ["EXTERNAL|THERMOSTAT", "EXTERNAL|THERMOSTAT", "thermo", 1],
+  43: ["UURTELLER|GEHEUGEN", "MEMORY|COUNTERS", "hourglass", 1], 44: ["PELLET|QUALITY", "PELLET|QUALITY", "pqs", 1],
+  45: ["COMBUSTION|QUALITY", "COMBUSTION|QUALITY", "flameair", 1], 46: ["INSTELL|WIRELESS", "SET|WIRELESS", null, 1],
+  47: ["ASSOCIEREN|WIRELESS", "LINK|WIRELESS", null, 1], 49: ["WIFI", "WIFI", "signal", 1], 50: ["PARAMETER", "PARAMETERS", "tools", 1],
+};
+const LCD_PARAM_MENU = { 199: 40, 130: 1, 71: 7, 200: 8, 145: 9, 146: 9, 76: 11, 79: 12, 80: 3, 193: 45, 198: 44, 217: 46, 248: 5, 249: 5, 250: 5, 251: 5, 252: 5, 253: 5 };
+const LCD_LANG = { 1: "ENG", 2: "FRA", 3: "DEU", 4: "NLD", 5: "POR", 6: "SPA", 7: "HRV", 8: "DAN" };
+const CQ_RAW = { 76: "+G", 2: "-3", 3: "-2", 4: "-1", 5: "0", 6: "+1", 7: "+2", 8: "+3" };
+const L = (nl, en) => (lang === "nl" ? nl : en);
+function lcdTitle(text) { const d = el("div", "ttl"); text.split("|").forEach((p, i) => { if (i) d.appendChild(el("br")); d.appendChild(document.createTextNode(p)); }); return d; }
+function lcdBig(text, cls) { return el("div", "big" + (cls ? " " + cls : ""), text); }
+
+// CHRONO: program n is stored at EEPROM timerBases[n] + offset; the remote edits it as
+// parameter (address + 1). Offsets: 0 on/off, 1 start, 2 stop, 3 set point, 4 flame,
+// 5 fan, 7 days (bit 0 = Monday).
+const CHRONO_BASES = [0x3C, 0x50, 0x58, 0x60, 0x68, 0x70];
+function chronoParam(p) {
+  if (!p) return null;
+  for (let i = 0; i < 6; i++) { const off = p - 1 - CHRONO_BASES[i]; if (off >= 0 && off <= 7) return { pr: i + 1, off }; }
+  return null;
+}
+function renderChronoLcd(lcd, c, ev) {
+  const tm = (timersData && timersData["PR" + c.pr]) || {}, set = tm.settings || {}, days = tm.enabled_on || {};
+  const hm = v => v >= 144 || v === undefined || v === null ? "OFF" : pad(Math.floor(v * 10 / 60)) + ":" + pad(v * 10 % 60);
+  const fromStr = sv => { const m = /^(\d\d):(\d\d)$/.exec(sv || ""); return m ? (+m[1] * 60 + +m[2]) / 10 : 144; };
+  // stored values, with the field being edited replaced by the value the remote shows (RAM 0x19)
+  const val = {
+    0: tm.enabled ? 1 : 0, 1: fromStr(tm.on), 2: fromStr(tm.off), 3: set.setpoint, 4: set.flame_power, 5: set.RoomFanSpeed,
+    7: DAYS.reduce((m, d, i) => m | (days[d] ? 1 << i : 0), 0),
+  };
+  val[c.off] = ev;
+  const hi = off => c.off === off ? " inv" : "";
+  lcd.classList.add("chrono");
+  const top = el("div", "chtop");
+  top.append(el("span", "chpr", "PR" + c.pr), el("span", "chon" + hi(0), val[0] ? "ON" : "OFF"));
+  const dw = el("span", "chdays" + hi(7));
+  for (let i = 0; i < 7; i++) { const d = el("span", "chd"); d.append(el("b", "", String(i + 1)), el("i", val[7] & (1 << i) ? "f" : "")); dw.appendChild(d); }
+  top.appendChild(dw);
+  const box = (cls, off, label, value, icon) => {
+    const b = el("div", "chbox " + cls + (icon ? " ci" : "") + hi(off));
+    if (icon) b.appendChild(lcdIcon(icon, 11)); else b.appendChild(el("span", "chl", label));
+    b.appendChild(el("span", "chv", value)); return b;
+  };
+  const grid = el("div", "chgrid");
+  grid.append(box("cs", 1, "START", hm(val[1])), box("ct", 3, "", String(val[3] ?? "–"), "thermom"), box("cf", 5, "", String(val[5] ?? "–"), "fan"),
+              box("ce", 2, "STOP", hm(val[2])), box("cp", 4, "", String(val[4] ?? "–"), "flame"));
+  lcd.append(top, grid);
+}
+
+function renderLcd() {
+  const lcd = $("lcd"); lcd.innerHTML = ""; lcd.className = "lcd";
+  if (!state) return;
+  const st = state.stoveState || {}, code = st.stoveState, d = parseStove(state.time && state.time.stove);
+  const menuId = remote && remote.menuId !== undefined ? remote.menuId : 0;
+  const param = remote && remote.parameterId ? remote.parameterId : 0;
+  const ev = remote ? remote.editValue : undefined;
+  const es = state.energySaving || {};
+  const clockLine = () => { const top = el("div", "top"); top.append(el("span", "", d ? fmtHM(d) : ""), el("span", "", d ? fmtDate(d) : "")); return top; };
+
+  // ----- CHRONO program PR1-PR6 (parameter = EEPROM address + 1 of the program field) -----
+  const chrono = chronoParam(param);
+  if (chrono && ev !== undefined) { renderChronoLcd(lcd, chrono, ev); return; }
+
+  // ----- STAAT KACHEL opened with OK (parameter 123); the menu itself (menu 14, no
+  // parameter) is an ordinary menu screen below -----
+  if (param === 123) {
+    // Three pages, RAM 0x19 = page (0, 1, 2), texts as on the GRF remote (photos 16/11/2026).
+    // Values whose register is not known yet are shown as "–" rather than guessed.
+    const tp = state.temperatures || {}, room = tp.room;
+    const mark = x => (x !== undefined && x === room ? "<" : "");
+    lcd.classList.add("list");
+    lcd.append(el("div", "ttl", L("STAAT KACHEL", "STOVE STATUS")));
+    const rows = ev === 0 ? [
+        "TERM EXT=–",                                             // external thermostat input: register unknown
+        "DATA BANK=–",                                            // shows 08 on this stove: register unknown
+        state.firmwareVersion || "FW –",
+      ] : ev === 2 ? [
+        "SENSOR 1=–",                                             // wireless sensor 1 (shows DISAB): register unknown
+        "ID SENSOR 1=–",
+      ] : [
+        L("ROOKG", "SMOKE") + "=" + (tp.fume !== undefined ? String(Math.trunc(tp.fume)).padStart(3, "0") : "–") + "°",
+        "RPM/ASP=" + (state.fumeFanRPM ?? "–"),
+        L("SCHROEF", "FEED") + "=" + (state.augerSpeed !== undefined ? Number(state.augerSpeed).toFixed(1).padStart(4, "0") : "–"),
+        L("KACHEL", "STOVE") + "=" + (tp.stove !== undefined ? Math.trunc(tp.stove) : "–") + "°" + mark(tp.stove),
+        L("AFSTAND.", "REMOTE") + "=" + (tp.remoteControl !== undefined ? Math.trunc(tp.remoteControl) : "–") + "°" + mark(tp.remoteControl),
+      ];
+    rows.forEach(r => lcd.appendChild(el("div", "li" + (r.length > 17 ? " sm" : ""), r)));
+    return;
+  }
+
+  // ----- edit screens (a parameter is being edited on the remote) -----
+  if (param && ev !== undefined) {
+    const v = ev;
+    if (param === 130) {                                     // MULTIFUOCO: fan + value
+      const row = el("div", "row1"); row.append(lcdIcon("fan", 40), lcdBig(String(v), "huge"));
+      lcd.append(row); if (v === 0) lcd.appendChild(el("div", "foot", "NATURAL MODE"));
+    } else if (param === 145 || param === 146) {             // ENERGY SAVING STOP / START
+      lcd.append(lcdTitle("ENERGY SAVING"));
+      const row = el("div", "row2"); row.append(el("span", "lbl2", param === 145 ? "STOP" : "START"));
+      if (v === 0) { row.append(lcdIcon("lock", 22), el("span", "val2", "OFF")); }
+      else row.append(el("span", "val2", (param === 145 ? "+ " : "- ") + v + "°"));
+      lcd.append(row);
+    } else if (param === 76) {                               // ZOEMER ON/OFF
+      lcd.append(lcdTitle(L("ZOEMER", "BEEP")), lcdBig(v ? "ON" : "OFF"));
+      const ic = el("div", "spk"); const a = lcdIcon("spk", 22), b = lcdIcon("mute", 22);
+      (v ? a : b).classList.add("ul"); ic.append(a, b); lcd.append(ic);
+    } else if (param === 80) {                               // TAAL
+      lcd.append(lcdTitle(L("TAAL", "LANGUAGE")), lcdBig(LCD_LANG[v] || "#" + v));
+    } else if (param === 193) {                              // COMBUSTION QUALITY
+      lcd.append(lcdTitle("COMBUSTION|QUALITY"), lcdBig(CQ_RAW[v] || "#" + v));
+    } else if (param === 198) {                              // PELLET QUALITY (raw 0..10 = -5..+5)
+      const n = v - 5; lcd.append(lcdTitle("PELLET|QUALITY"), lcdBig(v >= 0 && v <= 10 ? (n > 0 ? "+" + n : String(n)) : "#" + v));
+    } else if (param === 79) {                               // DISPLAY settings of the remote
+      // DISPLAY has several screens (e.g. "ACHTERGRONDVERLICHTING ON 10 s", "POWER ON 31 s").
+      // They are kept in the remote itself: the stove only sees parameter 79 with
+      // RAM 0x19 = 1 for all of them, so the app can show neither the screen nor the value.
+      const set = el("div", "ttl", "SET"); set.style.fontSize = "17px"; set.style.marginTop = "2px";
+      const ttl = lcdTitle("DISPLAY"); ttl.classList.add("small");
+      const big = lcdBig("– s", "huge"); big.style.textTransform = "none"; big.style.marginTop = "2px";
+      lcd.append(set, ttl, big);
+    } else if (param === 199) {                              // PELLET RESERVE (EEPROM 0xC6)
+      const big = lcdBig(v ? "ON" : "OFF", "huge"); big.style.marginTop = "6px";   // as on the remote: title + value, no icon
+      lcd.append(lcdTitle("PELLET|RESERVE"), big);
+    } else if (param === 217) {                              // INSTELL WIRELESS
+      lcd.append(lcdTitle(L("INSTELL|WIRELESS", "SET|WIRELESS")), lcdBig(v ? "ON" : "OFF"));
+    } else if (param >= 248 && param <= 253) {              // KLOK: highlight the field being edited
+      lcd.append(lcdTitle(L("KLOK", "CLOCK")));
+      const dow = (d ? (d.getDay() + 6) % 7 : 0) + 1;
+      const days = el("div", "days7");
+      for (let i = 1; i <= 7; i++) days.appendChild(el("span", param === 248 && i === v ? "inv" : (param !== 248 && i === dow ? "u" : ""), String(i)));
+      const f = (id, val) => el("span", param === id ? "inv" : "", pad(param === id ? v : val));
+      const hm = el("div", "fld"); hm.append(f(249, d ? d.getHours() : 0), document.createTextNode(" : "), f(250, d ? d.getMinutes() : 0));
+      const dm = el("div", "fld sm"); dm.append(f(251, d ? d.getDate() : 0), document.createTextNode(" / "), f(252, d ? d.getMonth() + 1 : 0), document.createTextNode(" / 20"), f(253, d ? d.getFullYear() % 100 : 0));
+      lcd.append(days, hm, dm);
+    } else {                                                 // other parameters: title + raw value
+      // unknown parameter: title of the open menu (or of the parameter's menu) + raw value
+      const m = LCD_MENU[LCD_PARAM_MENU[param]] || LCD_MENU[menuId];
+      lcd.append(lcdTitle(m ? L(m[0], m[1]) : "#" + param), lcdBig(String(v)));
+    }
+    return;
+  }
+
+  // ----- menu screens -----
+  if (menuId && menuId !== 0) {
+    if (menuId >= 51 && menuId <= 54) {                       // UURTELLER GEHEUGEN pages
+      if (menuId === 54) {
+        lcd.classList.add("list"); lcd.append(el("div", "ttl", "MEM-AL"));
+        for (let i = 1; i <= 5; i++) { const e = state.previousErrors && state.previousErrors["MemoryPos_" + i]; lcd.appendChild(el("div", "li", i + "   " + (e ? e.error : "- -"))); }
+      } else {
+        const [t1, v1] = menuId === 51 ? [L("TOTAAL UREN", "TOTAL HOURS"), state.totalRuntime] : menuId === 52 ? [L("INTERVAL UREN", "PARTIAL HOURS"), state.hoursSinceLastService] : [L("AANTAL STARTS", "NUMBER OF STARTS"), state.numberOfStarts];
+        lcd.append(lcdTitle(t1), lcdBig(String(v1 ?? 0).padStart(5, "0")));
+      }
+      return;
+    }
+    const m = LCD_MENU[menuId];
+    if (!m) { lcd.append(lcdTitle("MENU"), el("div", "mid", remote.displayed_menu || "#" + menuId)); return; }
+    // as on the remote: icon + name, no "MENU" header (photo of STAAT KACHEL, 16/11/2026)
+    if (m[2]) { const ic = lcdIcon(m[2], 44); ic.classList.add("cic"); lcd.appendChild(ic); }
+    const nm = lcdTitle(L(m[0], m[1])); nm.className = "mname" + (m[2] ? "" : " noic"); lcd.appendChild(nm);
+    return;
+  }
+
+  // ----- status screens -----
+  if (code === -1) { lcd.append(lcdIcon("signal", 40), el("div", "msg", L("TOESTEL NIET GEVONDEN", "DEVICE NOT FOUND"))); lcd.firstChild.classList.add("cic"); return; }
+  if (state.currentError || [8, 10].includes(code)) {
+    const row = el("div", "row1"); row.append(lcdIcon("warn", 44), lcdBig(state.currentError ? state.currentError.error : "!", "huge"));
+    lcd.appendChild(row); return;
+  }
+  // Phase screens with the signal icon (manual §6 start-up, §11 shut-down). Mapping of
+  // stove states 1-3 to CONTROLE / START FASE I / START FASE II follows the order in the manual.
+  const PHASE = { 1: L("CONTROLE", "CHECK UP"), 2: L("START FASE I", "START PHASE I"), 3: L("START FASE II", "START PHASE II"),
+                  5: L("REINIGING BRANDKORF", "CLEANING GRATE"), 6: L("UITSCHAKELEN", "SHUT DOWN"),
+                  7: es.enabled ? "ENERGY OK" : "STANDBY" };
+  const msgLetter = () => {                                  // message zone (manual §3.1.3 item 11)
+    if (es.enabled) return "E";
+    if (state.RoomFanSpeed === 0) return "N";
+    return "";
+  };
+  // chrono icon (top right) when a timer program is enabled: on the main screen, and also on the
+  // standby / ENERGY OK screen (seen on the remote 17/11/2026); other phase screens and OFF not checked
+  const anyTimer = timersData && Object.values(timersData).some(x => x.enabled);
+  const chronoIcon = () => { if (anyTimer) { const c = lcdIcon("alarm", 14); c.classList.add("chr"); lcd.appendChild(c); } };
+  if (PHASE[code] !== undefined) {
+    lcd.appendChild(clockLine());
+    if (code === 7) chronoIcon();
+    const ic = lcdIcon("signal", 44); ic.classList.add("cic"); lcd.appendChild(ic);
+    lcd.appendChild(el("div", "msg", PHASE[code]));
+    if (msgLetter()) lcd.appendChild(el("div", "eco", msgLetter()));
+    return;
+  }
+  lcd.appendChild(clockLine());
+  if (!st.poweredOn) {                                       // OFF screen
+    const off = lcdBig("OFF", "huge"); off.style.marginTop = "12px"; lcd.appendChild(off);
+    if (msgLetter()) lcd.appendChild(el("div", "eco", msgLetter()));
+    return;
+  }
+  // main screen: chrono icon, temperature (black background when the set point is reached),
+  // flame power blocks 1-4, room fan, message letter, low pellet message
+  chronoIcon();
+  const tp = state.temperatures || {};
+  const reached = tp.room !== undefined && tp.setPoint !== undefined && tp.room >= tp.setPoint;
+  lcd.appendChild(lcdBig(tp.room !== undefined ? Number(tp.room).toFixed(1) + "°C" : "–", reached ? "inv" : ""));
+  const bars = el("div", "bars"), fp = state.flame ? state.flame.power : 0;
+  for (let i = 1; i <= 4; i++) {
+    const col = el("div", "", String(i)), blk = el("span", i <= fp ? "f" : "");
+    blk.style.height = (4 + (i - 1) * 6) + "px"; col.appendChild(blk); bars.appendChild(col);
+  }
+  lcd.appendChild(bars);
+  const fan = el("div", "fan"); fan.appendChild(lcdIcon("fan", 16)); fan.appendChild(el("span", "", String(state.RoomFanSpeed ?? "–")));
+  lcd.appendChild(fan);
+  if (msgLetter()) lcd.appendChild(el("div", "eco", msgLetter()));
+  if (state.lowPalletAlarm) lcd.appendChild(el("div", "warnmsg", "PELLET RESERVE"));
+}
+
+// Name of the parameter being edited on the remote (RAM 0x18), in the web app language
+const PARAM_NAMES = {
+  nl: { 71:"Multicomfort", 76:"Zoemer", 79:"Display (instelling in de afstandsbediening)", 80:"Taal", 123:"Staat kachel", 128:"Vlamvermogen", 130:"Multifuoco",
+        145:"Energy saving – stop", 146:"Energy saving – start", 193:"Verbrandingskwaliteit", 198:"Pelletkwaliteit", 199:"Pelletreserve",
+        200:"Multicomfort Plus", 217:"Instell wireless", 248:"Klok – dag", 249:"Klok – uur", 250:"Klok – minuten", 251:"Klok – datum",
+        252:"Klok – maand", 253:"Klok – jaar" },
+  en: { 71:"Multicomfort", 76:"Beep", 79:"Display (setting kept in the remote)", 80:"Language", 123:"Stove status", 128:"Flame power", 130:"Multifuoco",
+        145:"Energy saving – stop", 146:"Energy saving – start", 193:"Combustion quality", 198:"Pellet quality", 199:"Pellet reserve",
+        200:"Multicomfort Plus", 217:"Set wireless", 248:"Clock – day", 249:"Clock – hour", 250:"Clock – minutes", 251:"Clock – date",
+        252:"Clock – month", 253:"Clock – year" },
+};
+const CHRONO_FIELDS = {
+  nl: ["Aan/Uit", "Starttijd", "Stoptijd", "Gewenste temperatuur", "Vlamvermogen", "Ventilator", null, "Weekoverzicht"],
+  en: ["On/Off", "Start time", "Stop time", "Set point", "Flame power", "Room fan", null, "Week days"],
+};
+function paramName(id, fallback) {
+  const c = chronoParam(id);
+  if (c && CHRONO_FIELDS[lang][c.off]) return "PR" + c.pr + " – " + CHRONO_FIELDS[lang][c.off];
+  return PARAM_NAMES[lang][id] || fallback || "#" + id;
+}
+
+function renderRemoteInfo() {
+  if (!state) return;
+  const menu = remote ? (remote.displayed_menu || remote.diplayed_menu) : null;
+  const rows = [
+    [t("menu"), menu ? (menu === "Main screen" ? t("mainScreen") : menu) : "–"],
+    [t("selParam"), remote && remote.parameterId ? paramName(remote.parameterId, remote.selected_parameter) : t("none")],
+  ];
+  if (remote && remote.parameterId && remote.editValue !== undefined) rows.push([t("remoteValue"), String(remote.editValue), "d"]);
+  rows.push([t("language"), remote ? remote.language : "–"],
+    [t("remoteSeen"), state.RemoteControlLastSeen >= 0 ? t("secAgo", state.RemoteControlLastSeen) : t("unknown")],
+    [t("wirelessLabel"), { on: t("on"), off: t("off") }[state.wirelessSensor] || t("unknown")]);
+  fillDl($("remoteList"), rows);
+}
+function renderRemote() { renderLcd(); renderRemoteInfo(); }
+
+let remoteTimer = null;
+async function pollRemote() {
+  clearTimeout(remoteTimer);
+  if (!document.hidden && busy === 0) {
+    try { remote = (await api("GET", "/api/remote")).data; if (remote && remote.language && remote.language !== "Unknown") setLang(langFromRemote(remote.language)); renderRemote(); } catch (_) {}
+  }
+  // poll faster while a menu is open on the remote, so edits show up quickly
+  remoteTimer = setTimeout(pollRemote, remote && (remote.menuId || remote.parameterId) ? 3000 : REMOTE_MS);
+}
+
+// ---------- history chart (inline SVG, no libraries) ----------
+// One chart, stacked lanes on a shared time axis (each lane its own y-scale, never
+// two scales in one lane), one crosshair + tooltip across all lanes, and vertical
+// lines where the stove state changes. Series colors follow a fixed slot order.
+const SVGNS = "http://www.w3.org/2000/svg";
+function svgEl(tag, attrs, text) { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text !== undefined) e.textContent = text; return e; }
+const SERIES = [
+  { key: "room",     field: "room",     lane: "temp",  color: "--s1", label: () => t("room"),        unit: "°", dec: 1, def: true },
+  { key: "setpoint", field: "setpoint", lane: "temp",  color: "--s2", label: () => t("setPoint"),    unit: "°", step: true, dash: true, def: true },
+  { key: "stove",    field: "stove",    lane: "temp",  color: "--s3", label: () => t("stoveSensor"), unit: "°", dec: 1, def: false },
+  { key: "remote",   field: "remote",   lane: "temp",  color: "--s4", label: () => t("remoteSensor"), unit: "°", dec: 1, def: false },
+  { key: "flameAct", field: "flameActual", lane: "flame", color: "--s5", label: () => t("flameActual"), unit: "", step: true, def: true },
+  { key: "flame",    field: "flame",    lane: "flame", color: "--s5", label: () => t("flameSet"),    unit: "", step: true, dash: true, def: true },
+  // samples from older firmware have no actual speed when the power was not 21/23/25:
+  // the fan then ran at the selected speed (its power scales with the flame)
+  { key: "fanAct",   field: "fanActual", lane: "fan",  color: "--s6", label: () => t("fanActual"),   unit: "", step: true, def: true,
+    derive: col => { const fp = col("fanPower"), fs = col("fan"); return col("fanActual").map((v, i) => v === null && fp[i] > 0 ? fs[i] : v); } },
+  { key: "fan",      field: "fan",      lane: "fan",   color: "--s6", label: () => t("fanSet"),      unit: "", step: true, dash: true, def: true },
+  { key: "fume",     field: "fume",     lane: "fume",  color: "--s7", label: () => t("fumeTemp"),    unit: "°", def: false },
+  { key: "auger",    field: "auger",    lane: "auger", color: "--s8", label: () => t("auger"),       unit: "", dec: 1, def: false },
+  // 8 palette slots are taken: the fume fan reuses the fume hue (same exhaust system), dashed, in its own lane
+  { key: "fanPower", field: "fanPower", lane: "fanPower", color: "--s6", label: () => t("fanPower"), unit: "", step: true, def: false, x: "d" },   // raw register: debug only
+  { key: "fumeFan",  field: "fumeFan",  lane: "fumeFan", color: "--s7", dash: true, label: () => t("fumeFan"), unit: "", def: false },
+];
+const LANES = [
+  { id: "temp",  h: 160, title: () => t("temperatures") },
+  { id: "fume",  h: 90,  title: () => t("fumeTemp") },
+  { id: "flame", h: 64,  title: () => t("flamePower"), fixed: [0, 4], ticks: [0, 2, 4] },
+  { id: "fan",   h: 56,  title: () => t("tFan"),       fixed: [0, 3], ticks: [0, 3] },
+  { id: "auger", h: 70,  title: () => t("auger") + " (rpm)" },
+  { id: "fumeFan", h: 70, title: () => t("fumeFan") + " (rpm)" },
+  { id: "fanPower", h: 70, title: () => t("fanPower") + " (RAM 0x0A)" },
+];
+let histVis = (() => {
+  let v = null; try { v = JSON.parse(localStorage.getItem("histVis")); } catch (_) {}
+  const o = Object.assign({ state: true }, v || {});
+  SERIES.forEach(s => { if (o[s.key] === undefined) o[s.key] = s.def; });   // new series default to visible
+  return o;
+})();
+const seriesOn = s => !s.x || (s.x === "d" ? debug : expert);   // expert / debug only series
+function saveVis() { try { localStorage.setItem("histVis", JSON.stringify(histVis)); } catch (_) {} }
+function renderToggles() {
+  const host = $("histToggles"); host.innerHTML = "";
+  const cs = getComputedStyle(document.documentElement);
+  const chip = (key, label, color, dashed) => {
+    const b = el("button", "chip" + (histVis[key] ? " on" : "")); b.setAttribute("aria-pressed", !!histVis[key]);
+    const k = el("i"); if (color) { k.style.borderColor = cs.getPropertyValue(color).trim(); if (dashed) k.style.borderTopStyle = "dashed"; } else k.className = "vline";
+    b.append(k, document.createTextNode(label));
+    b.onclick = () => { histVis[key] = !histVis[key]; saveVis(); renderToggles(); renderHistory(); };
+    host.appendChild(b);
+  };
+  SERIES.filter(seriesOn).forEach(s => chip(s.key, s.label(), s.color, s.dash));
+  chip("state", t("stateLines"), null);
+}
+function niceTicks(min, max, count) {
+  const span = max - min || 1, step0 = span / count, mag = Math.pow(10, Math.floor(Math.log10(step0)));
+  const step = [1, 2, 5, 10].map(m => m * mag).find(s => span / s <= count) || 10 * mag;
+  const lo = Math.floor(min / step) * step, hi = Math.ceil(max / step) * step, ticks = [];
+  for (let v = lo; v <= hi + 1e-9; v += step) ticks.push(+v.toFixed(6));
+  return { lo, hi, ticks };
+}
+function fmtVal(s, v) {
+  if (v === null || v === undefined || isNaN(v)) return "–";
+  if (s.unit === "°") return fmtTemp(v, s.dec);
+  if ((s.key === "fan" || s.key === "fanAct") && v === 0) return t("off");
+  return s.dec ? Number(v).toFixed(s.dec) : String(v);
+}
+function renderHistory() {
+  markSeg2(); renderToggles();
+  const empty = $("histEmpty"), charts = $("histCharts");
+  // the server works in whole hours: cut shorter ranges (30 min) here
+  const now = Math.floor(Date.now() / 1000), fT = hist && hist.fields ? hist.fields.indexOf("t") : 0;
+  const tEnd = hist && hist.samples && hist.samples.length ? Math.max(now, hist.samples[hist.samples.length - 1][fT]) : now;
+  const samples = hist && hist.samples ? hist.samples.filter(r => r[fT] >= tEnd - histHours * 3600) : null;
+  if (!samples || samples.length < 2) {
+    charts.style.display = "none"; empty.style.display = ""; empty.textContent = hist && hist.error ? t("histErr", hist.error) : t("histEmpty"); return;
+  }
+  empty.style.display = "none"; charts.style.display = "";
+  const f = hist.fields, col = n => f.includes(n) ? samples.map(r => r[f.indexOf(n)]) : samples.map(() => null);
+  const times = col("t"), states = col("state");
+  const cs = getComputedStyle(document.documentElement), color = n => cs.getPropertyValue(n).trim();
+  const series = SERIES.filter(s => histVis[s.key] && seriesOn(s)).map(s => ({ ...s, values: s.derive ? s.derive(col) : col(s.field), stroke: color(s.color) }));
+  const lanes = LANES.filter(l => series.some(s => s.lane === l.id));
+  const host = $("histChart"), svg = host.querySelector("svg"), tip = host.querySelector(".tip");
+  const W = Math.max(280, host.clientWidth), m = { l: 34, r: 58, t: 6, b: 22 }, gap = 26, titleH = 14;
+  let H = m.t + (histVis.state ? 14 : 0);
+  const laneGeo = lanes.map(l => { const top = H + titleH; H = top + l.h + gap; return { ...l, top }; });
+  H = H - gap + m.b;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.innerHTML = "";
+  if (!lanes.length) { svg.setAttribute("viewBox", `0 0 ${W} 40`); svg.appendChild(svgEl("text", { x: m.l, y: 24 }, t("histNothing"))); return; }
+  // the x axis always spans the selected range (6/12/24 h), also when less history is stored
+  const t1 = Math.max(times[times.length - 1], Math.floor(Date.now() / 1000)), t0 = t1 - histHours * 3600;
+  const X = tm => m.l + (tm - t0) / (t1 - t0 || 1) * (W - m.l - m.r);
+  const plotTop = laneGeo[0].top, plotBottom = laneGeo[laneGeo.length - 1].top + laneGeo[laneGeo.length - 1].h;
+
+  // state change lines first, so data draws on top
+  if (histVis.state) {
+    let lastLabelX = -999;
+    // exact changes from the state log (/api/events); older firmware: derive them from the samples
+    // Before the log starts (or without it) the changes are derived from the 2-min samples.
+    // The first log entry with from = null only marks the start of the log, not a change.
+    const stEv = stateEvents(), logStart = stEv.length ? stEv[0].t : Infinity;
+    const sampled = states.map((v, i) => ({ t: times[i], s: v })).filter((c, i) => i > 0 && c.s !== states[i - 1] && c.t < logStart);
+    const logged = stEv.filter(e => e.from !== null && e.t >= t0 && e.t <= t1).map(e => ({ t: e.t, s: e.to }));
+    // errors from the log: red line labelled with the code
+    const errs = (Array.isArray(events) ? events : []).filter(e => e.type === "error" && e.id && e.t >= t0 && e.t <= t1).map(e => ({ t: e.t, err: e.error }));
+    const changes = sampled.concat(logged, errs).sort((a, b) => a.t - b.t);
+    for (const c of changes) {
+      const x = X(c.t), alarm = c.err !== undefined || [8, 9, 10, -1].includes(c.s);
+      svg.appendChild(svgEl("line", { x1: x, x2: x, y1: m.t + 10, y2: plotBottom, stroke: alarm ? "var(--err)" : "var(--muted)", "stroke-width": 1, "stroke-dasharray": "2 3", opacity: alarm ? 0.9 : 0.55 }));
+      if (x - lastLabelX > 56) { svg.appendChild(svgEl("text", { x: x + 3, y: m.t + 9, style: alarm ? "fill:var(--err)" : "" }, c.err !== undefined ? c.err : STATE_NAME[lang][c.s] ?? c.s)); lastLabelX = x; }
+    }
+  }
+  const scales = {};
+  for (const l of laneGeo) {
+    const ls = series.filter(s => s.lane === l.id);
+    const vals = ls.flatMap(s => s.values).filter(v => v !== null && !isNaN(v));
+    const y = l.fixed ? { lo: l.fixed[0], hi: l.fixed[1], ticks: l.ticks } : !vals.length ? { lo: 0, hi: 1, ticks: [] } : niceTicks(Math.min(...vals), Math.max(...vals), l.h > 100 ? 4 : 2);
+    const Y = v => l.top + (1 - (v - y.lo) / (y.hi - y.lo || 1)) * l.h;
+    scales[l.id] = Y;
+    svg.appendChild(svgEl("text", { x: m.l, y: l.top - 4, class: "lane" }, l.title()));
+    for (const v of y.ticks) {
+      svg.appendChild(svgEl("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: "var(--grid)", "stroke-width": 1 }));
+      svg.appendChild(svgEl("text", { x: m.l - 6, y: Y(v) + 4, "text-anchor": "end" }, l.id === "temp" || l.id === "fume" ? v + "°" : v));
+    }
+    for (const s of ls) {
+      let d = "", prevT = null;
+      s.values.forEach((v, i) => {
+        if (v === null || isNaN(v)) { prevT = null; return; }
+        const brk = prevT === null || times[i] - prevT > 600;              // > 10 min without samples: gap
+        if (s.step && !brk) d += `H${X(times[i]).toFixed(1)}V${Y(v).toFixed(1)}`;
+        else d += `${brk ? "M" : "L"}${X(times[i]).toFixed(1)},${Y(v).toFixed(1)}`;
+        prevT = times[i];
+      });
+      svg.appendChild(svgEl("path", { d, fill: "none", stroke: s.stroke, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round", "stroke-dasharray": s.dash ? "5 3" : "none" }));
+    }
+    // direct labels at the line ends (ink text + a short color key)
+    const ends = ls.map(s => { const vs = s.values; let i = vs.length - 1; while (i >= 0 && (vs[i] === null || isNaN(vs[i]))) i--; return i >= 0 ? { s, v: vs[i] } : null; })
+      .filter(Boolean).sort((a, b) => Y(a.v) - Y(b.v));
+    let lastY = -99;
+    for (const e of ends) {
+      let yy = Y(e.v) + 4; if (yy - lastY < 13) yy = lastY + 13; lastY = yy;
+      svg.appendChild(svgEl("line", { x1: W - m.r + 4, x2: W - m.r + 12, y1: yy - 4, y2: yy - 4, stroke: e.s.stroke, "stroke-width": 2 }));
+      svg.appendChild(svgEl("text", { x: W - m.r + 15, y: yy, class: "lbl" }, fmtVal(e.s, e.v)));
+    }
+  }
+  // x axis: round times, step depends on the range and the width
+  const spanH = (t1 - t0) / 3600, narrow = W < 500;
+  const stepMin = spanH > 12 ? (narrow ? 360 : 240) : spanH > 6 ? (narrow ? 240 : 120) : spanH > 1 ? (narrow ? 120 : 60) : spanH > 0.5 ? (narrow ? 20 : 10) : (narrow ? 10 : 5);
+  const first = new Date(t0 * 1000); first.setMinutes(0, 0, 0);
+  for (let m0 = first.getTime() / 1000; m0 < t1; m0 += stepMin * 60) {
+    if (m0 <= t0) continue;
+    const d = new Date(m0 * 1000); if ((d.getHours() * 60 + d.getMinutes()) % stepMin) continue;
+    svg.appendChild(svgEl("text", { x: X(m0), y: H - 6, "text-anchor": "middle" }, fmtHM(d)));
+  }
+  // crosshair + tooltip spanning all lanes
+  const cross = svgEl("line", { y1: plotTop, y2: plotBottom, stroke: "var(--muted)", "stroke-width": 1, visibility: "hidden" });
+  const dots = series.map(s => svgEl("circle", { r: 4, fill: s.stroke, stroke: "var(--card)", "stroke-width": 2, visibility: "hidden" }));
+  svg.append(cross, ...dots);
+  const hit = svgEl("rect", { x: m.l, y: 0, width: W - m.l - m.r, height: H, fill: "transparent" }); svg.appendChild(hit);
+  const move = ev => {
+    const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) * (W / r.width);
+    const tm = t0 + (px - m.l) / (W - m.l - m.r) * (t1 - t0);
+    let i = 0, best = Infinity; times.forEach((x, k) => { const dd = Math.abs(x - tm); if (dd < best) { best = dd; i = k; } });
+    const cx = X(times[i]); cross.setAttribute("x1", cx); cross.setAttribute("x2", cx); cross.setAttribute("visibility", "visible");
+    tip.innerHTML = ""; const dd = new Date(times[i] * 1000);
+    tip.appendChild(el("div", "tt", fmtDate(dd) + " " + fmtHM(dd) + " · " + (STATE_NAME[lang][stateAt(times[i], states[i])] ?? "–")));
+    series.forEach((s, k) => {
+      const v = s.values[i], ok = v !== null && !isNaN(v);
+      dots[k].setAttribute("visibility", ok ? "visible" : "hidden");
+      if (ok) { dots[k].setAttribute("cx", cx); dots[k].setAttribute("cy", scales[s.lane](v)); }
+      const row = el("div", "tr"), lab = el("span"), key = el("i"); key.style.borderColor = s.stroke; if (s.dash) key.style.borderTopStyle = "dashed";
+      lab.append(key, document.createTextNode(s.label())); row.append(lab, el("b", "", fmtVal(s, v))); tip.appendChild(row);
+    });
+    tip.style.display = "block";
+    const left = (cx / W) * r.width; tip.style.left = Math.min(Math.max(0, left + 12), r.width - tip.offsetWidth) + "px"; tip.style.top = "20px";
+  };
+  const leave = () => { cross.setAttribute("visibility", "hidden"); dots.forEach(d => d.setAttribute("visibility", "hidden")); tip.style.display = "none"; };
+  hit.addEventListener("pointermove", move); hit.addEventListener("pointerdown", move); hit.addEventListener("pointerleave", leave);
+  svg.setAttribute("aria-label", t("history") + ": " + series.map(s => s.label()).join(", "));
+
+  // table view (accessible alternative), newest first, all fields
+  const tbl = $("histTable"); tbl.innerHTML = "";
+  const cols = [["t", t("tTime")], ["state", t("status")], ["room", t("room")], ["setpoint", t("setPoint")], ["stove", t("stoveSensor")], ["remote", t("remoteSensor")], ["fume", t("fumes")], ["flame", t("flameSet")], ["flameActual", t("flameActual")], ["fan", t("fanSet")], ["fanActual", t("fanActual")], ["fanPower", t("fanPower")], ["auger", t("auger")], ["fumeFan", t("fumeFan")]];
+  const head = el("tr"); cols.forEach(c => head.appendChild(el("th", "", c[1]))); tbl.appendChild(head);
+  for (let i = samples.length - 1; i >= 0; i--) {
+    const r = samples[i], tr = el("tr"), get = n => f.includes(n) ? r[f.indexOf(n)] : null;
+    cols.forEach(([n]) => {
+      const v = get(n);
+      const txt = n === "t" ? (d => fmtDate(d) + " " + fmtHM(d))(new Date(v * 1000)) : n === "state" ? (STATE_NAME[lang][v] ?? "–")
+        : ["room", "stove", "remote"].includes(n) ? fmtTemp(v, 1) : ["setpoint", "fume"].includes(n) ? fmtTemp(v)
+        : n === "fanActual" && v === null && get("fanPower") > 0 ? get("fan") : (v ?? "–");
+      tr.appendChild(el("td", "", txt));
+    });
+    tbl.appendChild(tr);
+  }
+}
+// state at a moment according to the change log (falls back to the sampled state)
+function stateEvents() { return Array.isArray(events) ? events.filter(e => !e.type || e.type === "state") : []; }
+function stateAt(tm, fallback) {
+  const ev = stateEvents(); if (!ev.length || tm < ev[0].t) return fallback;
+  let s = fallback; for (const e of ev) { if (e.t > tm) break; s = e.to; } return s;
+}
+// Time each error memory position first appeared, from the error log: positions run
+// newest (#1) to oldest, matched in order against logged errors (newest first).
+// Positions without a matching logged error get no time (happened before the log).
+function errorTimes(prev) {
+  const out = {}; if (!prev || !Array.isArray(events)) return out;
+  const seen = events.filter(e => e.type === "error" && e.id).reverse();
+  let k = 0;
+  for (let i = 1; i <= 5; i++) {
+    const m = prev["MemoryPos_" + i]; if (!m) continue;
+    while (k < seen.length && seen[k].id !== m.id) k++;
+    if (k >= seen.length) break;
+    out["MemoryPos_" + i] = seen[k].t; k++;
+  }
+  return out;
+}
+function fmtDur(sec) {
+  if (sec < 60) return sec + " s";
+  const m = Math.floor(sec / 60); if (m < 60) return m + " min";
+  const h = Math.floor(m / 60); return h < 48 ? h + " u " + pad(m % 60) : Math.floor(h / 24) + " d " + (h % 24) + " u";
+}
+function renderEvents() {
+  const box = $("evtBox"), tbl = $("evtTable");
+  box.style.display = Array.isArray(events) ? "" : "none";
+  if (!Array.isArray(events)) return;
+  tbl.innerHTML = "";
+  if (!events.length) { const tr = el("tr"); const td = el("td", "", t("evtNone")); td.style.textAlign = "left"; tr.appendChild(td); tbl.appendChild(tr); return; }
+  const head = el("tr"); [t("evtWhen"), t("evtFrom"), t("evtTo"), t("evtDur")].forEach(h => head.appendChild(el("th", "", h))); tbl.appendChild(head);
+  const now = Math.floor(Date.now() / 1000), name = v => v === null || v === undefined ? "–" : (STATE_NAME[lang][v] ?? String(v));
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i], kind = e.type || "state", isErr = kind === "error", d = new Date(e.t * 1000), tr = el("tr");
+    // duration until the next event of the same kind (pellet: same register)
+    let next = null;
+    for (let j = i + 1; j < events.length; j++) { const n = events[j]; if ((n.type || "state") === kind && (kind !== "pellet" || n.register === e.register)) { next = n; break; } }
+    const dur = fmtDur(Math.max(0, (next ? next.t : now) - e.t)) + (next ? "" : " (" + t("evtNow") + ")");
+    const pelName = e.register === "0xA4" ? t("pelSensor") : t("pelCounter");
+    const cells = isErr ? [t("evtError"), e.id ? t("evtErrOn", e.error) : t("evtErrOff"), e.id ? dur : ""]
+                : kind === "pellet" ? [pelName + " " + (e.from ?? "–"), pelName + " " + e.to, dur]
+                : [name(e.from), name(e.to), dur];
+    [fmtDate(d) + " " + fmtHM(d) + ":" + pad(d.getSeconds()), ...cells].forEach(x => tr.appendChild(el("td", "", x)));
+    if ((isErr && e.id) || [8, 9, 10].includes(e.to)) tr.style.color = "var(--err)";
+    tbl.appendChild(tr);
+  }
+}
+let histTimer = null;
+async function loadHistory() {
+  clearTimeout(histTimer);
+  const [h, ev] = await Promise.allSettled([api("GET", "/api/history", { hours: Math.max(1, Math.ceil(histHours)) }), api("GET", "/api/events")]);
+  hist = h.status === "fulfilled" ? h.value.data : { error: h.reason && h.reason.message };
+  events = ev.status === "fulfilled" && ev.value.data && Array.isArray(ev.value.data.events) ? ev.value.data.events.slice().sort((a, b) => a.t - b.t) : null;   // null: firmware without the log
+  renderHistory(); renderEvents(); if (state) render(state);   // error memory shows times from the log
+  histTimer = setTimeout(loadHistory, HISTORY_MS);
+}
+let resizeT = null; window.addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(renderHistory, 150); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderHistory);
+
+
+// ---------- expert mode ----------
+function applyExpert() {
+  document.body.classList.toggle("expert", expert);
+  document.body.classList.toggle("debug", debug);
+  $("expertBtn").setAttribute("aria-pressed", expert); $("expertBtn").title = t("expertTitle");
+  $("debugBtn").setAttribute("aria-pressed", debug); $("debugBtn").title = t("debugTitle");
+}
+$("expertBtn").onclick = () => {
+  expert = !expert; try { localStorage.setItem("expert", expert ? "1" : "0"); } catch (_) {}
+  applyExpert(); renderHistory();
+};
+$("debugBtn").onclick = () => {
+  debug = !debug; try { localStorage.setItem("debug", debug ? "1" : "0"); } catch (_) {}
+  applyExpert(); renderHistory(); renderHyp(); renderParams(); if (debug) { loadHyp(); loadParams(); }
+};
+
+// ---------- reachability ----------
+// Controller offline: every card is grey. Stove not answering (state -1): every card
+// except the device card (restart / firmware upload still work) is grey.
+function applyReach() {
+  const noStove = !!state && state.stoveState && state.stoveState.stoveState === -1;
+  document.querySelectorAll("main > section.card").forEach(c => {
+    const dim = offline || (noStove && c.id !== "devCard");
+    c.classList.toggle("dim", dim); c.toggleAttribute("inert", dim);
+  });
+}
+
+
+// ---------- known EEPROM parameters (debug) ----------
+// st: ok = verified on this stove, doc = from the documentation / other Micronova
+// maps, not verified here, h = hypothesis, u = unknown meaning.
+const rpmOf = v => (v + 25) * 10;   // fume fan encoding, same as RAM 0x36 / 0x37
+const PRESET_ROWS = [   // [label, auger addr, fume fan addr, 0x86-0x89 addr, flame level]
+  [() => L("Ontsteking", "Ignition"), 0x04, 0x10, null, null],
+  [() => L("Vlam 1", "Flame 1"), 0x05, 0x11, 0x86, 1],
+  [() => L("Vlam 2", "Flame 2"), 0x06, 0x12, 0x87, 2],
+  [() => L("Vlam 3", "Flame 3"), 0x07, 0x13, 0x88, 3],
+  [() => L("Vlam 4", "Flame 4"), 0x08, 0x14, 0x89, 4],
+  [() => L("Niveau 5 (ongebruikt)", "Level 5 (unused)"), 0x09, 0x15, null, null],
+];
+const LANGS = ["", "ENG", "FRA", "DEU", "NLD", "POR", "SPA", "HRV", "DAN"];
+const bcd = v => v === undefined ? undefined : (v >> 4) * 10 + (v & 15);
+const PARAMS = [
+  { a: [0x7D], n: ["Gewenste temperatuur", "Set point"], f: v => v[0] + " °C", st: "ok" },
+  { a: [0x7F], n: ["Vlamvermogen", "Flame power"], f: v => String(v[0]), st: "ok" },
+  { a: [0x81], n: ["Ventilator (Multifuoco)", "Room fan (Multifuoco)"], f: v => v[0] ? L("stand ", "speed ") + v[0] : L("uit", "off"), st: "ok" },
+  { a: [0x90, 0x91], n: ["Energy saving stop / herstart", "Energy saving stop / restart"], f: v => "+" + v[0] + " °C / −" + v[1] + " °C", st: "ok" },
+  { a: [0x02], n: ["Interval branderreiniging", "Brazier cleaning interval"], f: v => v[0] + " min", st: "ok" },
+  { a: [0xC0], n: ["Verbrandingskwaliteit", "Combustion quality"], f: () => state && state.burn ? String(state.burn.combustionQuality) : "?", st: "ok" },
+  { a: [0xBC], n: ["Pelletkwaliteit", "Pellet quality"], f: () => state && state.burn ? String(state.burn.pelletQuality) : "?", st: "ok" },
+  { a: [0xC6], n: ["Pelletreserve (PELLET RESERVE)", "Pellet reserve (PELLET RESERVE)"], f: v => v[0] ? "ON" : "OFF", st: "ok" },
+  { a: [0x4B], n: ["Zoemer", "Beep"], f: v => v[0] ? L("aan", "on") : L("uit", "off"), st: "ok" },
+  { a: [0x4F], n: ["Taal afstandsbediening", "Remote language"], f: v => LANGS[v[0]] || "?", st: "ok" },
+  { a: [0x4E], n: ["DISPLAY (parameter 79)", "DISPLAY (parameter 79)"], f: v => String(v[0]), st: "u",
+    x: ["Altijd 1; de schermverlichting zit in de afstandsbediening zelf", "Always 1; the backlight is kept in the remote itself"] },
+  { a: [0x48], n: ["Externe thermostaat: werking", "External thermostat: mode"], f: v => v[0] ? "Stop" : L("Moduleren", "Modulate"), st: "doc" },
+  { a: [0x49], n: ["Externe thermostaat: contact", "External thermostat: contact"], f: v => v[0] ? "N.C." : "N.O.", st: "doc" },
+  { a: [0xC4], n: ["Pelletcontact", "Pellet contact"], f: v => v[0] ? "N.C." : "N.O.", st: "doc" },
+  { a: [0xC5], n: ["Onbekend (naast pelletkwaliteit)", "Unknown (next to pellet quality)"], f: v => String(v[0]), st: "u" },
+  { a: [0xE7], n: ["Uren sinds onderhoud", "Hours since service"], f: v => v[0] + " h", st: "ok" },
+  { a: [0xEA, 0xEB], n: ["Werkuren totaal", "Total working hours"], f: v => (v[0] | (v[1] << 8)) + " h", st: "ok" },
+  { a: [0xEC], n: ["Werkuren (?)", "Working hours (?)"], f: v => String(v[0]), st: "u" },
+  { a: [0xEE, 0xEF], n: ["Aantal starts", "Number of starts"], f: v => String(v[0] | (v[1] << 8)), st: "ok" },
+  { a: [0x8A, 0x8B, 0x8C, 0x8D, 0x8E, 0x8F], n: ["Firmware kachel", "Stove firmware"],
+    f: v => "FW-" + String.fromCharCode(v[0], v[1]) + "-" + pad(v[2]) + "-V-" + pad(v[3]) + "-" + pad(v[4]) + "-" + pad(v[5]), st: "ok" },
+  { a: [0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD], n: ["Klok (BCD)", "Clock (BCD)"],
+    f: v => pad(bcd(v[3])) + "/" + pad(bcd(v[4])) + "/20" + pad(bcd(v[5])) + " " + pad(bcd(v[1])) + ":" + pad(bcd(v[2])) + " (" + (DAY_SHORT[lang][bcd(v[0]) - 1] || "?") + ")", st: "ok",
+    x: ["Wordt geschreven bij het gelijkzetten; de lopende klok staat in RAM 0x7A – 0x80", "Written when the clock is set; the running clock is in RAM 0x7A – 0x80"] },
+  { a: [0xE0, 0xE1, 0xE2, 0xE3, 0xE4], n: ["Foutgeheugen 1 – 5", "Error memory 1 – 5"], f: v => v.map(x => x ? "E" + x : "–").join(" / "), st: "ok",
+    x: ["Ruwe foutcodes; zie het blok Foutgeheugen", "Raw error codes; see the Error memory card"] },
+];
+let parVals = {}, parAt = 0, parBusy = false;
+const hx = a => "0x" + a.toString(16).toUpperCase().padStart(2, "0");
+function stPill(st) {
+  const lbl = { ok: "stOk", doc: "stDoc", h: "stHyp", u: "stUnk" }[st];
+  return pill(t(lbl), st === "ok" ? "ok" : st === "h" ? "warn" : "");
+}
+function renderParams() {
+  if (!debug) return;
+  const get = a => parVals[a];
+  // presets per power level
+  const pt = $("parPresetTable"); pt.innerHTML = "";
+  const head = el("tr");
+  [t("parLevel"), t("parAuger") + " (0x04 – 0x09)", t("parFume") + " (0x10 – 0x15)", "0x86 – 0x89"].forEach(h => head.appendChild(el("th", "", h)));
+  const th = el("thead"); th.appendChild(head); pt.appendChild(th);
+  const tb = el("tbody"), cur = state && state.flame ? state.flame.actual : null;
+  for (const [lbl, aAug, aFan, aX, lvl] of PRESET_ROWS) {
+    const tr = el("tr", lvl && lvl === cur ? "cur" : "");
+    const va = get(aAug), vf = get(aFan), vx = aX !== null ? get(aX) : undefined;
+    tr.append(el("td", "", lbl() + (lvl && lvl === cur ? " ← " + t("parNow") : "")),
+      el("td", "n", va === undefined ? "–" : (va / 10).toFixed(1)),
+      el("td", "n", vf === undefined ? "–" : rpmOf(vf) + " rpm (" + vf + ")"),
+      el("td", "n", aX === null ? "" : vx === undefined ? "–" : String(vx)));
+    tb.appendChild(tr);
+  }
+  const st = el("tr"), stc = el("td"); stc.textContent = t("status");
+  const c1 = el("td", "n"), c2 = el("td", "n"), c3 = el("td", "n");
+  // auger: verified for flame 1 - 3 (RAM 0x0D), ignition and flame 4 by analogy
+  c1.appendChild(pill(t("stOk") + " " + L("vlam 1 – 3", "flame 1 – 3"), "ok")); c2.appendChild(stPill("h")); c3.appendChild(stPill("u"));
+  st.append(stc, c1, c2, c3); tb.appendChild(st);
+  pt.appendChild(tb);
+  // other settings
+  const ptab = $("parTable"); ptab.innerHTML = "";
+  const h2 = el("tr"); [t("hypReg"), t("parRaw"), t("parName"), t("parMeaning"), t("hypSt")].forEach(h => h2.appendChild(el("th", "", h)));
+  const th2 = el("thead"); th2.appendChild(h2); ptab.appendChild(th2);
+  const tb2 = el("tbody"), i = lang === "nl" ? 0 : 1;
+  for (const p of PARAMS) {
+    const v = p.a.map(get), have = v.every(x => x !== undefined);
+    const reg = p.a.length > 2 ? hx(p.a[0]) + " – " + hx(p.a[p.a.length - 1]) : p.a.map(hx).join(", ");
+    const tr = el("tr"), m = el("td", "h");
+    m.textContent = have ? p.f(v) : "–";
+    if (p.x) m.appendChild(el("div", "muted", p.x[i]));
+    const s = el("td"); s.appendChild(stPill(p.st));
+    tr.append(el("td", "r", "EEPROM " + reg), el("td", "v", have ? v.join(" / ") : "–"), el("td", "", p.n[i]), m, s);
+    tb2.appendChild(tr);
+  }
+  ptab.appendChild(tb2);
+  $("parAge").textContent = parAt ? t("updated", new Date(parAt).toLocaleTimeString(lang === "nl" ? "nl-BE" : "en-GB")) : "";
+}
+// EEPROM settings hardly change: read once when debug mode is turned on, and on "Reload".
+async function loadParams(force) {
+  if (!debug || offline || parBusy || (parAt && !force)) return;
+  const want = [...new Set([...PRESET_ROWS.flatMap(r => [r[1], r[2], r[3]]).filter(a => a !== null), ...PARAMS.flatMap(p => p.a)])];
+  parBusy = true; $("parReload").disabled = true;
+  try {
+    const r = await api("GET", "/api/dump", { register: "eeprom", address: want.map(hx).join(",") });
+    const blk = r.data ? Object.values(r.data)[0] || {} : {};
+    for (const v of Object.values(blk)) parVals[v.Address_int] = v.Value_int;
+    parAt = Date.now();
+  } catch (e) { toast(t("failed", t("parTitle"), e.message), true); }
+  finally { parBusy = false; $("parReload").disabled = false; }
+  renderParams();
+}
+$("parReload").onclick = () => loadParams(true);
+
+// ---------- register hypotheses (debug) ----------
+// From docs/discovered-values.md. Not verified with a controlled change unless the
+// status says so. a: addresses read live (ram / eeprom), shown as "v1 / v2".
+const HYP = [
+  { r: "RAM 0x89", a: [["ram", 0x89]], st: "h",
+    o: ["20 met volle bak; geen kopie van de gewenste temperatuur (bleef 20 bij 21). Tijdens branden om de 9,5 à 14 min kort 20 → 19 en na ~35 s terug (16/11 en 17/11); nooit als de kachel uit staat",
+        "20 with a full hopper; not a set point copy (stayed 20 at 21). While working briefly 20 → 19 every 9.5 – 14 min, back after ~35 s (16/11 and 17/11); never while off"],
+    h: ["Aftelling (min) tot het pelletreserve-alarm; de niveausensor ziet mogelijk kort geen pellets",
+        "Countdown (min) to the pellet reserve alarm; the level sensor possibly briefly sees no pellets"] },
+  { r: "RAM 0xA4", a: [["ram", 0xA4]], st: "h",
+    o: ["Altijd 0, ook tijdens de dips van 0x89", "Always 0, also during the 0x89 dips"],
+    h: ["Pelletsensor (5 = actief); mogelijk niet het juiste register", "Pellet sensor (5 = active); possibly not the right register"] },
+  { r: "RAM 0x2F", a: [["ram", 0x2F]], st: "h",
+    o: ["10 tijdens branden, 20 uit. Tijdens de branderreiniging (17/11 09:28) 25 → 18 → 11 → 3, ~1 per seconde; de reiniging duurt 24 – 26 s",
+        "10 while working, 20 off. During brazier cleaning (17/11 09:28) 25 → 18 → 11 → 3, ~1 per second; the cleaning lasts 24 – 26 s"],
+    h: ["Aftelling in seconden van de huidige fase (o.a. de branderreiniging)", "Countdown in seconds of the current phase (e.g. brazier cleaning)"] },
+  { r: "RAM 0x07", a: [["ram", 0x07]], st: "h",
+    o: ["Telt 4 → 1, één stap per minuut, enkel tijdens branden. Sprong van 1 naar 4 bij de start van de branderreiniging (17/11)",
+        "Counts 4 → 1, one step per minute, only while working. Jumped from 1 to 4 when brazier cleaning started (17/11)"],
+    h: ["Minutenteller van een cyclus van 4 min die herstart bij de branderreiniging; wat de cyclus doet is onbekend", "Minute counter of a 4-minute cycle that restarts at brazier cleaning; what the cycle does is unknown"] },
+  { r: "RAM 0x36", a: [["ram", 0x36], ["ram", 0x37]], st: "h",
+    o: ["Volgt 0x37 (gemeten toerental) op 1 na: 134 / 154 / 178 bij vlam 1 / 2 / 3, 238 tijdens branderreiniging, 0 uit",
+        "Follows 0x37 (measured speed) within 1: 134 / 154 / 178 at flame 1 / 2 / 3, 238 during brazier cleaning, 0 off"],
+    h: ["Doeltoerental rookgasventilator (zelfde codering als 0x37)", "Fume fan target speed (same encoding as 0x37)"] },
+  { r: "RAM 0xD3", a: [["ram", 0xD3]], st: "h",
+    o: ["1 / 2 / 3 bij werkelijk vlamvermogen 1 / 2 / 3; ook 1 als de ventilator stilstaat in stand-by",
+        "1 / 2 / 3 at actual flame power 1 / 2 / 3; also 1 when the fan has stopped in standby"],
+    h: ["Volgt het werkelijke vlamvermogen (minimum 1), niet de ventilator", "Follows the actual flame power (minimum 1), not the fan"] },
+  { r: "RAM 0x04", a: [["ram", 0x04]], st: "h",
+    o: ["0 als de kachel koud is, 1 / 2 / 3 bij vlam 1 / 2 / 3 terwijl de ventilator draait", "0 when the stove is cold, 1 / 2 / 3 at flame 1 / 2 / 3 while the fan runs"],
+    h: ["Rij in de ventilatortabel (vlamniveau); 0 = te koud voor de ventilator. De firmware gebruikt ≠ 0 als 'warm genoeg'", "Row in the fan table (flame level); 0 = too cold for the fan. The firmware uses ≠ 0 as 'hot enough'"] },
+  { r: "RAM 0x0E", a: [["ram", 0x0E]], st: "h",
+    o: ["1 uit, 2 bij vlam 2, 3 bij vlam 3", "1 off, 2 at flame 2, 3 at flame 3"], h: ["Nog een kopie van het vermogensniveau (minimum 1)", "Another copy of the power level (minimum 1)"] },
+  { r: "RAM 0xA1", a: [["ram", 0xA1]], st: "u",
+    o: ["0 uit, 214 bij vlam 2, 238 bij vlam 3", "0 off, 214 at flame 2, 238 at flame 3"], h: ["Hangt af van het vermogen; betekenis onbekend", "Depends on the power; meaning unknown"] },
+  { r: "RAM 0x09, 0x43", a: [["ram", 0x09], ["ram", 0x43]], st: "u",
+    o: ["10 tijdens branden, 0 in stand-by. Tijdens de branderreiniging 10 → 3 / 2 → 0 en daarna terug 10",
+        "10 while working, 0 in standby. During brazier cleaning 10 → 3 / 2 → 0, then back to 10"],
+    h: ["Volgen de brandfase (vallen weg tijdens reiniging en stand-by)", "Follow the burning phase (drop during cleaning and standby)"] },
+  { r: "RAM 0x0B, 0x4E, 0x12", a: [["ram", 0x0B], ["ram", 0x4E], ["ram", 0x12]], st: "u",
+    o: ["0x0B / 0x4E: 0 uit, ~105 tijdens branden. Alle drie zakken ~3 tijdens de branderreiniging (105 → 102, 0x12 104 → 101)",
+        "0x0B / 0x4E: 0 off, ~105 while working. All three drop ~3 during brazier cleaning (105 → 102, 0x12 104 → 101)"],
+    h: ["Hangen samen; betekenis onbekend", "Linked; meaning unknown"] },
+  { r: "RAM 0x39", a: [["ram", 0x39]], st: "u",
+    o: ["16 tijdens branden, 80 in stand-by", "16 while working, 80 in standby"], h: ["Verandert met de fase; onbekend", "Changes with the phase; unknown"] },
+  { r: "RAM 0x32", a: [["ram", 0x32]], st: "h",
+    o: ["Minuten tot de branderreiniging (bevestigd). Tijdens de reiniging zelf 3 (17/11) of 0 (16/11), daarna 45",
+        "Minutes to brazier cleaning (confirmed). During the cleaning itself 3 (17/11) or 0 (16/11), then 45"],
+    h: ["Waarde tijdens de reiniging zelf onduidelijk", "Value during the cleaning itself unclear"] },
+  { r: "RAM 0x6D, 0x79", a: [["ram", 0x6D], ["ram", 0x79]], st: "u",
+    o: ["Altijd 20. Bleven 20 toen de gewenste temperatuur van 20 naar 21 ging (17/11, kachel uit)", "Always 20. Stayed 20 when the set point went from 20 to 21 (17/11, stove off)"],
+    h: ["Geen kopie van de gewenste temperatuur (weerlegd); betekenis onbekend. De gewenste temperatuur staat enkel in EEPROM 0x7D", "Not a copy of the set point (refuted); meaning unknown. The set point is only in EEPROM 0x7D"] },
+  { r: "RAM 0xA7", a: [["ram", 0xA7]], st: "h",
+    o: ["0 uit; ≈ 117 − 1,5 × 0x0A (74 bij vermogen 27)", "0 off; ≈ 117 − 1.5 × 0x0A (74 at power 27)"], h: ["Tweede sturing kamerventilator, mogelijk een triac-vertraging", "Second room fan drive, possibly a triac delay"] },
+  { r: "RAM 0xAF", a: [["ram", 0xAF]], st: "h",
+    o: ["47 – 48 uit (koud), 68 – 75 na 1 – 2 u branden op vlam 2, 92 – 93 op vlam 3 (17/11)", "47 – 48 off (cold), 68 – 75 after 1 – 2 h at flame 2, 92 – 93 at flame 3 (17/11)"],
+    h: ["Temperatuur in de kachel / van de elektronica in x/2 (23,5 → 46 °C)?", "Temperature inside the stove / of the electronics in x/2 (23.5 → 46 °C)?"] },
+  { r: "RAM 0x96, 0x9E, 0x83, 0x38", a: [["ram", 0x96], ["ram", 0x9E], ["ram", 0x83], ["ram", 0x38]], st: "h",
+    o: ["Schommelen tussen metingen (0x38 24 – 30, 0x96 41 – 48), ongeveer gelijk aan of uit; 0x83 meestal 200 met korte dips",
+        "Move between reads (0x38 24 – 30, 0x96 41 – 48), about the same on or off; 0x83 mostly 200 with short dips"],
+    h: ["Ruwe analoge (ADC) metingen", "Raw analog (ADC) readings"] },
+  { r: "RAM 0x08, 0x16, 0x24", a: [["ram", 0x08], ["ram", 0x16], ["ram", 0x24]], st: "h",
+    o: ["Bevestigd (17/11): 0x08 = ingedrukte toets, 1 = ▼, 2 = ▲, 4 = ESC, 8 = OK; 0x16 telt de toetsstappen (ook bij ingedrukt houden); 0x24 telt ~1 s af na de laatste toets. ⏻ niet getest",
+        "Confirmed (17/11): 0x08 = pressed key, 1 = ▼, 2 = ▲, 4 = ESC, 8 = OK; 0x16 counts key steps (also while held); 0x24 counts down ~1 s after the last key. ⏻ not tested"],
+    h: ["0x08 zelf schrijven werkt niet als toets (getest 17/11: de kachel maakt er 224 of 16 van, er opent niets). Vermoedelijk lopen de menu's in de afstandsbediening zelf en melden deze registers de toets enkel aan de kachel",
+        "Writing 0x08 does not act as a key (tested 17/11: the stove turns it into 224 or 16, nothing opens). The menus probably run in the remote itself; these registers only report the key to the stove"] },
+  { r: "RAM 0x14, 0x22, 0x3A, 0xC7", a: [["ram", 0x14], ["ram", 0x22], ["ram", 0x3A], ["ram", 0xC7]], st: "u",
+    o: ["Uit 1 / 1 / 2 / 2; branden 16/11 0 / 51 / 0 / 0; branden 17/11 1 / 1 / 3 / 2", "Off 1 / 1 / 2 / 2; working 16/11 0 / 51 / 0 / 0; working 17/11 1 / 1 / 3 / 2"],
+    h: ["Volgen aan/uit niet (eerder gedacht); betekenis onbekend", "Do not follow on/off (as thought before); meaning unknown"] },
+  { r: "RAM 0xC6, 0xC8", a: [["ram", 0xC6], ["ram", 0xC8]], st: "u",
+    o: ["75 / 89 uit en tijdens branden op 17/11; 143 / 147 tijdens branden op 16/11", "75 / 89 off and while working on 17/11; 143 / 147 while working on 16/11"],
+    h: ["Volgen aan/uit niet; betekenis onbekend", "Do not follow on/off; meaning unknown"] },
+  { r: "RAM 0x1F, 0x20, 0xB7", a: [["ram", 0x1F], ["ram", 0x20], ["ram", 0xB7]], st: "u",
+    o: ["Branden 158 / 0 / 230 – 236, uit 144 / 8 / 234", "Working 158 / 0 / 230 – 236, off 144 / 8 / 234"], h: ["Onbekend", "Unknown"] },
+  { r: "RAM 0xFA", a: [["ram", 0xFA]], st: "u",
+    o: ["32 (spatie) tijdens branden, 69 ('E') uit; de rest van 0xE0 – 0xFF blijft 32", "32 (space) while working, 69 ('E') off; the rest of 0xE0 – 0xFF stays 32"], h: ["Onbekend; geen tekstbuffer van het display", "Unknown; not a display text buffer"] },
+  { r: "RAM 0x13, 0x4B", a: [["ram", 0x13], ["ram", 0x4B]], st: "h",
+    o: ["Lopen continu: 0x13 tot 120, 0x4B ~5 per seconde", "Run continuously: 0x13 wraps at 120, 0x4B ~5 per second"], h: ["Vrijlopende tellers", "Free-running counters"] },
+  { r: "RAM 0x61 – 0x64", a: [["ram", 0x61], ["ram", 0x62], ["ram", 0x63], ["ram", 0x64]], st: "h",
+    o: ["80 / 95 / 110 / 120 = EEPROM 0x86 – 0x89", "80 / 95 / 110 / 120 = EEPROM 0x86 – 0x89"], h: ["RAM-kopie van een parameter per vermogensniveau", "RAM copy of a per-power-level parameter"] },
+  { r: "EEPROM 0x10 – 0x15", a: [["eeprom", 0x10], ["eeprom", 0x11], ["eeprom", 0x12], ["eeprom", 0x13], ["eeprom", 0x14]], st: "h",
+    o: ["0x11 / 0x12 / 0x13 = 135 / 155 / 180, RAM 0x36 = 134 / 154 / 178 bij vlam 1 / 2 / 3; 0x10 = 165, 0x14 = 0x15 = 205",
+        "0x11 / 0x12 / 0x13 = 135 / 155 / 180, RAM 0x36 = 134 / 154 / 178 at flame 1 / 2 / 3; 0x10 = 165, 0x14 = 0x15 = 205"],
+    h: ["Doeltoerental rookgasventilator per vermogensniveau (0x10 ontsteking?, 0x11 – 0x14 vlam 1 – 4). RAM ligt 1 – 2 lager, mogelijk door verbrandingskwaliteit −1",
+        "Fume fan target speed per power level (0x10 ignition?, 0x11 – 0x14 flame 1 – 4). RAM is 1 – 2 lower, possibly from combustion quality −1"] },
+  { r: "EEPROM 0x0A – 0x0F", a: [["eeprom", 0x0A], ["eeprom", 0x0B], ["eeprom", 0x0C], ["eeprom", 0x0D], ["eeprom", 0x0E], ["eeprom", 0x0F]], st: "u",
+    o: ["55 / 25 / 17 / 155 / 35 / 150", "55 / 25 / 17 / 155 / 35 / 150"], h: ["Onbekend; ligt tussen de tabellen voor schroef en rookgasventilator", "Unknown; sits between the auger and fume fan tables"] },
+  { r: "EEPROM 0x92 – 0xB9", a: [], st: "h",
+    o: ["Rijen van 5 waarden, de 5e gelijk aan de 4e", "Rows of 5 values, the 5th equal to the 4th"], h: ["Installateurstabel per vermogensniveau", "Installer table per power level"] },
+  { r: "EEPROM 0xC5", a: [["eeprom", 0xC5]], st: "u", o: ["137", "137"], h: ["Onbekend (naast pelletkwaliteit 0xBC)", "Unknown (next to pellet quality 0xBC)"] },
+  { r: "STAAT KACHEL", a: [], st: "u",
+    o: ["TERM EXT, DATA BANK, SENSOR 1, ID SENSOR 1", "TERM EXT, DATA BANK, SENSOR 1, ID SENSOR 1"], h: ["Registers nog niet gevonden", "Registers not found yet"] },
+];
+let hypVals = { ram: {}, eeprom: {} }, hypAt = 0, hypTimer = null;
+function renderHyp() {
+  const tb = $("hypTable"); if (!debug) return;
+  tb.innerHTML = "";
+  const i = lang === "nl" ? 0 : 1, hr = el("tr");
+  for (const k of ["hypReg", "hypLive", "hypObs", "hypHyp", "hypSt"]) hr.appendChild(el("th", "", t(k)));
+  const thead = el("thead"); thead.appendChild(hr); tb.appendChild(thead);
+  const body = el("tbody");
+  for (const h of HYP) {
+    const tr = el("tr"), live = h.a.map(([reg, a]) => hypVals[reg][a] ?? "–").join(" / ");
+    tr.append(el("td", "r", h.r), el("td", "v", h.a.length ? live : ""), el("td", "o", h.o[i]), el("td", "h", h.h[i]));
+    const st = el("td"); st.appendChild(pill(t(h.st === "h" ? "stHyp" : "stUnk"), h.st === "h" ? "warn" : "")); tr.appendChild(st);
+    body.appendChild(tr);
+  }
+  tb.appendChild(body);
+  $("hypAge").textContent = hypAt ? t("updated", new Date(hypAt).toLocaleTimeString(lang === "nl" ? "nl-BE" : "en-GB")) : "";
+}
+// Live values: one dump call per register type, every 30 s while debug mode is on.
+// EEPROM values hardly change, so they are read once per page load.
+async function loadHyp() {
+  clearTimeout(hypTimer);
+  if (debug && !document.hidden && !offline && busy === 0) {
+    const want = reg => [...new Set(HYP.flatMap(h => h.a.filter(x => x[0] === reg).map(x => x[1])))];
+    const read = async reg => {
+      const r = await api("GET", "/api/dump", { register: reg, address: want(reg).map(a => "0x" + a.toString(16).toUpperCase().padStart(2, "0")).join(",") });
+      const blk = r.data ? Object.values(r.data)[0] || {} : {};
+      for (const v of Object.values(blk)) hypVals[reg][v.Address_int] = v.Value_int;
+    };
+    try {
+      await read("ram");
+      if (!Object.keys(hypVals.eeprom).length) await read("eeprom");
+      hypAt = Date.now();
+    } catch (_) {}
+    renderHyp();
+  }
+  hypTimer = setTimeout(loadHyp, 30000);
+}
+
+// ---------- polling ----------
+let pollTimer = null, polling = false;
+async function poll() {
+  clearTimeout(pollTimer);
+  if (busy > 0 || polling || document.hidden) { pollTimer = setTimeout(poll, POLL_MS); return; }
+  polling = true;
+  try {
+    const { data } = await api("GET", "/api/state");
+    state = data; offline = false; render(data); applyReach();
+    const age = data.dataAge ? data.dataAge.fastSeconds : null;
+    if (age === null || age === undefined) setConn(true, t("waiting"), true);
+    else if (age > 30) setConn(true, t("stale", age), true);
+    else setConn(true, t("updated", new Date().toLocaleTimeString(lang === "nl" ? "nl-BE" : "en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })));
+  } catch (e) { offline = true; setConn(false, t("offline")); renderAlerts(); applyReach(); }
+  finally { polling = false; pollTimer = setTimeout(poll, POLL_MS); }
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { poll(); pollRemote(); loadHyp(); } });
+
+applyStatic(); applyExpert(); renderTimers();
+// Read the remote first so the page starts in the right language
+pollRemote().finally(() => poll().then(() => { loadTimers(); loadHistory(); loadBt(); loadSecurity(); loadHyp(); loadParams(); }));
+</script>
+</body>
+</html>

@@ -21,7 +21,6 @@ static void appendDebugLog(const String& line)
 Stove::Stove(int uart_nr)
 {
     StoveSerial = new HardwareSerial(uart_nr);
-    StoveSerial->setTimeout(50);
     StoveSerial->begin(1200, SERIAL_MODE, RX_PIN, TX_PIN, false, 256);
 }
 
@@ -31,134 +30,156 @@ bool Stove::isDebugEnabled() const  { return _debugEnabled; }
 void Stove::debugLog(const char* msg) { appendDebugLog(String(msg)); }
 
 // ─────────────────────────────────────────────────────────────────
+// LOW LEVEL TRANSACTION
+// ─────────────────────────────────────────────────────────────────
+//
+// The Micronova bus is single wire: everything we transmit is echoed back on
+// RX, followed by the stove's 2 byte reply. At 1200 baud 8N2 one byte takes
+// 11 bits = ~9.2 ms on the wire, so a read frame (2 echo + 2 reply) needs
+// ~37 ms and a write frame (4 echo + 2 reply) ~55 ms, plus the stove's
+// reaction time. The timeout is therefore derived from the frame length
+// instead of a fixed value.
+
+static const uint32_t BYTE_TIME_US      = 11UL * 1000000UL / 1200UL; // ~9167 µs
+static const uint32_t STOVE_LATENCY_MS  = 60;   // margin for the stove to start answering
+static const uint8_t  MAX_ATTEMPTS      = 3;
+static const uint32_t RETRY_DELAY_MS    = 40;   // let the bus go idle before retrying
+
+void Stove::drainRx()
+{
+    StoveSerial->flush(true);                // wait until our TX is on the wire
+    while (StoveSerial->available()) StoveSerial->read();  // drop stale / late bytes
+}
+
+// Send `tx`, then wait for txLen echo bytes + replyLen reply bytes.
+// Returns the number of bytes received (== txLen + replyLen on success).
+int Stove::transact(const byte* tx, size_t txLen, byte* rx, size_t rxLen)
+{
+    drainRx();
+    uint32_t timeoutMs = (rxLen * BYTE_TIME_US) / 1000UL + STOVE_LATENCY_MS;
+    StoveSerial->setTimeout(timeoutMs);
+    StoveSerial->write(tx, txLen);
+    int received = StoveSerial->readBytes(rx, rxLen);
+    esp_task_wdt_reset();
+    return received;
+}
+
+// ─────────────────────────────────────────────────────────────────
 // READ
 // ─────────────────────────────────────────────────────────────────
 
-byte Stove::read(byte type, byte address)
+int Stove::read(byte type, byte address)
 {
-    byte message[2] = {type, address};
+    const byte message[2] = {type, address};
+    char buf[128];
 
-    esp_task_wdt_reset();
-
-    if (_debugEnabled) {
-        char buf[64];
-        snprintf(buf, sizeof(buf),
-                 "READ  TX: { 0x%02X, 0x%02X }  (type=0x%02X addr=0x%02X)",
-                 message[0], message[1], type, address);
-        appendDebugLog(buf);
-    }
-
-    StoveSerial->flush();
-    StoveSerial->write(message, sizeof(message));
-
-    char stoveRxData[4];
-    int received = StoveSerial->readBytes(stoveRxData, 4);
-
-    if (received != 4) {
-        char buf[64];
-        snprintf(buf, sizeof(buf),
-                 "READ  ERR: timeout — received %d/4 bytes", received);
-        appendDebugLog(buf);
+    for (uint8_t attempt = 1; attempt <= MAX_ATTEMPTS; attempt++)
+    {
+        if (attempt > 1) { retries++; delay(RETRY_DELAY_MS); }
         esp_task_wdt_reset();
-        return -1;
-    }
 
-    esp_task_wdt_reset();
-
-    byte checksum        = stoveRxData[2];
-    byte val             = stoveRxData[3];
-    byte address_derived = checksum - val - type;
-
-    if (_debugEnabled) {
-        char buf[128];
-        snprintf(buf, sizeof(buf),
-                 "READ  RX: echo={ 0x%02X, 0x%02X } resp={ 0x%02X, 0x%02X }  "
-                 "checksum=0x%02X val=0x%02X addr_derived=0x%02X",
-                 (uint8_t)stoveRxData[0], (uint8_t)stoveRxData[1],
-                 (uint8_t)stoveRxData[2], (uint8_t)stoveRxData[3],
-                 checksum, val, address_derived);
-        appendDebugLog(buf);
-    }
-
-    if (address_derived == address) {
         if (_debugEnabled) {
-            char buf[48];
-            snprintf(buf, sizeof(buf), "READ  OK: val=0x%02X (%d)", val, val);
+            snprintf(buf, sizeof(buf), "READ  TX: { 0x%02X, 0x%02X }  attempt %u", type, address, attempt);
             appendDebugLog(buf);
         }
-        delay(10);
-        return val;
+
+        byte rx[4] = {0};
+        int received = transact(message, sizeof(message), rx, sizeof(rx));
+        if (received != (int)sizeof(rx)) {
+            snprintf(buf, sizeof(buf), "READ  ERR: addr=0x%02X timeout - received %d/4 bytes (attempt %u)",
+                     address, received, attempt);
+            appendDebugLog(buf);
+            continue;
+        }
+        // Echo is informational only; the checksum below is the real validation.
+        if (_debugEnabled && (rx[0] != message[0] || rx[1] != message[1])) {
+            snprintf(buf, sizeof(buf), "READ  WARN: echo differs { 0x%02X, 0x%02X }", rx[0], rx[1]);
+            appendDebugLog(buf);
+        }
+
+        byte checksum        = rx[2];
+        byte val             = rx[3];
+        byte address_derived = checksum - val - type;
+
+        if (_debugEnabled) {
+            snprintf(buf, sizeof(buf), "READ  RX: resp={ 0x%02X, 0x%02X } val=0x%02X addr_derived=0x%02X",
+                     checksum, val, val, address_derived);
+            appendDebugLog(buf);
+        }
+
+        if (address_derived == address) {
+            if (_debugEnabled) {
+                snprintf(buf, sizeof(buf), "READ  OK: val=0x%02X (%d)", val, val);
+                appendDebugLog(buf);
+            }
+            delay(10);
+            return val;
+        }
+
+        snprintf(buf, sizeof(buf), "READ  ERR: checksum mismatch - expected addr=0x%02X got 0x%02X (attempt %u)",
+                 address, address_derived, attempt);
+        appendDebugLog(buf);
     }
 
-    char buf[80];
-    snprintf(buf, sizeof(buf),
-             "READ  ERR: checksum mismatch — expected addr=0x%02X got 0x%02X",
-             address, address_derived);
-    appendDebugLog(buf);
+    readErrors++;
     return -1;
 }
 
 // ─────────────────────────────────────────────────────────────────
 // WRITE
 // ─────────────────────────────────────────────────────────────────
+// Writes are idempotent (same value to the same address), so retrying is safe.
 
 bool Stove::write(byte type, byte address, byte value)
 {
     const byte writeByte     = 0x80;
     uint8_t checksum_calc    = (writeByte + type + address + value) & 0xFF;
-    byte firstbyte           = writeByte + type;
-    byte message[4]          = {firstbyte, address, value, checksum_calc};
+    const byte message[4]    = {(byte)(writeByte + type), address, value, checksum_calc};
+    char buf[128];
 
-    if (_debugEnabled) {
-        char buf[96];
-        snprintf(buf, sizeof(buf),
-                 "WRITE TX: { 0x%02X, 0x%02X, 0x%02X, 0x%02X }  "
-                 "(type=0x%02X addr=0x%02X val=0x%02X chk=0x%02X)",
-                 message[0], message[1], message[2], message[3],
-                 type, address, value, checksum_calc);
-        appendDebugLog(buf);
-    }
-
-    esp_task_wdt_reset();
-    StoveSerial->write(message, sizeof(message));
-
-    char stoveRxData[6];
-    int received = StoveSerial->readBytes(stoveRxData, 6);
-
-    if (received == 0) {
-        appendDebugLog("WRITE ERR: timeout — received 0 bytes");
+    for (uint8_t attempt = 1; attempt <= MAX_ATTEMPTS; attempt++)
+    {
+        if (attempt > 1) { retries++; delay(RETRY_DELAY_MS); }
         esp_task_wdt_reset();
-        return false;
-    }
 
-    esp_task_wdt_reset();
+        if (_debugEnabled) {
+            snprintf(buf, sizeof(buf), "WRITE TX: { 0x%02X, 0x%02X, 0x%02X, 0x%02X }  attempt %u",
+                     message[0], message[1], message[2], message[3], attempt);
+            appendDebugLog(buf);
+        }
 
-    byte checksum_resp   = stoveRxData[4];
-    byte value_resp      = stoveRxData[5];
-    uint8_t address_resp = (checksum_resp - writeByte - type - value_resp) & 0xFF;
+        byte rx[6] = {0};
+        int received = transact(message, sizeof(message), rx, sizeof(rx));
+        if (received != (int)sizeof(rx)) {
+            snprintf(buf, sizeof(buf), "WRITE ERR: addr=0x%02X timeout - received %d/6 bytes (attempt %u)",
+                     address, received, attempt);
+            appendDebugLog(buf);
+            continue;
+        }
+        // Echo is informational only; the address/value in the reply is the real validation.
+        if (_debugEnabled && memcmp(rx, message, sizeof(message)) != 0)
+            appendDebugLog("WRITE WARN: echo differs from transmitted frame");
 
-    if (_debugEnabled) {
-        char buf[128];
-        snprintf(buf, sizeof(buf),
-                 "WRITE RX: echo={ 0x%02X,0x%02X,0x%02X,0x%02X } resp={ 0x%02X, 0x%02X }  "
-                 "checksum=0x%02X val_resp=0x%02X addr_resp=0x%02X",
-                 (uint8_t)stoveRxData[0], (uint8_t)stoveRxData[1],
-                 (uint8_t)stoveRxData[2], (uint8_t)stoveRxData[3],
-                 (uint8_t)stoveRxData[4], (uint8_t)stoveRxData[5],
-                 checksum_resp, value_resp, address_resp);
+        byte checksum_resp   = rx[4];
+        byte value_resp      = rx[5];
+        uint8_t address_resp = (checksum_resp - writeByte - type - value_resp) & 0xFF;
+
+        if (_debugEnabled) {
+            snprintf(buf, sizeof(buf), "WRITE RX: resp={ 0x%02X, 0x%02X } val_resp=0x%02X addr_resp=0x%02X",
+                     checksum_resp, value_resp, value_resp, address_resp);
+            appendDebugLog(buf);
+        }
+
+        if (address_resp == address && value_resp == value) {
+            if (_debugEnabled) appendDebugLog("WRITE OK: [SUCCESS]");
+            return true;
+        }
+
+        snprintf(buf, sizeof(buf), "WRITE ERR: mismatch - addr expected=0x%02X got=0x%02X  val expected=0x%02X got=0x%02X (attempt %u)",
+                 address, address_resp, value, value_resp, attempt);
         appendDebugLog(buf);
     }
 
-    if ((address_resp == address) && (value_resp == value)) {
-        if (_debugEnabled) appendDebugLog("WRITE OK: [SUCCESS]");
-        return true;
-    }
-
-    char buf[96];
-    snprintf(buf, sizeof(buf),
-             "WRITE ERR: mismatch — addr expected=0x%02X got=0x%02X  "
-             "val expected=0x%02X got=0x%02X",
-             address, address_resp, value, value_resp);
-    appendDebugLog(buf);
+    writeErrors++;
     return false;
 }

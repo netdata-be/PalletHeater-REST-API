@@ -1,0 +1,124 @@
+#pragma once
+// Optional API key for the HTTP interface.
+//
+// - A random 128-bit key (32 hex chars) is generated on first boot and stored in
+//   NVS ("auth"/"key"); an existing key is reused.
+// - Enforcement is optional ("auth"/"required", default off). When required,
+//   every route except the public ones (see main.cpp) needs the key in a header:
+//     X-API-Key: <key>      or      Authorization: Bearer <key>
+// - GET/POST /api/auth manages the setting; the key is only returned to callers
+//   that are authorised (or while the key is not required).
+#include <constants.h>
+#include <Preferences.h>
+#include <ArduinoJson.h>
+#include <functional>
+#include <esp_system.h>
+
+static String apiKey;
+static bool   apiKeyRequired = false;
+
+static String generateApiKey()
+{
+    char buf[33];
+    for (int i = 0; i < 16; i++) snprintf(buf + i * 2, 3, "%02x", (unsigned)(esp_random() & 0xFF));
+    return String(buf);
+}
+
+void authInit()
+{
+    Preferences prefs;
+    prefs.begin("auth", false);
+    apiKey = prefs.getString("key", "");
+    if (apiKey.length() != 32) {
+        apiKey = generateApiKey();
+        prefs.putString("key", apiKey);
+        Serial.println("API key generated");
+    }
+    apiKeyRequired = prefs.getBool("required", false);
+    prefs.end();
+    Serial.printf("API key: %s (%s)\n", apiKey.c_str(), apiKeyRequired ? "required" : "optional");
+}
+
+// The web server only exposes headers it was told to collect (call before begin())
+void authCollectHeaders()
+{
+    // Content-Type: /api/update must only touch the upload for multipart requests (httpUpdate.h)
+    static const char* keys[] = { "X-API-Key", "Authorization", "X-OTA-Password", "Content-Type" };
+    wm.server->collectHeaders(keys, 4);
+}
+
+static bool constantTimeEquals(const String& a, const String& b)
+{
+    if (a.length() != b.length()) return false;
+    uint8_t diff = 0;
+    for (unsigned int i = 0; i < a.length(); i++) diff |= (uint8_t)(a[i] ^ b[i]);
+    return diff == 0;
+}
+
+// true when the request carries the right key (header only, never a query parameter)
+static bool requestHasValidKey()
+{
+    String k = wm.server->header("X-API-Key");
+    if (k.length() == 0) {
+        String a = wm.server->header("Authorization");
+        if (a.startsWith("Bearer ")) k = a.substring(7);
+    }
+    k.trim();
+    return k.length() && constantTimeEquals(k, apiKey);
+}
+
+bool authOk() { return !apiKeyRequired || requestHasValidKey(); }
+
+// Wrap a route handler so it is only executed with a valid key (when required)
+std::function<void()> authed(std::function<void()> fn)
+{
+    return [fn]() {
+        if (!authOk()) {
+            wm.server->sendHeader("WWW-Authenticate", "Bearer");
+            wm.server->send(401, "application/json", "{\"error\":\"Missing or invalid API key (X-API-Key header)\"}");
+            return;
+        }
+        fn();
+    };
+}
+
+// GET  /api/auth                       -> { required, key? }
+// POST /api/auth?required=true|false   -> enable / disable enforcement
+// POST /api/auth?rotate=true           -> generate a new key
+// Changing anything while the key is required needs the current key.
+void handleRouteAuth()
+{
+    bool authorised = authOk();
+    if (wm.server->method() == HTTP_POST)
+    {
+        if (!authorised) {
+            wm.server->send(401, "application/json", "{\"error\":\"Missing or invalid API key (X-API-Key header)\"}");
+            return;
+        }
+        Preferences prefs;
+        prefs.begin("auth", false);
+        if (wm.server->hasArg("required")) {
+            String v = wm.server->arg("required");
+            if (v != "true" && v != "false") {
+                prefs.end();
+                wm.server->send(400, "application/json", "{\"result\":\"failed - expected required=true/false\"}");
+                return;
+            }
+            apiKeyRequired = (v == "true");
+            prefs.putBool("required", apiKeyRequired);
+        }
+        if (wm.server->arg("rotate") == "true") {
+            apiKey = generateApiKey();
+            prefs.putString("key", apiKey);
+        }
+        prefs.end();
+    }
+    else if (wm.server->method() != HTTP_GET) { wm.server->send(405); return; }
+
+    StaticJsonDocument<192> json;
+    if (wm.server->method() == HTTP_POST) json["result"] = "success";
+    json["required"] = apiKeyRequired;
+    if (authorised) json["key"] = apiKey;   // never leak the key to unauthorised callers
+    String out; serializeJson(json, out);
+    wm.server->send(200, "application/json", out);
+}

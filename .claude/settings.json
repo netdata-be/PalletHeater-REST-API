@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(pio pkg *)",
+      "Bash(pio platform *)",
+      "Bash(cat /Users/wouterdhaeseleer/.platformio/packages/framework-arduinoespressif32/tools/espota.py | grep -n \"except\" | head -20)",
+      "Read(//Users/wouterdhaeseleer/.platformio/packages/framework-arduinoespressif32/tools/**)",
+      "Bash(~/.platformio/penv/bin/pip install *)",
+      "Bash(xcodegen generate *)",
+      "Bash(find /Users/wouterdhaeseleer -name \"NimBLEAdvertising.h\" 2>/dev/null | head -5)",
+      "Read(//Users/wouterdhaeseleer/**)"
+    ],
+    "additionalDirectories": [
+      "/Users/wouterdhaeseleer/.platformio/packages/framework-arduinoespressif32/tools"
+    ]
+  }
+}

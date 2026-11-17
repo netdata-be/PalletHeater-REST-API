@@ -9,9 +9,11 @@ bool        setEnergySavingStop(int stop);
 void        setCombustionQuality(int val);
 void        setStoveDateTime();
 void        getStoveState();
+void        getTempSetpoint();
 int         combustionQualityFromLabel(const String& label);
 int         pelletQualityFromLabel(const String& label);
 const char* getCombustionQualityLabel(int val);
+const char* getPelletQualityLabel(int val);
 const char* getRemoteMenuName(int id);
 const char* getSelectedParameterName(int id);
 
@@ -56,6 +58,7 @@ enum TelnetConfigField {
     CF_COMBUSTION_QUALITY,
     CF_PELLET_QUALITY,
     CF_BEEP,
+    CF_SETPOINT,
     CF_SYNC_TIME
 };
 
@@ -85,9 +88,10 @@ static bool timerStepIsTime = false;
 
 // Timer DOW select state
 static byte timerDowWorking = 0;
-static uint16_t          liveValuesMask    = 0;
-static unsigned long     lastLiveUpdate    = 0;
-static int               menuCursor        = 0;
+static uint16_t          liveValuesMask       = 0;
+static unsigned long     lastLiveUpdate       = 0;
+static unsigned long     lastTelnetActivity   = 0;
+static int               menuCursor           = 0;
 static int               menuItemCount     = 0;
 static uint8_t           escState          = 0;   // 0=normal 1=got ESC 2=got ESC[
 
@@ -287,6 +291,7 @@ static void telnetShowMainMenu(bool full)
         }
         tpl(String("  Date:     ") + dateBuf);
         tpl(String("  Time:     ") + timeBuf);
+        tpl(String("  Uptime:   ") + uptimeStr());
         tpl("");
         if (cachedLowPallet) {
             tpl("\x1B[41;97m  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  \x1B[0m");
@@ -578,7 +583,7 @@ static void telnetDrawDebugMenu()
         "Show debug log",
         "Clear debug log",
         "Raw read   (hex: type addr   e.g. '00 1a')",
-        "Raw write  (hex: type addr val  e.g. '00 21 01')",
+        "Raw write  (hex: type addr val [...]  e.g. '00 21 01')",
         "Back"
     };
     for (int i = 0; i < 6; i++) menuRow(items[i], i == menuCursor);
@@ -673,9 +678,24 @@ static void telnetHandleDebugRawRead(const String& input)
 
 static void telnetHandleDebugRawWrite(const String& input)
 {
-    unsigned int type = 0, address = 0, value = 0;
-    if (sscanf(input.c_str(), "%x %x %x", &type, &address, &value) != 3) {
-        tpl("Invalid format. Use hex: '00 21 01'");
+    // One or more writes "type addr val", e.g. '00 21 01' or '00 24 07 00 08 02'.
+    // Several writes are sent back to back (~30 ms apart, stove lock held), for
+    // tests where the timing between registers matters (e.g. a remote key press).
+    const int MAXW = 4;
+    unsigned int v[MAXW * 3];
+    int n = 0;
+    String rest = input; rest.trim();
+    while (rest.length() && n < MAXW * 3) {
+        int sp = rest.indexOf(' ');
+        String tok = sp < 0 ? rest : rest.substring(0, sp);
+        rest = sp < 0 ? "" : rest.substring(sp + 1); rest.trim();
+        char* end = nullptr;
+        unsigned long x = strtoul(tok.c_str(), &end, 16);
+        if (!tok.length() || (end && *end) || x > 0xFF) { n = -1; break; }
+        v[n++] = (unsigned int)x;
+    }
+    if (n <= 0 || n % 3 != 0 || rest.length()) {
+        tpl("Invalid format. Use hex: '00 21 01' (up to 4 writes: '00 24 07 00 08 02')");
         menuCursor = 0;
         telnetShowDebugMenu();
         return;
@@ -684,9 +704,22 @@ static void telnetHandleDebugRawWrite(const String& input)
     stove.setDebug(true);
     stoveDebugBuffer = "";
 
-    bool ok = stove.write((byte)type, (byte)address, (byte)value);
+    bool ok = true;
+    if (stoveMutex) xSemaphoreTakeRecursive(stoveMutex, portMAX_DELAY);
+    unsigned long t0 = millis();
+    unsigned long at[MAXW];
+    for (int i = 0; i < n / 3; i++) {
+        at[i] = millis() - t0;
+        if (!stove.write((byte)v[i * 3], (byte)v[i * 3 + 1], (byte)v[i * 3 + 2])) ok = false;
+    }
+    if (stoveMutex) xSemaphoreGiveRecursive(stoveMutex);
 
     { String _log = stoveDebugBuffer; _log.replace("\r\n", "\n"); _log.replace("\n", "\r\n"); tp(_log); }
+    if (n > 3) {
+        String tl = "Sent at (ms):";
+        for (int i = 0; i < n / 3; i++) tl += " " + String(at[i]);
+        tpl(tl);
+    }
     tpl(ok ? "Result: SUCCESS" : "Result: FAILED");
     stove.setDebug(prevDebug);
     menuCursor = 0;
@@ -784,10 +817,15 @@ static void telnetPrintLiveValues()
     if (liveValuesMask & (1 << 1)) {
         tpl("Temp room:    " + String(ambTemp)          + " C   setpoint: " + String(setPointTemp) + " C");
         tpl("Temp stove:   " + String(ambTempStove)     + " C   remote:   " + String(ambTempRemoteControl) + " C");
+        tpl("Wireless sensor: " + String(wirelessSensorStr()) + " (INSTELL WIRELESS)");
         tpl("Fume temp:    " + String(fumesTemp)        + " C");
     }
     if (liveValuesMask & (1 << 2)) tpl("Flame power:  " + String(flamePower));
-    if (liveValuesMask & (1 << 3)) tpl("Room fan:     " + String(roomFanSpeed));
+    if (liveValuesMask & (1 << 3)) {
+        int act = roomFanActual();
+        tpl("Room fan:     " + String(roomFanSpeed) + " (actual " + (act < 0 ? String("?") : String(act)) +
+            ", power 0x0A = " + String(cachedRoomFanControl) + (roomFanIsRunning() == 0 ? ", stopped" : "") + ")");
+    }
     if (liveValuesMask & (1 << 4)) tpl("Fume fan RPM: " + String(cachedFumeFanRPM));
     if (liveValuesMask & (1 << 5)) tpl("Auger speed:  " + String(cachedAugerSpeed));
     if (liveValuesMask & (1 << 6)) tpl("Low pallet:   " + String(cachedLowPallet ? "YES" : "no"));
@@ -809,20 +847,21 @@ static void telnetPrintLiveValues()
 
 static void telnetDrawConfigMenu()
 {
-    String items[11] = {
+    String items[12] = {
         "Power state (on/off)             current: " + String(StoveIsOn ? "on" : "off"),
         "Flame power       [1-4]          current: " + String(flamePower),
         "Room fan speed    [0-3]          current: " + String(roomFanSpeed),
         "Energy save start [0,-1,-2,-3]   current: " + String(energySavingStart),
         "Energy save stop  [0,1,2,3]      current: " + String(energySavingStop),
-        "Combustion quality               current: " + String(getCombustionQualityLabel(cachedCombustionQuality)),
-        "Pellet quality                   current: " + String(getCombustionQualityLabel(cachedPelletQuality)),
+        "Combustion quality               current: " + String(getCombustionQualityLabel(cachedCombustionQuality) ? getCombustionQualityLabel(cachedCombustionQuality) : "Unknown"),
+        "Pellet quality                   current: " + String(getPelletQualityLabel(cachedPelletQuality) ? getPelletQualityLabel(cachedPelletQuality) : "Unknown"),
         "Beep                             current: " + String(cachedBeepEnabled ? "enabled" : "disabled"),
+        "Temperature setpoint [7-30] C    current: " + String((int)setPointTemp) + " C",
         "Sync NTP time to stove",
         "View timers (PR1-PR6)",
         "Back"
     };
-    for (int i = 0; i < 11; i++) menuRow(items[i], i == menuCursor);
+    for (int i = 0; i < 12; i++) menuRow(items[i], i == menuCursor);
 }
 
 static void telnetShowConfigMenu(bool full)
@@ -833,7 +872,7 @@ static void telnetShowConfigMenu(bool full)
     if (full) {
         tpl("");
         tp("  \x1B[2m[arrows] navigate   [enter] select\x1B[0m\r\n");
-        menuItemCount = 11;
+        menuItemCount = 12;
         setTelnetState(TS_CONFIG_MENU);
     }
 }
@@ -853,26 +892,27 @@ static void telnetHandleConfigMenu(const String& key)
         { "Combustion quality [+G,-3,-2,-1,0,+1,+2,+3]: ",       CF_COMBUSTION_QUALITY },
         { "Pellet quality [+G,-3,-2,-1,0,+1,+2,+3]: ",           CF_PELLET_QUALITY     },
         { "Beep [on/off]: ",                                      CF_BEEP               },
+        { "Temperature setpoint [7-30] C: ",                      CF_SETPOINT           },
     };
 
-    if (menuCursor <= 7) {
+    if (menuCursor <= 8) {
         tp(opts[menuCursor].prompt);
         telnetConfig = opts[menuCursor].field;
         setTelnetState(TS_CONFIG_INPUT);
         return;
     }
-    if (menuCursor == 8) {
+    if (menuCursor == 9) {
         setStoveDateTime();
         tpl("Time synced to NTP.");
         telnetShowConfigMenu();
         return;
     }
-    if (menuCursor == 9) {
+    if (menuCursor == 10) {
         menuCursor = 0;
         telnetShowTimersMenu();
         return;
     }
-    if (menuCursor == 10) {
+    if (menuCursor == 11) {
         menuCursor = 0;
         telnetShowMainMenu();
         return;
@@ -958,6 +998,14 @@ static void telnetHandleConfigInput(const String& input)
                 tpl("Invalid. Enter on or off.");
                 tp("> "); return;
             }
+            break;
+        }
+
+        case CF_SETPOINT: {
+            int v = input.toInt();
+            if (v < 7 || v > 30) { tpl("Invalid. Must be 7-30."); tp("> "); return; }
+            ok = stove.write(eeprom, TempSetpointAddr, v);
+            if (ok) { setPointTemp = (float)v; }
             break;
         }
 
@@ -1148,9 +1196,9 @@ static void telnetHandleTimerEditMenu(const String& key)
         case 4: { // Flame power stepper
             timerStepIsTime = false;
             timerStepOffset = TIMER_FLAME_OFFSET;
-            timerStepMin = 1; timerStepMax = 5;
+            timerStepMin = 1; timerStepMax = 4;
             int v = stove.read(eeprom, base + TIMER_FLAME_OFFSET);
-            timerStepValue = (v < 1 || v > 5) ? 1 : v;
+            timerStepValue = (v < 1 || v > 4) ? 1 : v;
             menuCursor = 0;
             telnetShowTimerStep();
             break;
@@ -1356,6 +1404,8 @@ static void menuDispatch(const String& key)
 
 void telnetHandleInput(const String& rawInput)
 {
+    lastTelnetActivity = millis();
+
     // ── Char-mode states: parse arrow keys and control chars ──────
     if (isCharModeState(telnetState)) {
         for (int i = 0; i < (int)rawInput.length(); i++) {
@@ -1401,8 +1451,9 @@ void telnetHandleInput(const String& rawInput)
 void telnetOnConnect(const String& ip)
 {
     Serial.println("- Telnet: " + ip + " connected");
-    escState   = 0;
-    menuCursor = 0;
+    escState             = 0;
+    menuCursor           = 0;
+    lastTelnetActivity   = millis();
 
     // Negotiate character-at-a-time mode immediately on connect
     const uint8_t seq[] = {
@@ -1429,9 +1480,18 @@ void telnetMenuLoop()
         WiFi.reconnect();
     }
 
+    // Drop stale connections — a client that disappears without TCP FIN (NAT
+    // timeout, network blip) would otherwise block new connections indefinitely.
+    if (telnetState != TS_NONE && millis() - lastTelnetActivity > 1800000UL) {
+        Serial.println("Telnet: idle timeout — dropping stale connection");
+        telnet.disconnectClient();
+        telnetState = TS_NONE;
+    }
+
     if (telnetState != TS_LIVE_RUNNING) return;
     unsigned long now_ms = millis();
     if (now_ms - lastLiveUpdate >= 2000) {
+        StoveBusLock lock;  // live view reads the stove directly
         telnetPrintLiveValues();
         lastLiveUpdate = now_ms;
     }

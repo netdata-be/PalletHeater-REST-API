@@ -1,0 +1,3690 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "PalletHeater REST API",
+    "description": "REST API running on an ESP32 that talks to Micronova based pellet stoves over the stove serial bus (UART2).\n\nAll write parameters are passed as **query parameters** (or `application/x-www-form-urlencoded` form fields), except the timer endpoints which take a **JSON body**.\n\nMost read endpoints query the stove directly over the serial bus; `/api/state` and `/metrics` are served from a cache that a background task refreshes continuously.\n\n**API key (optional).** A random key is generated on first boot. When it is set to required (`POST /api/auth?required=true`), every route except `/`, `/app`, `/api`, `/api-specs.json` and `/api/auth` needs the header `X-API-Key: <key>` or `Authorization: Bearer <key>`; otherwise the response is `401`. Use the **Authorize** button to try the API with a key.",
+    "version": "1.3"
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "This device"
+    },
+    {
+      "url": "http://palletheater.local",
+      "description": "mDNS hostname"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Status",
+      "description": "Aggregated state and health"
+    },
+    {
+      "name": "Power",
+      "description": "Switch the stove on or off"
+    },
+    {
+      "name": "Heating",
+      "description": "Flame power, room fan, set point, energy saving and combustion settings"
+    },
+    {
+      "name": "Timers",
+      "description": "Chrono programs PR1 - PR6"
+    },
+    {
+      "name": "Date and Time",
+      "description": "Stove clock versus NTP"
+    },
+    {
+      "name": "Error log",
+      "description": "Error memory of the stove (5 positions)"
+    },
+    {
+      "name": "Settings",
+      "description": "Misc stove settings"
+    },
+    {
+      "name": "Diagnostics",
+      "description": "Low level register access, remote control state and metrics"
+    },
+    {
+      "name": "Device",
+      "description": "ESP32 device pages"
+    },
+    {
+      "name": "Legacy",
+      "description": "Old routes kept for backwards compatibility. Use the `/api/...` equivalents instead."
+    }
+  ],
+  "paths": {
+    "/api/state": {
+      "get": {
+        "tags": [
+          "Status"
+        ],
+        "summary": "Get all relevant stove info in one call",
+        "description": "Served from the sensor cache (no extra serial traffic). `previousErrors` is `false` when the error memory is empty, otherwise an object containing only the non-empty memory positions. `hydro` is only present when hydro mode is enabled in `/config.txt`. On a serial error the cache keeps the last known value. `dataAge` tells how old the cached values are.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/State"
+                },
+                "example": {
+                  "stoveState": {
+                    "stoveState": 4,
+                    "state": "Working",
+                    "poweredOn": true
+                  },
+                  "flame": {
+                    "power": 2,
+                    "actual": 1
+                  },
+                  "temperatures": {
+                    "room": 20.5,
+                    "stove": 21.0,
+                    "remoteControl": 20.5,
+                    "setPoint": 21,
+                    "fume": 118
+                  },
+                  "wirelessSensor": "off",
+                  "energySaving": {
+                    "start": -1,
+                    "stop": 2,
+                    "enabled": true,
+                    "startTemperature": 20,
+                    "stopTemperature": 23
+                  },
+                  "RoomFanSpeed": 2,
+                  "roomFan": {
+                    "speed": 2,
+                    "actual": 2,
+                    "running": true,
+                    "hotEnough": true,
+                    "drive": 23,
+                    "mode": "on"
+                  },
+                  "lowPalletAlarm": 0,
+                  "stoveBeepEnabled": true,
+                  "numberOfStarts": 412,
+                  "hoursSinceLastService": 213,
+                  "totalRuntime": 1873,
+                  "firmwareVersion": "FW-PZ-02-V-01-04-00",
+                  "augerSpeed": 2.4,
+                  "burn": {
+                    "combustionQuality": "0",
+                    "pelletQuality": "0"
+                  },
+                  "fumeFanRPM": 1550,
+                  "RemoteControlLastSeen": 12,
+                  "previousErrors": false,
+                  "time": {
+                    "ntp": "2026-11-15 17:50:06",
+                    "stove": "2026-11-15 17:49:35",
+                    "delta": 31
+                  },
+                  "dataAge": {
+                    "fastSeconds": 2,
+                    "slowSeconds": 9
+                  },
+                  "serial": {
+                    "readErrors": 0,
+                    "writeErrors": 0,
+                    "retries": 3
+                  },
+                  "uptime": {
+                    "seconds": 93784,
+                    "human": "1d 02h 03m 04s"
+                  },
+                  "currentError": false,
+                  "bluetooth": true,
+                  "telnet": true,
+                  "apiKeyRequired": false,
+                  "pelletReserve": {
+                    "enabled": true,
+                    "sensor": 0,
+                    "counter": 20
+                  },
+                  "brazierCleaning": {
+                    "minutesLeft": 12,
+                    "active": false,
+                    "interval": 45
+                  },
+                  "controller": {
+                    "version": "674b88d-dirty",
+                    "built": "2026-11-16T17:05:12Z",
+                    "branch": "master",
+                    "env": "esp32doit-devkit-v1-http"
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "tags": [
+          "Status"
+        ],
+        "summary": "Check the serial link with the stove",
+        "responses": {
+          "200": {
+            "description": "Stove responds on the serial bus",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                },
+                "example": {
+                  "health": "Healthy"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Stove does not respond",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                },
+                "example": {
+                  "health": "Failed to talk to Stove"
+                }
+              }
+            }
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/power": {
+      "get": {
+        "tags": [
+          "Power"
+        ],
+        "summary": "Get the power state of the stove",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoveState"
+                },
+                "examples": {
+                  "Off": {
+                    "value": {
+                      "stoveState": 0,
+                      "state": "Off",
+                      "poweredOn": false
+                    }
+                  },
+                  "Starting": {
+                    "value": {
+                      "stoveState": 1,
+                      "state": "Starting",
+                      "poweredOn": true
+                    }
+                  },
+                  "Working": {
+                    "value": {
+                      "stoveState": 4,
+                      "state": "Working",
+                      "poweredOn": true
+                    }
+                  },
+                  "Final cleaning": {
+                    "value": {
+                      "stoveState": 6,
+                      "state": "Final cleaning",
+                      "poweredOn": false
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Power"
+        ],
+        "summary": "Switch the stove on or off",
+        "description": "`on` only has effect when the stove is `Off` (state 0). `off` sends state 0 while starting/loading and state 6 (final cleaning) while igniting/working.",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "on",
+                "off"
+              ]
+            },
+            "example": "on"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Command sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PowerResult"
+                },
+                "examples": {
+                  "Power on": {
+                    "value": {
+                      "result": "Powered on sended",
+                      "stoveState": 1,
+                      "state": "Starting",
+                      "poweredOn": true
+                    }
+                  },
+                  "Power off": {
+                    "value": {
+                      "result": "Powered off sended - 6",
+                      "stoveState": 6,
+                      "state": "Final cleaning",
+                      "poweredOn": false
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Nothing to do, the stove is already in (or moving to) the requested state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PowerResult"
+                },
+                "examples": {
+                  "Already on": {
+                    "value": {
+                      "result": "Stove already on",
+                      "stoveState": 4,
+                      "state": "Working",
+                      "poweredOn": true
+                    }
+                  },
+                  "Already off": {
+                    "value": {
+                      "result": "Stove already off",
+                      "stoveState": 0,
+                      "state": "Off",
+                      "poweredOn": false
+                    }
+                  },
+                  "Shutting down": {
+                    "value": {
+                      "result": "Stove already shutting down - Final cleaning",
+                      "stoveState": 6,
+                      "state": "Final cleaning",
+                      "poweredOn": false
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid `state` value",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "Unknown state argument",
+                  "stoveState": 0,
+                  "state": "Off",
+                  "poweredOn": false
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Serial communication failed",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "FAILED to send Power on",
+                  "stoveState": 0,
+                  "state": "Off",
+                  "poweredOn": false
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/flame": {
+      "get": {
+        "tags": [
+          "Heating"
+        ],
+        "summary": "Get the flame power",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Flame"
+                },
+                "example": {
+                  "power": 2
+                }
+              }
+            }
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Heating"
+        ],
+        "summary": "Set the flame power",
+        "parameters": [
+          {
+            "name": "power",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "enum": [
+                1,
+                2,
+                3,
+                4
+              ]
+            },
+            "example": 3
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Flame"
+                },
+                "example": {
+                  "result": "success",
+                  "power": 3
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Out of range",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "failed - power is out of range: Should be between 1 and 4",
+                  "power": 2
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Serial communication failed",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "Failed - RS2232 error...",
+                  "power": -1
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/fan": {
+      "get": {
+        "tags": [
+          "Heating"
+        ],
+        "summary": "Get the room fan speed (0 = disabled)",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fan"
+                },
+                "example": {
+                  "speed": 2
+                }
+              }
+            }
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Heating"
+        ],
+        "summary": "Set the room fan speed",
+        "parameters": [
+          {
+            "name": "speed",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "enum": [
+                0,
+                1,
+                2,
+                3
+              ]
+            },
+            "example": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fan"
+                },
+                "example": {
+                  "result": "success",
+                  "speed": 2
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Out of range",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "failed - Speed is out of range: Should be between 0 and 3",
+                  "speed": 2
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Serial communication failed",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "Failed - RS2232 error...",
+                  "speed": -1
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/setpoint": {
+      "get": {
+        "tags": [
+          "Heating"
+        ],
+        "summary": "Get the room temperature set point (°C)",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Setpoint"
+                },
+                "example": {
+                  "setpoint": 21
+                }
+              }
+            }
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Heating"
+        ],
+        "summary": "Set the room temperature set point (°C)",
+        "parameters": [
+          {
+            "name": "value",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 7,
+              "maximum": 30
+            },
+            "example": 21
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Setpoint"
+                },
+                "example": {
+                  "result": "success",
+                  "setpoint": 21
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Out of range",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "failed - value must be 7-30"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Serial communication failed",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "failed - RS232 error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/energysaving": {
+      "get": {
+        "tags": [
+          "Heating"
+        ],
+        "summary": "Get the energy saving (modulation) offsets",
+        "description": "The stove restarts when the room drops to `setpoint + start` and stops when it reaches `setpoint + stop`. Both offsets 0 means energy saving is disabled; `startTemperature`/`stopTemperature` are only present when enabled.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "string"
+                    },
+                    "energySaving": {
+                      "$ref": "#/components/schemas/EnergySaving"
+                    }
+                  }
+                },
+                "examples": {
+                  "Enabled": {
+                    "value": {
+                      "energySaving": {
+                        "start": -1,
+                        "stop": 2,
+                        "enabled": true,
+                        "startTemperature": 20,
+                        "stopTemperature": 23
+                      }
+                    }
+                  },
+                  "Disabled": {
+                    "value": {
+                      "energySaving": {
+                        "start": 0,
+                        "stop": 0,
+                        "enabled": false
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Heating"
+        ],
+        "summary": "Set the energy saving offsets",
+        "description": "Pass `start`, `stop` or both.",
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "required": false,
+            "description": "Restart offset below the set point (°C)",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                -3,
+                -2,
+                -1,
+                0
+              ]
+            },
+            "example": -1
+          },
+          {
+            "name": "stop",
+            "in": "query",
+            "required": false,
+            "description": "Stop offset above the set point (°C)",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                0,
+                1,
+                2,
+                3
+              ]
+            },
+            "example": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "success",
+                  "energySaving": {
+                    "start": -1,
+                    "stop": 2,
+                    "enabled": true,
+                    "startTemperature": 20,
+                    "stopTemperature": 23
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Out of range",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Invalid start": {
+                    "value": {
+                      "result": "failed - start is out of range: Should be between -3 and 0",
+                      "energySaving": {
+                        "start": 0,
+                        "stop": 0,
+                        "enabled": false
+                      }
+                    }
+                  },
+                  "Invalid stop": {
+                    "value": {
+                      "result": "failed - stop is out of range: Should be between 0 and 3",
+                      "energySaving": {
+                        "start": 0,
+                        "stop": 0,
+                        "enabled": false
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Serial communication failed",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "Failed - RS2232 error..."
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/burn": {
+      "get": {
+        "tags": [
+          "Heating"
+        ],
+        "summary": "Get combustion quality and pellet quality",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Burn"
+                },
+                "example": {
+                  "combustionQuality": "0",
+                  "pelletQuality": "-1"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Heating"
+        ],
+        "summary": "Set combustion quality and/or pellet quality",
+        "description": "The leading `+` is optional (`+1` = `1`, `+G` = `G`), so an unencoded `+` (decoded as a space) is accepted as well.",
+        "parameters": [
+          {
+            "name": "combustionQuality",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "+G",
+                "G",
+                "-3",
+                "-2",
+                "-1",
+                "0",
+                "1",
+                "+1",
+                "2",
+                "+2",
+                "3",
+                "+3"
+              ]
+            },
+            "example": "0"
+          },
+          {
+            "name": "pelletQuality",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "-5",
+                "-4",
+                "-3",
+                "-2",
+                "-1",
+                "0",
+                "1",
+                "+1",
+                "2",
+                "+2",
+                "3",
+                "+3",
+                "4",
+                "+4",
+                "5",
+                "+5"
+              ]
+            },
+            "example": "-1"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Burn"
+                },
+                "example": {
+                  "result": "success",
+                  "combustionQuality": "0",
+                  "pelletQuality": "-1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid value",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "failed - pelletQuality must be one of: -5, -4, -3, -2, -1, 0, +1, +2, +3, +4, +5",
+                  "combustionQuality": "0",
+                  "pelletQuality": "0"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Serial communication failed",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "failed - RS232 error",
+                  "combustionQuality": "0",
+                  "pelletQuality": "0"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/beep": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get whether the stove beep is enabled",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Beep"
+                },
+                "example": {
+                  "enabled": true
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Enable or disable the stove beep",
+        "parameters": [
+          {
+            "name": "enabled",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false",
+                "1",
+                "0"
+              ]
+            },
+            "example": "false"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Beep"
+                },
+                "example": {
+                  "result": "success",
+                  "enabled": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid value",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "failed - expected enabled=true/false"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Serial communication failed",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "failed - RS232 error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/time": {
+      "get": {
+        "tags": [
+          "Date and Time"
+        ],
+        "summary": "Get the stove clock and the NTP time",
+        "description": "`delta` is NTP time minus stove time, in seconds. The stove clock is read every 5 min (every 10 s until a valid time is known) and extrapolated in between, so the values are current on every request.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeResult"
+                },
+                "example": {
+                  "time": {
+                    "stove": "2026-11-15 17:50:12",
+                    "ntp": "2026-11-15 17:50:38",
+                    "delta": 26
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Date and Time"
+        ],
+        "summary": "Set the stove clock (NTP time, or the given local datetime)",
+        "responses": {
+          "200": {
+            "description": "Synced",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeResult"
+                },
+                "example": {
+                  "result": "success Synced NTP time to stove",
+                  "time": {
+                    "stove": "2026-11-15 17:51:00",
+                    "ntp": "2026-11-15 17:51:01",
+                    "delta": 1
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "400": {
+            "description": "Invalid datetime",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "failed - datetime must be YYYY-MM-DDTHH:MM[:SS]"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "parameters": [
+          {
+            "name": "datetime",
+            "in": "query",
+            "required": false,
+            "description": "Local time YYYY-MM-DDTHH:MM[:SS], e.g. the browser time. Without it, NTP time is used.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "2026-11-16T14:30:00"
+          }
+        ]
+      }
+    },
+    "/api/errors": {
+      "get": {
+        "tags": [
+          "Error log"
+        ],
+        "summary": "Get the error memory",
+        "description": "Read directly from the stove. `previousErrors` is `false` when all 5 positions are empty, otherwise only the non-empty positions are listed.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Errors"
+                },
+                "examples": {
+                  "No errors": {
+                    "value": {
+                      "previousErrors": false
+                    }
+                  },
+                  "With errors": {
+                    "value": {
+                      "previousErrors": {
+                        "MemoryPos_1": {
+                          "id": 32,
+                          "error": "E1",
+                          "desc": "Pallet loading door is open for to long or air pressure inside stove is wrong"
+                        },
+                        "MemoryPos_2": {
+                          "id": 4,
+                          "error": "E9",
+                          "desc": "Ignition temperature not reached within limit"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "$ref": "#/components/responses/MethodNotAllowed"
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Error log"
+        ],
+        "summary": "Overwrite one or more error memory positions",
+        "description": "Use `0` to clear a position. All parameters are validated first; an unknown error id returns 400 and nothing is written.",
+        "parameters": [
+          {
+            "name": "MemoryPos_1",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ErrorId"
+            }
+          },
+          {
+            "name": "MemoryPos_2",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ErrorId"
+            }
+          },
+          {
+            "name": "MemoryPos_3",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ErrorId"
+            }
+          },
+          {
+            "name": "MemoryPos_4",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ErrorId"
+            }
+          },
+          {
+            "name": "MemoryPos_5",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ErrorId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success, returns the error memory after the write",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Errors"
+                },
+                "example": {
+                  "action": "MemoryPos_1 set",
+                  "previousErrors": false
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "400": {
+            "description": "Unknown error id",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "failed - MemoryPos_1 must be a known error id (see /api docs), e.g. 0 to clear"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/timers": {
+      "get": {
+        "tags": [
+          "Timers"
+        ],
+        "summary": "Get all 6 chrono programs",
+        "description": "Disabled programs only contain `enabled: false`.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "timers": {
+                      "$ref": "#/components/schemas/TimerSet"
+                    }
+                  }
+                },
+                "example": {
+                  "timers": {
+                    "PR1": {
+                      "enabled": true,
+                      "on": "06:30",
+                      "off": "08:30",
+                      "enabled_on": {
+                        "monday": true,
+                        "tuesday": true,
+                        "wednesday": true,
+                        "thursday": true,
+                        "friday": true,
+                        "saturday": false,
+                        "sunday": false
+                      },
+                      "settings": {
+                        "setpoint": 21,
+                        "flame_power": 3,
+                        "RoomFanSpeed": 2
+                      }
+                    },
+                    "PR2": {
+                      "enabled": false
+                    },
+                    "PR3": {
+                      "enabled": false
+                    },
+                    "PR4": {
+                      "enabled": false
+                    },
+                    "PR5": {
+                      "enabled": false
+                    },
+                    "PR6": {
+                      "enabled": false
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Timers"
+        ],
+        "summary": "Update one or more chrono programs",
+        "description": "Partial update: only programs and fields present in the body are written. The whole body is validated first; on any invalid value nothing is written and 400 is returned.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "timers"
+                ],
+                "properties": {
+                  "timers": {
+                    "$ref": "#/components/schemas/TimerSet"
+                  }
+                }
+              },
+              "example": {
+                "timers": {
+                  "PR1": {
+                    "enabled": true,
+                    "on": "06:30",
+                    "off": "08:30"
+                  },
+                  "PR2": {
+                    "enabled": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "success"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty body, invalid JSON, missing `timers` key, unknown program or invalid value",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "Missing key": {
+                    "value": {
+                      "error": "Missing 'timers' key"
+                    }
+                  },
+                  "Invalid time": {
+                    "value": {
+                      "error": "PR1: 'on' must be HH:MM on a 10 minute boundary or 'off'"
+                    }
+                  },
+                  "Out of range": {
+                    "value": {
+                      "error": "PR2: 'settings.setpoint' must be 7-30"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/timers/{program}": {
+      "parameters": [
+        {
+          "name": "program",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "enum": [
+              "pr1",
+              "pr2",
+              "pr3",
+              "pr4",
+              "pr5",
+              "pr6"
+            ]
+          },
+          "example": "pr1"
+        }
+      ],
+      "get": {
+        "tags": [
+          "Timers"
+        ],
+        "summary": "Get a single chrono program",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "PR1": {
+                    "enabled": true,
+                    "on": "06:30",
+                    "off": "08:30",
+                    "enabled_on": {
+                      "monday": true,
+                      "tuesday": true,
+                      "wednesday": true,
+                      "thursday": true,
+                      "friday": true,
+                      "saturday": false,
+                      "sunday": false
+                    },
+                    "settings": {
+                      "setpoint": 21,
+                      "flame_power": 3,
+                      "RoomFanSpeed": 2
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "500": {
+            "description": "Timer could not be read from the stove",
+            "content": {
+              "application/json": {
+                "example": {
+                  "PR1": {
+                    "error": "Failed to read timer from stove - RS232 error"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Timers"
+        ],
+        "summary": "Enable or update a chrono program",
+        "description": "Without a body the program is just enabled. With a JSON body it behaves like PATCH (only provided fields are written); it is not a full replace. Invalid input returns 400 and nothing is written.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Timer"
+              },
+              "example": {
+                "enabled": true,
+                "on": "06:30",
+                "off": "08:30",
+                "enabled_on": {
+                  "monday": true,
+                  "tuesday": true,
+                  "wednesday": true,
+                  "thursday": true,
+                  "friday": true,
+                  "saturday": false,
+                  "sunday": false
+                },
+                "settings": {
+                  "setpoint": 21,
+                  "flame_power": 3,
+                  "RoomFanSpeed": 2
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TimerResult"
+          },
+          "400": {
+            "description": "Invalid JSON or invalid value",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "PR1: 'settings.flame_power' must be 1-4"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Timers"
+        ],
+        "summary": "Partially update a chrono program",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Timer"
+              },
+              "example": {
+                "off": "09:00",
+                "settings": {
+                  "setpoint": 22
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/TimerResult"
+          },
+          "400": {
+            "description": "Empty body, invalid JSON or invalid value",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "PR1: 'off' must be HH:MM on a 10 minute boundary or 'off'"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "description": "Invalid input returns 400 and nothing is written."
+      },
+      "delete": {
+        "tags": [
+          "Timers"
+        ],
+        "summary": "Disable a chrono program",
+        "description": "Only clears the enabled flag; the stored times and settings are kept.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "success",
+                  "PR1": {
+                    "enabled": false
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/remote": {
+      "get": {
+        "tags": [
+          "Diagnostics"
+        ],
+        "summary": "Get what the remote control / display is currently showing",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Remote"
+                },
+                "example": {
+                  "displayed_menu": "Main screen",
+                  "diplayed_menu": "Main screen",
+                  "selected_parameter": "Flame power",
+                  "language": "NLD",
+                  "menuId": 1,
+                  "parameterId": 130,
+                  "editValue": 2
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Serial communication failed",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Failed to read remote menu - RS232 error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/dump": {
+      "get": {
+        "tags": [
+          "Diagnostics"
+        ],
+        "summary": "Dump raw RAM / EEPROM registers",
+        "description": "Reads registers one by one over the serial bus. A full dump of both banks (512 reads) takes several seconds.",
+        "parameters": [
+          {
+            "name": "register",
+            "in": "query",
+            "required": false,
+            "description": "`ram` (default), `eeprom` or `all`. Add `unknown` (e.g. `ram,unknown`) to only return addresses that are not yet decoded.",
+            "schema": {
+              "type": "string",
+              "default": "ram"
+            },
+            "example": "eeprom"
+          },
+          {
+            "name": "address",
+            "in": "query",
+            "required": false,
+            "description": "Comma separated list of addresses, decimal or hex. Default: all 256.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "0x21,0x34,125"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "$ref": "#/components/schemas/Register"
+                    }
+                  }
+                },
+                "example": {
+                  "RAM(0x00)": {
+                    "0x21": {
+                      "Address_int": 33,
+                      "Value_int": 4,
+                      "Value_txt": "Working",
+                      "Value_hex": "0x04"
+                    },
+                    "0x34": {
+                      "Address_int": 52,
+                      "Value_int": 2,
+                      "Value_txt": "Flame power 2",
+                      "Value_hex": "0x02"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "tags": [
+          "Diagnostics"
+        ],
+        "summary": "Prometheus metrics",
+        "description": "ESP32, WiFi, HTTP and stove metrics in Prometheus text exposition format.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "example": "# HELP stove_state Stove state code\n# TYPE stove_state gauge\nstove_state 4\n"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "Device landing page (HTML)",
+        "responses": {
+          "200": {
+            "description": "HTML page with IP, SSID, RSSI, uptime and links",
+            "content": {
+              "text/html": {}
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
+    "/restart": {
+      "get": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "Reboot the ESP32",
+        "responses": {
+          "200": {
+            "description": "Restarting",
+            "content": {
+              "text/plain": {
+                "example": "Restarting..."
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api": {
+      "get": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "Swagger UI (this page)",
+        "responses": {
+          "200": {
+            "description": "HTML",
+            "content": {
+              "text/html": {}
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
+    "/api-specs.json": {
+      "get": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "This OpenAPI specification",
+        "responses": {
+          "200": {
+            "description": "OpenAPI 3 document",
+            "content": {
+              "application/json": {}
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
+    "/on": {
+      "get": {
+        "tags": [
+          "Legacy"
+        ],
+        "deprecated": true,
+        "summary": "Power on. Use POST /api/power?state=on",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/LegacyPower"
+          },
+          "202": {
+            "$ref": "#/components/responses/LegacyPower"
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/off": {
+      "get": {
+        "tags": [
+          "Legacy"
+        ],
+        "deprecated": true,
+        "summary": "Power off. Use POST /api/power?state=off",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/LegacyPower"
+          },
+          "202": {
+            "$ref": "#/components/responses/LegacyPower"
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/state": {
+      "get": {
+        "tags": [
+          "Legacy"
+        ],
+        "deprecated": true,
+        "summary": "Alias of GET /api/state",
+        "responses": {
+          "200": {
+            "description": "See /api/state"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/flame": {
+      "get": {
+        "tags": [
+          "Legacy"
+        ],
+        "deprecated": true,
+        "summary": "Alias of /api/flame (GET and POST)",
+        "responses": {
+          "200": {
+            "description": "See /api/flame"
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/fan": {
+      "get": {
+        "tags": [
+          "Legacy"
+        ],
+        "deprecated": true,
+        "summary": "Alias of /api/fan (GET and POST)",
+        "responses": {
+          "200": {
+            "description": "See /api/fan"
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/get": {
+      "get": {
+        "tags": [
+          "Legacy"
+        ],
+        "deprecated": true,
+        "summary": "Alias of GET /api/dump",
+        "responses": {
+          "200": {
+            "description": "See /api/dump"
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/set": {
+      "get": {
+        "tags": [
+          "Legacy"
+        ],
+        "deprecated": true,
+        "summary": "Read a single register (despite the name, nothing is written)",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ram",
+                "eeprom"
+              ],
+              "default": "ram"
+            }
+          },
+          {
+            "name": "int",
+            "in": "query",
+            "description": "Register address 0-255 (decimal). Alternatively use `address`.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "example": 33
+          },
+          {
+            "name": "address",
+            "in": "query",
+            "description": "Register address, decimal or hex (0x21)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "0x00": {
+                    "0x21": {
+                      "Address_int": 33,
+                      "Value_int": 4,
+                      "Value_txt": "Working",
+                      "Value_hex": "0x04"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid type or address",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "int (or address) must be 0-255, decimal or 0x hex"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Serial error",
+            "content": {
+              "application/json": {
+                "example": {
+                  "0x00": {
+                    "0x21": {
+                      "Address_int": 33,
+                      "error": "Failed to get value RS232 error"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/error": {
+      "get": {
+        "tags": [
+          "Legacy"
+        ],
+        "deprecated": true,
+        "summary": "Write error memory by index. Use POST /api/errors",
+        "parameters": [
+          {
+            "name": "0",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ErrorId"
+            }
+          },
+          {
+            "name": "1",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ErrorId"
+            }
+          },
+          {
+            "name": "2",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ErrorId"
+            }
+          },
+          {
+            "name": "3",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ErrorId"
+            }
+          },
+          {
+            "name": "4",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ErrorId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/LegacyOk"
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/cq": {
+      "get": {
+        "tags": [
+          "Legacy"
+        ],
+        "deprecated": true,
+        "summary": "Write raw combustion quality value. Use POST /api/burn",
+        "parameters": [
+          {
+            "name": "s",
+            "in": "query",
+            "required": true,
+            "description": "Raw EEPROM value",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/LegacyOk"
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/display": {
+      "get": {
+        "tags": [
+          "Legacy"
+        ],
+        "deprecated": true,
+        "summary": "Force the remote control display to a menu id",
+        "parameters": [
+          {
+            "name": "menu",
+            "in": "query",
+            "required": true,
+            "description": "Menu id (see RAM 0x1A in docs/discovered-values.md)",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/LegacyOk"
+          },
+          "503": {
+            "$ref": "#/components/responses/Busy"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/app": {
+      "get": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "Web app (HTML)",
+        "description": "Single page app (Dutch / English) to monitor and control the stove: status, alerts, history charts, remote control mirror, settings, timers. Use ?lang=nl or ?lang=en to force a language.",
+        "responses": {
+          "200": {
+            "description": "HTML",
+            "content": {
+              "text/html": {}
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
+    "/api/history": {
+      "get": {
+        "tags": [
+          "Status"
+        ],
+        "summary": "Last 24 h of temperatures",
+        "description": "One sample every 2 minutes for the last 24 h (720 samples). Kept in RAM and appended to SPIFFS, so it survives restarts. Each sample is an array in the order of `fields`; `t` is Unix time (UTC).",
+        "parameters": [
+          {
+            "name": "hours",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 24,
+              "default": 24
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "interval": {
+                      "type": "integer"
+                    },
+                    "fields": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "samples": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "interval": 120,
+                  "fields": [
+                    "t",
+                    "room",
+                    "stove",
+                    "remote",
+                    "setpoint",
+                    "fume",
+                    "flame",
+                    "state",
+                    "fan",
+                    "flameActual",
+                    "auger",
+                    "fumeFan",
+                    "fanActual",
+                    "fanPower"
+                  ],
+                  "samples": [
+                    [
+                      1794843000,
+                      20.5,
+                      22.0,
+                      20.5,
+                      22,
+                      118,
+                      2,
+                      4,
+                      1,
+                      1,
+                      1.2,
+                      2590,
+                      2,
+                      21
+                    ]
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/events": {
+      "get": {
+        "tags": [
+          "Status"
+        ],
+        "summary": "Log of stove state changes and errors",
+        "description": "Every change of the stove state and of the active error (both read ~1 s), with the exact time. The stove does not store when an error happened; this log is the only source for that. The last 200 entries are kept and persisted to SPIFFS. Recorded once NTP time is available. Oldest first. Errors are only logged once they last 30 s or the stove is in an alarm state. Changes of the pellet reserve registers (RAM 0xA4, 0x89) are logged as type pellet.",
+        "parameters": [
+          {
+            "name": "hours",
+            "in": "query",
+            "required": false,
+            "description": "Only return changes from the last N hours (default: all)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 720
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "t": {
+                            "type": "integer",
+                            "description": "Unix time (UTC)"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "state",
+                              "error",
+                              "pellet"
+                            ]
+                          },
+                          "from": {
+                            "type": "integer",
+                            "nullable": true,
+                            "description": "state: previous stove state code, null for the first logged change"
+                          },
+                          "to": {
+                            "type": "integer",
+                            "description": "state: new stove state code"
+                          },
+                          "id": {
+                            "type": "integer",
+                            "description": "error: raw error value, 0 = error cleared"
+                          },
+                          "error": {
+                            "type": "string",
+                            "nullable": true,
+                            "description": "error: error code such as E9, null when cleared"
+                          },
+                          "register": {
+                            "type": "string",
+                            "enum": [
+                              "0xA4",
+                              "0x89"
+                            ],
+                            "description": "pellet: RAM register that changed (0xA4 reserve sensor, 0x89 reserve counter); from/to are its old and new value"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "events": [
+                    {
+                      "t": 1794843000,
+                      "type": "state",
+                      "from": 7,
+                      "to": 1
+                    },
+                    {
+                      "t": 1794843600,
+                      "type": "error",
+                      "id": 4,
+                      "error": "E9"
+                    },
+                    {
+                      "t": 1794844200,
+                      "type": "error",
+                      "id": 0,
+                      "error": null
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid hours",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "failed - hours must be 1..720"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/bluetooth": {
+      "get": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "Bluetooth (BLE) setting",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bluetooth"
+                },
+                "example": {
+                  "enabled": true,
+                  "active": true,
+                  "restartRequired": false
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "Enable or disable Bluetooth (applied after a restart)",
+        "description": "Stored in NVS. With BLE off the controller skips BLE completely at boot and WiFi gets the radio to itself.",
+        "parameters": [
+          {
+            "name": "enabled",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "restart",
+            "in": "query",
+            "required": false,
+            "description": "Restart right away when the setting changed",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "success - restarting",
+                  "enabled": false,
+                  "active": true,
+                  "restartRequired": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid value",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "failed - expected enabled=true/false"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/auth": {
+      "get": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "API key status",
+        "description": "`key` is only returned to authorised callers (or while the key is not required).",
+        "security": [
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "required": false,
+                  "key": "3f9c0a1b2c3d4e5f60718293a4b5c6d7"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "Require / un-require the API key, or rotate it",
+        "description": "Needs the current key while it is required.",
+        "security": [
+          {},
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "required",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "rotate",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "success",
+                  "required": true,
+                  "key": "3f9c0a1b2c3d4e5f60718293a4b5c6d7"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid value"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/update": {
+      "post": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "Firmware update over HTTP",
+        "description": "Streams a firmware image (multipart field `firmware`) to the OTA partition and restarts the controller on success. Needs the API key (also when it is not required for other routes) or the OTA password in `X-OTA-Password`.",
+        "parameters": [
+          {
+            "name": "X-OTA-Password",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "OTA password from platformio.ini, alternative to the API key"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "firmware": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "firmware"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Installed, the controller restarts",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "success",
+                  "bytes": 1608157,
+                  "restarting": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key or OTA password",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Missing or invalid API key or OTA password"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Update failed; the current firmware keeps running",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "failed - write failed: ..."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/telnet": {
+      "get": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "Telnet menu setting",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "enabled": true
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "Enable or disable the telnet menu (applied immediately)",
+        "parameters": [
+          {
+            "name": "enabled",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "success",
+                  "enabled": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid value"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/keywatch": {
+      "get": {
+        "summary": "Key watch status and log",
+        "tags": [
+          "Diagnostics"
+        ],
+        "description": "Status and change log of the fast RAM watch (see POST).",
+        "responses": {
+          "200": {
+            "description": "Status and log",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyWatch"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Start a key watch",
+        "description": "Reverse-engineering aid: stops the normal polling and reads only the given RAM addresses back to back (about 20 reads per second in total), logging every change with a millisecond timestamp. Read-only. /api/state is not refreshed while a watch runs.",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "0x08,0x15,0x16,0x18,0x19,0x1A,0x24"
+            },
+            "description": "Comma separated RAM addresses (max 8), decimal or hex"
+          },
+          {
+            "name": "seconds",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 300,
+              "default": 60
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Watch started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyWatch"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No valid address"
+          }
+        },
+        "tags": [
+          "Diagnostics"
+        ]
+      },
+      "delete": {
+        "summary": "Stop the key watch",
+        "responses": {
+          "200": {
+            "description": "Stopped; returns the log",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyWatch"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Diagnostics"
+        ]
+      }
+    }
+  },
+  "components": {
+    "responses": {
+      "MethodNotAllowed": {
+        "description": "HTTP method not supported on this route"
+      },
+      "TimerResult": {
+        "description": "Success, returns the program after the write",
+        "content": {
+          "application/json": {
+            "example": {
+              "result": "success",
+              "PR1": {
+                "enabled": true,
+                "on": "06:30",
+                "off": "09:00",
+                "enabled_on": {
+                  "monday": true,
+                  "tuesday": true,
+                  "wednesday": true,
+                  "thursday": true,
+                  "friday": true,
+                  "saturday": false,
+                  "sunday": false
+                },
+                "settings": {
+                  "setpoint": 22,
+                  "flame_power": 3,
+                  "RoomFanSpeed": 2
+                }
+              }
+            }
+          }
+        }
+      },
+      "LegacyPower": {
+        "description": "Same logic as POST /api/power, but the state is nested",
+        "content": {
+          "application/json": {
+            "example": {
+              "result": "Powered on sended",
+              "stoveState": {
+                "stoveState": 1,
+                "state": "Starting",
+                "poweredOn": true
+              }
+            }
+          }
+        }
+      },
+      "LegacyOk": {
+        "description": "Always returns ok",
+        "content": {
+          "application/json": {
+            "example": {
+              "action": "ok"
+            }
+          }
+        }
+      },
+      "Busy": {
+        "description": "Stove bus busy, retry",
+        "content": {
+          "application/json": {
+            "example": {
+              "error": "Stove bus busy, try again"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "API key required and missing or invalid",
+        "content": {
+          "application/json": {
+            "example": {
+              "error": "Missing or invalid API key (X-API-Key header)"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "StoveState": {
+        "type": "object",
+        "properties": {
+          "stoveState": {
+            "type": "integer",
+            "description": "-1 Unknown (serial error), 0 Off, 1 Starting, 2 Pellet loading, 3 Ignition, 4 Working, 5 Brazier cleaning, 6 Final cleaning, 7 Standby, 8 Alarm State, 9 Ignition failure, 10 Alarm",
+            "enum": [
+              -1,
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          },
+          "state": {
+            "type": "string"
+          },
+          "poweredOn": {
+            "type": "boolean",
+            "description": "true for states 1-5, 7 and 8"
+          }
+        }
+      },
+      "PowerResult": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "result": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "$ref": "#/components/schemas/StoveState"
+          }
+        ]
+      },
+      "Health": {
+        "type": "object",
+        "properties": {
+          "health": {
+            "type": "string"
+          }
+        }
+      },
+      "Flame": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string"
+          },
+          "power": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4
+          }
+        }
+      },
+      "Fan": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string"
+          },
+          "speed": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          }
+        }
+      },
+      "Setpoint": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string"
+          },
+          "setpoint": {
+            "type": "integer",
+            "minimum": 7,
+            "maximum": 30
+          }
+        }
+      },
+      "Beep": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Burn": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string"
+          },
+          "combustionQuality": {
+            "type": "string",
+            "description": "+G, -3 .. 3 or Unknown"
+          },
+          "pelletQuality": {
+            "type": "string",
+            "description": "-5 .. 5 or Unknown"
+          }
+        }
+      },
+      "EnergySaving": {
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "integer",
+            "minimum": -3,
+            "maximum": 0,
+            "description": "0 = OFF: no automatic restart after stopping"
+          },
+          "stop": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3,
+            "description": "0 = OFF: energy saving disabled, the stove only modulates"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "true when STOP is set (stop != 0)"
+          },
+          "startTemperature": {
+            "type": "integer",
+            "description": "Only when enabled"
+          },
+          "stopTemperature": {
+            "type": "integer",
+            "description": "Only when enabled"
+          }
+        }
+      },
+      "Time": {
+        "type": "object",
+        "properties": {
+          "stove": {
+            "type": "string",
+            "example": "2026-11-15 17:50:12"
+          },
+          "ntp": {
+            "type": "string",
+            "example": "2026-11-15 17:50:38"
+          },
+          "delta": {
+            "type": "integer",
+            "description": "NTP minus stove time in seconds"
+          }
+        }
+      },
+      "TimeResult": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string"
+          },
+          "time": {
+            "$ref": "#/components/schemas/Time"
+          }
+        }
+      },
+      "ErrorId": {
+        "type": "integer",
+        "description": "0 = no error. See README for codes.",
+        "enum": [
+          0,
+          1,
+          2,
+          4,
+          8,
+          16,
+          32,
+          64,
+          128,
+          129,
+          130,
+          132,
+          136,
+          255
+        ]
+      },
+      "ErrorEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ErrorId"
+          },
+          "error": {
+            "type": "string",
+            "example": "E1"
+          },
+          "desc": {
+            "type": "string"
+          }
+        }
+      },
+      "PreviousErrors": {
+        "description": "`false` when empty, otherwise the non-empty memory positions (MemoryPos_1 .. MemoryPos_5)",
+        "oneOf": [
+          {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ErrorEntry"
+            }
+          }
+        ]
+      },
+      "Errors": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Only on POST"
+          },
+          "previousErrors": {
+            "$ref": "#/components/schemas/PreviousErrors"
+          }
+        }
+      },
+      "Timer": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "on": {
+            "type": "string",
+            "description": "HH:MM on a 10 minute boundary, or `off`",
+            "example": "06:30"
+          },
+          "off": {
+            "type": "string",
+            "description": "HH:MM on a 10 minute boundary, or `off`",
+            "example": "08:30"
+          },
+          "enabled_on": {
+            "type": "object",
+            "properties": {
+              "monday": {
+                "type": "boolean"
+              },
+              "tuesday": {
+                "type": "boolean"
+              },
+              "wednesday": {
+                "type": "boolean"
+              },
+              "thursday": {
+                "type": "boolean"
+              },
+              "friday": {
+                "type": "boolean"
+              },
+              "saturday": {
+                "type": "boolean"
+              },
+              "sunday": {
+                "type": "boolean"
+              }
+            }
+          },
+          "settings": {
+            "type": "object",
+            "properties": {
+              "setpoint": {
+                "type": "integer",
+                "minimum": 7,
+                "maximum": 30
+              },
+              "flame_power": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4
+              },
+              "RoomFanSpeed": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 3
+              }
+            }
+          },
+          "error": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Only present when the program could not be read; no other fields are returned then"
+          }
+        }
+      },
+      "TimerSet": {
+        "type": "object",
+        "properties": {
+          "PR1": {
+            "$ref": "#/components/schemas/Timer"
+          },
+          "PR2": {
+            "$ref": "#/components/schemas/Timer"
+          },
+          "PR3": {
+            "$ref": "#/components/schemas/Timer"
+          },
+          "PR4": {
+            "$ref": "#/components/schemas/Timer"
+          },
+          "PR5": {
+            "$ref": "#/components/schemas/Timer"
+          },
+          "PR6": {
+            "$ref": "#/components/schemas/Timer"
+          }
+        }
+      },
+      "Remote": {
+        "type": "object",
+        "properties": {
+          "displayed_menu": {
+            "type": "string"
+          },
+          "diplayed_menu": {
+            "type": "string",
+            "deprecated": true,
+            "description": "Deprecated misspelled alias of `displayed_menu`"
+          },
+          "selected_parameter": {
+            "type": "string"
+          },
+          "menuId": {
+            "type": "integer",
+            "description": "Raw id of the screen shown on the remote (RAM 0x1A); 0 = main screen"
+          },
+          "parameterId": {
+            "type": "integer",
+            "description": "Parameter being edited on the remote (RAM 0x18), e.g. 130 MultiFuoco, 128 flame power, 145/146 energy saving stop/start; 0 = not editing"
+          },
+          "editValue": {
+            "type": "integer",
+            "description": "Value the remote currently shows while editing (RAM 0x19), not yet confirmed"
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "ENG",
+              "FRA",
+              "DEU",
+              "NLD",
+              "POR",
+              "SPA",
+              "HRV",
+              "DAN",
+              "Unknown"
+            ]
+          }
+        }
+      },
+      "Register": {
+        "type": "object",
+        "properties": {
+          "Address_int": {
+            "type": "integer"
+          },
+          "Value_int": {
+            "type": "integer",
+            "description": "-1 on read error"
+          },
+          "Value_txt": {
+            "type": "string",
+            "description": "Decoded value, empty when unknown"
+          },
+          "Value_hex": {
+            "type": "string"
+          }
+        }
+      },
+      "State": {
+        "type": "object",
+        "properties": {
+          "stoveState": {
+            "$ref": "#/components/schemas/StoveState"
+          },
+          "hydro": {
+            "type": "object",
+            "description": "Only in hydro mode",
+            "properties": {
+              "Pressure": {
+                "type": "number"
+              },
+              "Temp": {
+                "type": "number"
+              }
+            }
+          },
+          "flame": {
+            "type": "object",
+            "properties": {
+              "power": {
+                "type": "integer",
+                "description": "Set flame power (EEPROM 0x7F)"
+              },
+              "actual": {
+                "type": "integer",
+                "description": "Flame power the stove currently runs at (RAM 0x34)"
+              }
+            }
+          },
+          "temperatures": {
+            "type": "object",
+            "properties": {
+              "room": {
+                "type": "number",
+                "description": "Room temperature as used by the stove (RAM 0x01), from the sensor selected in MULTICOMFORT"
+              },
+              "stove": {
+                "type": "number"
+              },
+              "remoteControl": {
+                "type": "number"
+              },
+              "setPoint": {
+                "type": "integer"
+              },
+              "fume": {
+                "type": "integer"
+              }
+            }
+          },
+          "wirelessSensor": {
+            "type": "string",
+            "enum": [
+              "on",
+              "off",
+              "unknown"
+            ],
+            "description": "Installer > INSTELL WIRELESS (bit 0 of RAM 0xB6): external wireless temperature sensor enabled. Read-only."
+          },
+          "energySaving": {
+            "$ref": "#/components/schemas/EnergySaving"
+          },
+          "RoomFanSpeed": {
+            "type": "integer"
+          },
+          "roomFan": {
+            "type": "object",
+            "description": "What the room fan really does; RoomFanSpeed is only the requested speed",
+            "properties": {
+              "speed": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 3,
+                "description": "Requested speed (same as RoomFanSpeed)"
+              },
+              "actual": {
+                "type": "integer",
+                "nullable": true,
+                "minimum": 0,
+                "maximum": 3,
+                "description": "Speed the fan really runs at: 0 when stopped, 1-3 derived from the drive value; null when unknown"
+              },
+              "running": {
+                "type": "boolean",
+                "nullable": true,
+                "description": "Fan turning (power RAM 0x0A > 0)"
+              },
+              "hotEnough": {
+                "type": "boolean",
+                "nullable": true,
+                "description": "Stove hot enough for the room fan (RAM 0x04); the fan waits for this after ignition"
+              },
+              "drive": {
+                "type": "integer",
+                "nullable": true,
+                "description": "Raw power (RAM 0x0A): 0 off; depends on speed and actual flame power, e.g. 9/14/19 at flame 1 and 21/23/25 at flame 2 for speed 1/2/3 (P220 M)"
+              },
+              "mode": {
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                  "off",
+                  "on",
+                  null
+                ],
+                "description": "From the fan power (RAM 0x0A): off (0) or on"
+              }
+            }
+          },
+          "lowPalletAlarm": {
+            "type": "integer"
+          },
+          "stoveBeepEnabled": {
+            "type": "boolean"
+          },
+          "numberOfStarts": {
+            "type": "integer"
+          },
+          "hoursSinceLastService": {
+            "type": "integer"
+          },
+          "totalRuntime": {
+            "type": "integer",
+            "description": "Total runtime in hours"
+          },
+          "firmwareVersion": {
+            "type": "string"
+          },
+          "augerSpeed": {
+            "type": "number",
+            "description": "rpm"
+          },
+          "burn": {
+            "$ref": "#/components/schemas/Burn"
+          },
+          "fumeFanRPM": {
+            "type": "integer"
+          },
+          "RemoteControlLastSeen": {
+            "type": "integer",
+            "description": "Seconds since last contact with the remote control, -1 if unknown"
+          },
+          "previousErrors": {
+            "$ref": "#/components/schemas/PreviousErrors"
+          },
+          "time": {
+            "$ref": "#/components/schemas/Time"
+          },
+          "dataAge": {
+            "type": "object",
+            "description": "Seconds since the cache was last refreshed; null until the first refresh",
+            "properties": {
+              "fastSeconds": {
+                "type": "integer",
+                "nullable": true
+              },
+              "slowSeconds": {
+                "type": "integer",
+                "nullable": true
+              }
+            }
+          },
+          "serial": {
+            "type": "object",
+            "description": "Serial bus counters since boot",
+            "properties": {
+              "readErrors": {
+                "type": "integer"
+              },
+              "writeErrors": {
+                "type": "integer"
+              },
+              "retries": {
+                "type": "integer"
+              }
+            }
+          },
+          "uptime": {
+            "type": "object",
+            "properties": {
+              "seconds": {
+                "type": "integer"
+              },
+              "human": {
+                "type": "string"
+              }
+            }
+          },
+          "currentError": {
+            "description": "Active error (RAM 0x33): false or the error entry",
+            "oneOf": [
+              {
+                "type": "boolean",
+                "enum": [
+                  false
+                ]
+              },
+              {
+                "$ref": "#/components/schemas/ErrorEntry"
+              }
+            ]
+          },
+          "bluetooth": {
+            "type": "boolean",
+            "description": "BLE running on the controller"
+          },
+          "telnet": {
+            "type": "boolean"
+          },
+          "apiKeyRequired": {
+            "type": "boolean"
+          },
+          "pelletReserve": {
+            "type": "object",
+            "description": "PELLET RESERVE (installer menu). How the stove decides the reserve is not verified.",
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "nullable": true,
+                "description": "EEPROM 0xC6"
+              },
+              "sensor": {
+                "type": "integer",
+                "nullable": true,
+                "description": "RAM 0xA4, 5 = reserve sensor active"
+              },
+              "counter": {
+                "type": "integer",
+                "nullable": true,
+                "description": "RAM 0x89, alarm assumed at <= 1"
+              }
+            }
+          },
+          "brazierCleaning": {
+            "type": "object",
+            "description": "Brazier cleaning while the stove is working (verified 16/11/2026).",
+            "properties": {
+              "minutesLeft": {
+                "type": "integer",
+                "nullable": true,
+                "description": "RAM 0x32: minutes to the next brazier cleaning. null when the stove is not working (state 4)"
+              },
+              "active": {
+                "type": "boolean",
+                "description": "true while the cleaning runs (state 5)"
+              },
+              "interval": {
+                "type": "integer",
+                "nullable": true,
+                "description": "EEPROM 0x02: interval between cleanings in minutes"
+              }
+            }
+          },
+          "controller": {
+            "type": "object",
+            "description": "Controller (ESP32) firmware build, generated by scripts/buildinfo.py",
+            "properties": {
+              "version": {
+                "type": "string",
+                "description": "git describe --tags --always --dirty"
+              },
+              "built": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Build time (UTC)"
+              },
+              "branch": {
+                "type": "string"
+              },
+              "env": {
+                "type": "string",
+                "description": "PlatformIO environment"
+              }
+            }
+          }
+        }
+      },
+      "Bluetooth": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Stored setting"
+          },
+          "active": {
+            "type": "boolean",
+            "description": "BLE running now"
+          },
+          "restartRequired": {
+            "type": "boolean"
+          }
+        }
+      },
+      "KeyWatch": {
+        "type": "object",
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "remainingSeconds": {
+            "type": "integer"
+          },
+          "started": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Unix time of the start"
+          },
+          "elapsedMs": {
+            "type": "integer"
+          },
+          "reads": {
+            "type": "integer"
+          },
+          "readErrors": {
+            "type": "integer"
+          },
+          "readsPerSecond": {
+            "type": "number"
+          },
+          "overflow": {
+            "type": "boolean",
+            "description": "true when more than 600 changes occurred (the rest was dropped)"
+          },
+          "addresses": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "start": {
+                  "type": "integer",
+                  "nullable": true
+                },
+                "now": {
+                  "type": "integer",
+                  "nullable": true
+                }
+              }
+            }
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "ms": {
+                  "type": "integer",
+                  "description": "ms since the start"
+                },
+                "addr": {
+                  "type": "string"
+                },
+                "from": {
+                  "type": "integer"
+                },
+                "to": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      },
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "security": [
+    {},
+    {
+      "ApiKeyAuth": []
+    },
+    {
+      "BearerAuth": []
+    }
+  ]
+}

@@ -39,6 +39,19 @@
         "getLocalTime",
         "snprintf",
         "NTPtime",
-        "INADDR"
+        "INADDR",
+        "espressif",
+        "devkit",
+        "clangtidy",
+        "DCORE",
+        "espota",
+        "usbserial",
+        "NimBLE",
+        "nimble",
+        "partitions",
+        "spiffs",
+        "DOTA",
+        "coex",
+        "COEX"
     ]
 }

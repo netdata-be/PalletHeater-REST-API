@@ -1,0 +1,26 @@
+name: PalletHeater
+options:
+  bundleIdPrefix: eu.inuits
+  deploymentTarget:
+    iOS: "16.0"
+targets:
+  PalletHeater:
+    type: application
+    platform: iOS
+    sources:
+      - path: PalletHeater
+    info:
+      path: PalletHeater/Info.plist
+      properties:
+        NSBluetoothAlwaysUsageDescription: "PalletHeater uses Bluetooth LE to connect to and control your pellet stove."
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        UILaunchStoryboardName: ""
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+    settings:
+      base:
+        SWIFT_VERSION: "5.9"
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+        PRODUCT_BUNDLE_IDENTIFIER: eu.inuits.PalletHeater

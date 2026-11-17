@@ -32,8 +32,9 @@ void getStoveState() // Get detailed stove state
         snprintf(StoveStateStr, sizeof(StoveStateStr), "Working");
         StoveIsOn = true;
         break;
-    case BRAZIER_CLEANING:
+    case BRAZIER_CLEANING:  // periodic cleaning while working, stove is still running
         snprintf(StoveStateStr, sizeof(StoveStateStr), "Brazier cleaning");
+        StoveIsOn = true;
         break;
     case FINAL_CLEANING:
         snprintf(StoveStateStr, sizeof(StoveStateStr), "Final cleaning");
@@ -43,8 +44,9 @@ void getStoveState() // Get detailed stove state
         snprintf(StoveStateStr, sizeof(StoveStateStr), "Standby");
         StoveIsOn = true;
         break;
-    case ALARM:
+    case ALARM:  // doStoveOff() still sends a shutdown (6) in this state, so treat it as on
         snprintf(StoveStateStr, sizeof(StoveStateStr), "Alarm State");
+        StoveIsOn = true;
         break;
     case IGNITION_FAILURE:
         snprintf(StoveStateStr, sizeof(StoveStateStr), "Ignition failure");

@@ -1,19 +1,28 @@
 #include <ArduinoOTA.h>
+#include <NimBLEDevice.h>
 #include "constants.h"
 
 void enableOTA(){
     ArduinoOTA.setHostname("Pelletheater");
     ArduinoOTA.setPort(3232);
+    ArduinoOTA.setPassword(OTA_PASSWORD);
     ArduinoOTA.onStart([](){
+        otaActive = true;   // pauses the sensor task: no serial traffic, more time for WiFi
+        // Stop BLE advertising so it stops competing with WiFi for the shared radio.
+        if (bleEnabled) NimBLEDevice::stopAdvertising();
         String type;
         type = (ArduinoOTA.getCommand() == U_FLASH) ? "sketch" : "filesystem";
         Serial.println("Updating...");
     }).onEnd([](){
+        otaActive = false;
+        if (bleEnabled) NimBLEDevice::startAdvertising();
         Serial.println("\nEnd");
     }).onProgress([](unsigned int progress, unsigned int total){
         esp_task_wdt_reset();
         Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
     }).onError([](ota_error_t error){
+        otaActive = false;
+        if (bleEnabled) NimBLEDevice::startAdvertising();
         Serial.printf("Error[%u]: ", error);
         switch(error){
             case OTA_AUTH_ERROR:

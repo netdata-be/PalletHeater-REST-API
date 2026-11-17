@@ -6,6 +6,8 @@
 #include "EasyLed.h"
 #include <EasyButton.h>
 #include <ctime>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 #include "Stove.h"
 
@@ -29,6 +31,15 @@ const char * defaultTimezone = "CET-1CEST,M3.5.0/2,M10.5.0/3";
 int currentDst = 0;
 time_t now;
 time_t stoveTime;
+unsigned long stoveTimeReadMs = 0;
+#define STOVE_TIME_READ_MS  300000UL   // re-read the stove clock every 5 min once it is known
+#define STOVE_TIME_RETRY_MS  10000UL   // ... and every 10 s while it is not   // millis() when stoveTime was last read from the stove
+// The stove clock is only read every 5 min (6 UART reads); in between it is extrapolated
+// with millis() so the API, metrics and web app see a clock that ticks every second.
+time_t stoveTimeNow() { return stoveTime ? stoveTime + (time_t)((millis() - stoveTimeReadMs) / 1000) : 0; }
+// The ESP32 system clock keeps running between NTP syncs, so read it directly instead of
+// the "now" snapshot that is only refreshed by getNTPtime() every 60 s.
+time_t ntpTimeNow() { time_t t; time(&t); return t; }
 long unsigned lastNTPtime;
 unsigned long lastEntryTime;
 
@@ -38,7 +49,30 @@ ESPTelnet telnet;
 EasyButton resetButton(RESET_PIN);
 
 const char * swaggerUI = "<!DOCTYPE html><html lang=\"en\"> <head> <meta charset=\"UTF-8\"> <title>Swagger UI</title> <link rel=\"stylesheet\" type=\"text/css\" href=\"https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.14.2/swagger-ui.css\"/> <link rel=\"stylesheet\" type=\"text/css\" href=\"https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.14.2/swagger-ui.css\"/> </head> <body> <div id=\"swagger-ui\"></div><script src=\"https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.14.2/swagger-ui-bundle.js\" charset=\"UTF-8\"> </script> <script src=\"https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.14.2/swagger-ui-standalone-preset.js\" charset=\"UTF-8\"> </script> <script>window.onload=function(){window.ui=SwaggerUIBundle({url: \"api-specs.json\", dom_id: '#swagger-ui', deepLinking: true, presets: [ SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset], plugins: [ SwaggerUIBundle.plugins.DownloadUrl], layout: \"StandaloneLayout\"});}; </script> </body></html>";
-const char * swaggerJSON = "{\"openapi\":\"3.0.1\",\"info\":{\"title\":\"Palletheater REST API\",\"description\":\"This API runs on a ESP32 an provides using the hardware serial UART2 an HTTP interface towards micronova pallet stoves.\",\"version\":\"0.3\"},\"paths\":{\"/api/flame\":{\"get\":{\"tags\":[\"Flame power\"],\"description\":\"Get the current flame power, can be 1 - 2 - 3 - 4\",\"responses\":{\"200\":{\"description\":\"Succesful fetech the current flame power\",\"content\":{\"application/json\":{\"schema\":{\"type\":\"object\",\"properties\":{\"power\":{\"description\":\"The amount of pallets falling\",\"enum\":[1,2,3,4],\"type\":\"integer\"}}},\"examples\":{\"Power level 1\":{\"value\":\"{\\\"power\\\":1}\"},\"Power level 2\":{\"value\":\"{\\\"power\\\":2}\"},\"Power level 3\":{\"value\":\"{\\\"power\\\":3}\"},\"Power level 4\":{\"value\":\"{\\\"power\\\":4}\"}}}}}}},\"post\":{\"tags\":[\"Flame power\"],\"description\":\"Set the current flame power\",\"parameters\":[{\"name\":\"power\",\"in\":\"query\",\"required\":true,\"schema\":{\"type\":\"integer\",\"enum\":[1,2,3,4]},\"example\":\"1\"}],\"responses\":{\"200\":{\"description\":\"Succesfully set\",\"content\":{\"application/json\":{\"schema\":{\"type\":\"object\",\"properties\":{\"result\":{\"type\":\"string\"},\"power\":{\"type\":\"integer\"}}},\"examples\":{\"Powerlevel 1\":{\"value\":\"{\\\"result\\\":\\\"success\\\",\\\"power\\\":1}\"},\"Powerlevel 2\":{\"value\":\"{\\\"result\\\":\\\"success\\\",\\\"power\\\":2}\"},\"Powerlevel 3\":{\"value\":\"{\\\"result\\\":\\\"success\\\",\\\"power\\\":3}\"},\"Powerlevel 4\":{\"value\":\"{\\\"result\\\":\\\"success\\\",\\\"power\\\":4}\"}}}}},\"400\":{\"description\":\"Wrong value, this means you have submitted the wrong int to the `power` argument.\",\"content\":{\"application/json\":{\"schema\":{\"type\":\"object\",\"properties\":{\"result\":{\"type\":\"string\"},\"power\":{\"type\":\"integer\"}}},\"examples\":{\"Failed\":{\"value\":\"{\\\"result\\\":\\\"failed - power is out of range: Should be between 1 and 4\\\",\\\"power\\\":1}\"}}}}},\"500\":{\"description\":\"Can happen when the RS232 communication fails\",\"content\":{\"application/json\":{\"schema\":{\"type\":\"object\",\"properties\":{\"result\":{\"type\":\"string\"},\"power\":{\"type\":\"integer\"}}},\"examples\":{\"Failed\":{\"value\":\"{\\\"result\\\":\\\"Failed - RS2232 error...\\\",\\\"power\\\":-1}\"}}}}}}}},\"/api/time\":{\"get\":{\"tags\":[\"Date and Time\"],\"description\":\"Get the stove it's internal time reference as well as NTP based time\",\"responses\":{\"200\":{\"description\":\"Successful\",\"content\":{\"application/json\":{\"schema\":{\"type\":\"object\",\"properties\":{\"time\":{\"type\":\"object\",\"properties\":{\"stove\":{\"type\":\"string\"},\"delta\":{\"type\":\"integer\"},\"ntp\":{\"type\":\"string\"}}}}},\"examples\":{\"Example\":{\"value\":\"{\\\"time\\\":{\\\"stove\\\":\\\"2022-10-05 17:50:12\\\",\\\"ntp\\\":\\\"2022-10-05 17:50:38\\\",\\\"delta\\\":26}}\"}}}}}}},\"patch\":{\"tags\":[\"Date and Time\"],\"description\":\"Set the stove time to the NTP timesource\",\"responses\":{\"200\":{\"description\":\"Successfull synced the internal clock.\",\"content\":{\"application/json\":{\"schema\":{\"type\":\"object\",\"properties\":{\"result\":{\"type\":\"string\"},\"time\":{\"type\":\"object\",\"properties\":{\"stove\":{\"type\":\"string\"},\"delta\":{\"type\":\"integer\"},\"ntp\":{\"type\":\"string\"}}}}},\"examples\":{\"0\":{\"value\":\"{\\\"result\\\":\\\"success Synced NTP time to stove\\\",\\\"time\\\":{\\\"stove\\\":\\\"2022-10-05 17:51:00\\\",\\\"ntp\\\":\\\"2022-10-05 17:51:04\\\",\\\"delta\\\":4}}\"}}}}}}}},\"/api/health\":{\"get\":{\"tags\":[\"Status\"],\"description\":\"Endpoint to test the serial interface it's health.\",\"responses\":{\"200\":{\"description\":\"When the serial interfaces works you get an HTTP 200\",\"content\":{\"application/json\":{\"schema\":{\"type\":\"object\",\"properties\":{\"health\":{\"type\":\"string\"}}},\"examples\":{\"Healthy\":{\"value\":\"{\\\"health\\\":\\\"Healthy\\\"}\"}}}}},\"500\":{\"description\":\"In case the stove serial is not working you get an HTTP 500\",\"content\":{\"application/json\":{\"schema\":{\"type\":\"object\",\"properties\":{\"health\":{\"type\":\"string\"}}},\"examples\":{\"Error\":{\"value\":\"{\\\"health\\\":\\\"Failed to talk to Stove\\\"}\"}}}}}}}},\"/api/state\":{\"get\":{\"tags\":[\"Status\"],\"description\":\"Fetch all relevant info in 1 output\",\"responses\":{\"200\":{\"description\":\"Success\",\"content\":{\"application/json\":{\"schema\":{\"type\":\"object\",\"properties\":{\"RemoteControlLastSeen\":{\"type\":\"integer\"},\"lowPalletAlarm\":{\"type\":\"integer\"},\"temperatures\":{\"type\":\"object\",\"properties\":{\"setPoint\":{\"type\":\"integer\"},\"stove\":{\"type\":\"integer\"},\"remoteControl\":{\"type\":\"integer\"},\"fume\":{\"type\":\"integer\"},\"room\":{\"type\":\"number\"}}},\"stoveBeepEnabled\":{\"type\":\"boolean\"},\"stoveState\":{\"type\":\"object\",\"properties\":{\"poweredOn\":{\"type\":\"boolean\"},\"stoveState\":{\"type\":\"integer\"},\"state\":{\"type\":\"string\"}}},\"RoomFanSpeed\":{\"type\":\"integer\"},\"time\":{\"type\":\"object\",\"properties\":{\"stove\":{\"type\":\"string\"},\"delta\":{\"type\":\"integer\"},\"ntp\":{\"type\":\"string\"}}},\"flame\":{\"type\":\"object\",\"properties\":{\"power\":{\"type\":\"integer\"}}},\"numberOfStarts\":{\"type\":\"integer\"},\"fumeFanRPM\":{\"type\":\"integer\"},\"previousErrors\":{\"type\":\"object\",\"properties\":{\"MemoryPos_1\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},\"error\":{\"type\":\"string\"},\"desc\":{\"type\":\"string\"}}},\"MemoryPos_3\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},\"error\":{\"type\":\"string\"},\"desc\":{\"type\":\"string\"}}},\"MemoryPos_2\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},\"error\":{\"type\":\"string\"},\"desc\":{\"type\":\"string\"}}},\"MemoryPos_5\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},\"error\":{\"type\":\"string\"},\"desc\":{\"type\":\"string\"}}},\"MemoryPos_4\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},\"error\":{\"type\":\"string\"},\"desc\":{\"type\":\"string\"}}}}}}},\"examples\":{\"Example\":{\"value\":\"{\\\"stoveState\\\":{\\\"stoveState\\\":0,\\\"state\\\":\\\"Off\\\",\\\"poweredOn\\\":false},\\\"flame\\\":{\\\"power\\\":2},\\\"temperatures\\\":{\\\"room\\\":21.5,\\\"stove\\\":22,\\\"remoteControl\\\":20,\\\"setPoint\\\":29,\\\"fume\\\":22},\\\"RoomFanSpeed\\\":2,\\\"lowPalletAlarm\\\":0,\\\"stoveBeepEnabled\\\":true,\\\"numberOfStarts\\\":66,\\\"fumeFanRPM\\\":0,\\\"RemoteControlLastSeen\\\":-1,\\\"previousErrors\\\":{\\\"MemoryPos_1\\\":{\\\"id\\\":0,\\\"error\\\":\\\"---\\\",\\\"desc\\\":\\\"No Error\\\"},\\\"MemoryPos_2\\\":{\\\"id\\\":0,\\\"error\\\":\\\"---\\\",\\\"desc\\\":\\\"No Error\\\"},\\\"MemoryPos_3\\\":{\\\"id\\\":0,\\\"error\\\":\\\"---\\\",\\\"desc\\\":\\\"No Error\\\"},\\\"MemoryPos_4\\\":{\\\"id\\\":0,\\\"error\\\":\\\"---\\\",\\\"desc\\\":\\\"No Error\\\"},\\\"MemoryPos_5\\\":{\\\"id\\\":0,\\\"error\\\":\\\"---\\\",\\\"desc\\\":\\\"No Error\\\"}},\\\"time\\\":{\\\"ntp\\\":\\\"2022-10-05 17:50:06\\\",\\\"stove\\\":\\\"2022-10-05 17:49:35\\\",\\\"delta\\\":31}}\"}}}}}}}},\"/api/errors\":{\"get\":{\"tags\":[\"Previous Error log\"],\"description\":\"Get a list of all previous errors\",\"responses\":{\"200\":{\"description\":\"Success\",\"content\":{\"application/json\":{\"schema\":{\"type\":\"object\",\"properties\":{\"MemoryPos_1\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},\"error\":{\"type\":\"string\"},\"desc\":{\"type\":\"string\"}}},\"MemoryPos_3\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},\"error\":{\"type\":\"string\"},\"desc\":{\"type\":\"string\"}}},\"MemoryPos_2\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},\"error\":{\"type\":\"string\"},\"desc\":{\"type\":\"string\"}}},\"MemoryPos_5\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},\"error\":{\"type\":\"string\"},\"desc\":{\"type\":\"string\"}}},\"MemoryPos_4\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},\"error\":{\"type\":\"string\"},\"desc\":{\"type\":\"string\"}}}}},\"examples\":{\"Example\":{\"value\":\"{\\\"MemoryPos_1\\\":{\\\"id\\\":0,\\\"error\\\":\\\"---\\\",\\\"desc\\\":\\\"No Error\\\"},\\\"MemoryPos_2\\\":{\\\"id\\\":0,\\\"error\\\":\\\"---\\\",\\\"desc\\\":\\\"No Error\\\"},\\\"MemoryPos_3\\\":{\\\"id\\\":0,\\\"error\\\":\\\"---\\\",\\\"desc\\\":\\\"No Error\\\"},\\\"MemoryPos_4\\\":{\\\"id\\\":0,\\\"error\\\":\\\"---\\\",\\\"desc\\\":\\\"No Error\\\"},\\\"MemoryPos_5\\\":{\\\"id\\\":0,\\\"error\\\":\\\"---\\\",\\\"desc\\\":\\\"No Error\\\"}}\"}}}}}}},\"post\":{\"tags\":[\"Previous Error log\"],\"description\":\"Set the error of a memory bank\",\"parameters\":[{\"name\":\"MemoryPos_1\",\"in\":\"query\",\"schema\":{\"type\":\"integer\",\"enum\":[0,1,2,4,8,16,32,64,128,129,130,132,136,255]}},{\"name\":\"MemoryPos_2\",\"in\":\"query\",\"schema\":{\"type\":\"integer\",\"enum\":[0,1,2,4,8,16,32,64,128,129,130,132,136,255]}},{\"name\":\"MemoryPos_3\",\"in\":\"query\",\"schema\":{\"type\":\"integer\",\"enum\":[0,1,2,4,8,16,32,64,128,129,130,132,136,255]}},{\"name\":\"MemoryPos_4\",\"in\":\"query\",\"schema\":{\"type\":\"integer\",\"enum\":[0,1,2,4,8,16,32,64,128,129,130,132,136,255]}},{\"name\":\"MemoryPos_5\",\"in\":\"query\",\"schema\":{\"type\":\"integer\",\"description\":\"The decimal error code\",\"enum\":[0,1,2,4,8,16,32,64,128,129,130,132,136,255]}}],\"responses\":{\"200\":{\"description\":\"Success and return the current errors\",\"content\":{\"application/json\":{\"schema\":{\"type\":\"object\",\"properties\":{\"MemoryPos_1\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},\"error\":{\"type\":\"string\"},\"desc\":{\"type\":\"string\"}}},\"MemoryPos_3\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},\"error\":{\"type\":\"string\"},\"desc\":{\"type\":\"string\"}}},\"MemoryPos_2\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},\"error\":{\"type\":\"string\"},\"desc\":{\"type\":\"string\"}}},\"action\":{\"type\":\"string\"},\"MemoryPos_5\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},\"error\":{\"type\":\"string\"},\"desc\":{\"type\":\"string\"}}},\"MemoryPos_4\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},\"error\":{\"type\":\"string\"},\"desc\":{\"type\":\"string\"}}}}},\"examples\":{\"Example\":{\"value\":\"{\\\"action\\\":\\\"MemoryPos_5 set\\\",\\\"MemoryPos_1\\\":{\\\"id\\\":0,\\\"error\\\":\\\"---\\\",\\\"desc\\\":\\\"No Error\\\"},\\\"MemoryPos_2\\\":{\\\"id\\\":0,\\\"error\\\":\\\"---\\\",\\\"desc\\\":\\\"No Error\\\"},\\\"MemoryPos_3\\\":{\\\"id\\\":0,\\\"error\\\":\\\"---\\\",\\\"desc\\\":\\\"No Error\\\"},\\\"MemoryPos_4\\\":{\\\"id\\\":0,\\\"error\\\":\\\"---\\\",\\\"desc\\\":\\\"No Error\\\"},\\\"MemoryPos_5\\\":{\\\"id\\\":0,\\\"error\\\":\\\"---\\\",\\\"desc\\\":\\\"No Error\\\"}}\"}}}}}}}},\"/api/fan\":{\"get\":{\"tags\":[\"Room ventilator\"],\"description\":\"Get the current room fan speed 0 means disabled.\",\"responses\":{\"200\":{\"description\":\"Success\",\"content\":{\"application/json\":{\"schema\":{\"type\":\"object\",\"properties\":{\"speed\":{\"type\":\"integer\"}}},\"examples\":{\"Disabled\":{\"value\":\"{\\\"speed\\\":0}\"},\"Speed 1\":{\"value\":\"{\\\"speed\\\":1}\"},\"Speed 2\":{\"value\":\"{\\\"speed\\\":2}\"},\"Speed 3\":{\"value\":\"{\\\"speed\\\":3}\"}}}}}}},\"post\":{\"tags\":[\"Room ventilator\"],\"description\":\"Set the roomfan its speed, 0 means the fan is disabled.\",\"parameters\":[{\"name\":\"speed\",\"in\":\"query\",\"required\":true,\"schema\":{\"type\":\"integer\",\"enum\":[0,1,2,3]},\"example\":\"1\"}],\"responses\":{\"200\":{\"description\":\"Success\",\"content\":{\"application/json\":{\"schema\":{\"type\":\"object\",\"properties\":{\"result\":{\"type\":\"string\"},\"speed\":{\"type\":\"integer\"}}},\"examples\":{\"Disabled\":{\"value\":\"{\\\"result\\\":\\\"success\\\",\\\"speed\\\":0}\"},\"Speed 1\":{\"value\":\"{\\\"result\\\":\\\"success\\\",\\\"speed\\\":1}\"},\"Speed 2\":{\"value\":\"{\\\"result\\\":\\\"success\\\",\\\"speed\\\":2}\"},\"Speed 3\":{\"value\":\"{\\\"result\\\":\\\"success\\\",\\\"speed\\\":3}\"}}}}}}}},\"/api/power\":{\"get\":{\"tags\":[\"Device power state\"],\"description\":\"Get the current powerstate of the stove\",\"responses\":{\"200\":{\"description\":\"success\",\"content\":{\"application/json\":{\"schema\":{\"type\":\"object\",\"properties\":{\"poweredOn\":{\"type\":\"boolean\"},\"stoveState\":{\"type\":\"integer\"},\"state\":{\"type\":\"string\"}}},\"examples\":{\"Stove is off\":{\"value\":\"{\\\"stoveState\\\":0,\\\"state\\\":\\\"Off\\\",\\\"poweredOn\\\":false}\"},\"Starting\":{\"value\":\"{\\\"stoveState\\\":1,\\\"state\\\":\\\"Starting\\\",\\\"poweredOn\\\":true}\"},\"Pellet loading\":{\"value\":\"{\\\"stoveState\\\":2,\\\"state\\\":\\\"Pellet loading\\\",\\\"poweredOn\\\":true}\"},\"Ignition\":{\"value\":\"{\\\"stoveState\\\":3,\\\"state\\\":\\\"Ignition\\\",\\\"poweredOn\\\":true}\"},\"Working\":{\"value\":\"{\\\"stoveState\\\":4,\\\"state\\\":\\\"Working\\\",\\\"poweredOn\\\":true}\"},\"Cleaning\":{\"value\":\"{\\\"stoveState\\\":5,\\\"state\\\":\\\"Brazier cleaning\\\",\\\"poweredOn\\\":true}\"},\"Final cleaning\":{\"value\":\"{\\\"stoveState\\\":6,\\\"state\\\":\\\"Final cleaning\\\",\\\"poweredOn\\\":true}\"},\"Alarm state\":{\"value\":\"{\\\"stoveState\\\":8,\\\"state\\\":\\\"Alarm State\\\",\\\"poweredOn\\\":true}\"}}}}}}},\"post\":{\"tags\":[\"Device power state\"],\"description\":\"Set the powerstate on or off.\",\"parameters\":[{\"name\":\"state\",\"in\":\"query\",\"required\":true,\"schema\":{\"type\":\"string\",\"enum\":[\"off\",\"on\"]},\"example\":\"off\"}],\"responses\":{\"200\":{\"description\":\"Success\",\"content\":{\"application/json\":{\"schema\":{\"type\":\"object\",\"properties\":{\"result\":{\"type\":\"string\"},\"poweredOn\":{\"type\":\"boolean\"},\"stoveState\":{\"type\":\"integer\"},\"state\":{\"type\":\"string\"}}},\"examples\":{\"Power on\":{\"value\":\"{\\\"result\\\":\\\"Powered on sended\\\",\\\"stoveState\\\":1,\\\"state\\\":\\\"Starting\\\",\\\"poweredOn\\\":true}\"},\"Power off\":{\"value\":\"{\\\"result\\\":\\\"Powered off sended - 0\\\",\\\"stoveState\\\":0,\\\"state\\\":\\\"Off\\\",\\\"poweredOn\\\":false}\"}}}}},\"202\":{\"description\":\"Success but no state change happend, because it is already in the desired state.\",\"content\":{\"application/json\":{\"schema\":{\"type\":\"object\",\"properties\":{\"result\":{\"type\":\"string\"},\"poweredOn\":{\"type\":\"boolean\"},\"stoveState\":{\"type\":\"integer\"},\"state\":{\"type\":\"string\"}}},\"examples\":{\"Already on\":{\"value\":\"{\\\"result\\\":\\\"Stove already on\\\",\\\"stoveState\\\":1,\\\"state\\\":\\\"Starting\\\",\\\"poweredOn\\\":true}\"},\"Already off\":{\"value\":\"{\\\"result\\\":\\\"Stove already off\\\",\\\"stoveState\\\":0,\\\"state\\\":\\\"Off\\\",\\\"poweredOn\\\":false}\"}}}}}}}}}}";
+// OpenAPI spec lives in docs/openapi.json and is embedded via board_build.embed_txtfiles
+extern const char swaggerJSON[] asm("_binary_docs_openapi_json_start");
+extern const char swaggerJSONEnd[] asm("_binary_docs_openapi_json_end");
+// Web app (web/app.html), embedded the same way and served on /app
+extern const char webAppHTML[]    asm("_binary_web_app_html_start");
+// Controller firmware build info, generated by scripts/buildinfo.py (src/buildinfo.cpp)
+extern const char* const BUILD_VERSION;   // git describe, e.g. 674b88d-dirty
+extern const char* const BUILD_BRANCH;
+extern const char* const BUILD_TIME;      // UTC, ISO 8601
+extern const char* const BUILD_ENV;       // PlatformIO environment
+extern const char webAppHTMLEnd[] asm("_binary_web_app_html_end");
+
+SemaphoreHandle_t stoveMutex = NULL;
+
+// Scoped lock for the stove serial bus (recursive, so nested use is safe).
+// Use it around any code that calls stove.read()/stove.write() outside the
+// sensor task, e.g. { StoveBusLock lock; ... }.
+struct StoveBusLock {
+    bool held = false;
+    StoveBusLock()  { if (stoveMutex) held = xSemaphoreTakeRecursive(stoveMutex, portMAX_DELAY) == pdTRUE; }
+    ~StoveBusLock() { if (held) xSemaphoreGiveRecursive(stoveMutex); }
+    StoveBusLock(const StoveBusLock&) = delete;
+    StoveBusLock& operator=(const StoveBusLock&) = delete;
+};
 
 EasyLed led(LED, EasyLed::ActiveLevel::High);
 
@@ -50,6 +84,8 @@ WiFiManagerParameter custom_hydro_mode("hydro", "hydro_mode", "0", 2);
 WiFiManagerParameter custom_ntp_server("ntp_server", "NTP server", "nl.pool.ntp.org", 20);
 WiFiManagerParameter custom_TimeZone("ntp_server", "NTP server", "CET-1CEST,M3.5.0/2,M10.5.0/3", 20);
 
+bool spiffsMounted = false;
+bool wifiConnected = false;
 
 unsigned long lastDebounceTime = 0;
 unsigned long debounceDelay = 50;
@@ -81,6 +117,7 @@ long previousMillisNTP;
 
 // RAM addresses
 #define stoveStateAddr       0x21
+#define currentErrorAddr     0x33  // RAM: active error code (same ids as the error memory)
 #define ambTempAddr          0x01
 #define fumesTempAddr        0x3E
 #define waterTempAddr        0x03
@@ -90,6 +127,15 @@ long previousMillisNTP;
 #define remoteControlTTLAddr 0x2e  // Remote control time-to-live countdown
 #define ambTempStoveAddr     0x44  // Ambient temp from stove sensor
 #define ambTempRemoteAddr    0x8f  // Ambient temp from remote control
+// "Installer > INSTELL WIRELESS": enables the optional external wireless
+// temperature sensor (manual §23.9). Found by diffing dumps while toggling the
+// menu on the remote. RAM 0xB6 is a bit field: bit 0 = 1 -> off, bit 0 = 0 -> on;
+// bit 1 meaning unknown (seen 1, 2 and 3). Read-only: the stove restores 0xB6
+// right after a write, and the menu confirm could not be emulated over the bus.
+// NOTE: the sensor the stove regulates on is chosen in the MULTICOMFORT menu
+// (AFSTAND. / KACHEL / WIRELESS, manual §18) - that register is not known yet.
+#define wirelessSensorAddr   0xb6
+#define menuEditValueAddr    0x19  // RAM: value being edited in the display menu
 #define palletSensorAddr     0xa4  // Pallet sensor state (5 = active)
 #define augerSpeedAddr       0x0D  // Auger speed (raw / 10 = rpm)
 #define palletLevelAddr      0x89  // Pallet fill level
@@ -105,7 +151,12 @@ long previousMillisNTP;
 
 // EEPROM addresses
 #define TempSetpointAddr      0x7d  // Room temperature setpoint
-#define flamePowerEepromAddr  0x7f  // Flame power level
+#define flamePowerEepromAddr  0x7f  // Flame power level (setting)
+#define roomFanControlAddr    0x0A  // RAM: room fan drive value: 0 off, 21/23/25 at speed 1/2/3 (P220 M)
+#define roomFanControl2Addr   0xA7  // RAM: second room fan drive value: 0 off, 86/82/78 at speed 1/2/3 (meaning unknown)
+#define roomFanRunningAddr    0xD3  // RAM: room fan running (0 = stopped, 2 = running)
+#define hotForFanAddr         0x04  // RAM: stove hot enough for the room fan (0 = no)
+#define flamePowerActualAddr  0x34  // RAM: flame power the stove currently runs at (modulates to 1 at the set point)
 #define roomFanEepromAddr     0x81  // Room fan speed (persisted)
 #define beepEnabledAddr       0x4b  // Beep enabled flag
 #define numberOfStartsHiAddr  0xef  // Number of starts (high byte)
@@ -155,6 +206,13 @@ String stoveDebugBuffer = "";
 float cachedAugerSpeed = 0.0;
 char cachedFirmwareVersion[32] = "Unknown";
 int cachedLowPallet = 0;
+// Pellet reserve (installer menu PELLET RESERVE, EEPROM 0xC6). How the stove decides
+// the reserve is not verified: the alarm is taken as sensor (RAM 0xA4) = 5 and
+// counter (RAM 0x89) <= 1. Changes of both are logged in /api/events to find out.
+#define pelletReserveEnabledAddr 0xc6
+int cachedPelletSensor = -1;      // RAM 0xA4, -1 = not read yet
+int cachedPelletCounter = -1;     // RAM 0x89
+int cachedPelletReserveOn = -1;   // EEPROM 0xC6
 bool cachedBeepEnabled = false;
 int cachedNumberOfStarts = 0;
 int cachedHoursSinceLastService = 0;
@@ -163,6 +221,74 @@ int cachedCombustionQuality = 0;
 int cachedPelletQuality = 0;
 int cachedFumeFanRPM = 0;
 int cachedRemoteControlLastSeen = -1;
+int cachedWirelessSensor = -1;  // INSTELL WIRELESS: -1 unknown, 0 off, 1 on
+int cachedCurrentError = 0;     // RAM 0x33 as read, 0 = no active error
+// RAM 0x33 also shows short pre-warnings that are not real errors: e.g. E12 (fume
+// fan) for 1-5 s when the stove switches to and from brazier cleaning, while the
+// stove keeps running and nothing is stored in the error memory. An error only
+// counts once it stays for ERROR_CONFIRM_MS, or right away when the stove is in an
+// alarm state (8, 9, 10). Cleared errors are reported right away.
+const unsigned long ERROR_CONFIRM_MS = 30000;
+int confirmedCurrentError = 0;
+void updateConfirmedError(int stoveStateNow)
+{
+    static int pending = 0;
+    static unsigned long since = 0;
+    int raw = cachedCurrentError;
+    if (raw != pending) { pending = raw; since = millis(); }
+    bool alarm = stoveStateNow == 8 || stoveStateNow == 9 || stoveStateNow == 10;
+    if (raw == 0) confirmedCurrentError = 0;
+    else if (alarm || millis() - since >= ERROR_CONFIRM_MS) confirmedCurrentError = raw;
+}
+int cachedRoomFanControl = -1;  // RAM 0x0A, -1 = not read yet
+int cachedRoomFanRunning = -1;  // RAM 0xD3
+int cachedHotForFan = -1;       // RAM 0x04
+// Brazier cleaning (verified 16/11/2026): RAM 0x32 counts the minutes to the next
+// cleaning while the stove is working; EEPROM 0x02 is the interval in minutes.
+#define brazierCountdownAddr 0x32
+#define brazierIntervalAddr  0x02
+int cachedBrazierCountdown = -1; // RAM 0x32
+int cachedBrazierInterval = -1;  // EEPROM 0x02
+// The room fan power (RAM 0x0A) depends on the selected speed AND the actual flame
+// power (measured 16/11/2026 on a P220 M):
+//            speed 1  speed 2  speed 3
+//   flame 1     9       14       19
+//   flame 2    21       23       25
+//   flame 3    27        ?        ?   (17/11/2026)
+// So there is no separate "reduced" mode: the stove scales the fan with the flame.
+// Speed the fan runs at: 0 when stopped (power 0), otherwise the selected speed;
+// -1 when not read yet.
+int roomFanActual()
+{
+    if (cachedRoomFanControl < 0) return -1;
+    if (cachedRoomFanControl == 0) return 0;
+    return roomFanSpeed;
+}
+// "off" (power 0) or "on"; RAM 0xD3 is not used: it stays 1 after the fan stopped.
+const char* roomFanMode()
+{
+    if (cachedRoomFanControl < 0) return nullptr;   // not read yet
+    return cachedRoomFanControl == 0 ? "off" : "on";
+}
+// Fan really turning: power > 0 (falls back to RAM 0xD3 before 0x0A is read)
+int roomFanIsRunning()
+{
+    if (cachedRoomFanControl >= 0) return cachedRoomFanControl > 0 ? 1 : 0;
+    return cachedRoomFanRunning < 0 ? -1 : (cachedRoomFanRunning != 0);
+}
+int cachedFlameActual = -1;     // RAM 0x34, -1 = not read yet
+// Bluetooth (BLE) can be disabled to give WiFi the radio. Stored in NVS
+// ("ble"/"enabled"); bleEnabled is the state of the running firmware.
+bool bleEnabled = true;
+volatile bool otaActive = false;   // set while an OTA firmware update is running (ota.h)
+// Telnet debug menu on port 23, stored in NVS ("telnet"/"enabled"), switchable at runtime
+bool telnetEnabled = true;
+
+static const char* wirelessSensorStr()
+{
+    return cachedWirelessSensor == 1 ? "on" : cachedWirelessSensor == 0 ? "off" : "unknown";
+}
+
 int cachedErrors[5] = {0, 0, 0, 0, 0};
 
 int cachedTimerEnabled[6] = {0, 0, 0, 0, 0, 0};
@@ -173,8 +299,6 @@ int cachedTimerFlame[6] = {0, 0, 0, 0, 0, 0};
 int cachedTimerFan[6] = {0, 0, 0, 0, 0, 0};
 int cachedTimerDowMask[6] = {0, 0, 0, 0, 0, 0};
 
-char storedRam[256];
-char storedEeprom[256];
 
 // ── Timer (PR1-PR6) EEPROM layout ───────────────────────────────────────────
 // Base addresses for each timer block (8 bytes each)
@@ -198,6 +322,21 @@ static String timerValueToTimeStr(int val)
     return String(buf);
 }
 
+static String uptimeStr()
+{
+    unsigned long total = millis() / 1000;
+    unsigned long d = total / 86400;
+    unsigned long h = (total % 86400) / 3600;
+    unsigned long m = (total % 3600)  / 60;
+    unsigned long s = total % 60;
+    char buf[24];
+    if      (d > 0) snprintf(buf, sizeof(buf), "%lud %02luh %02lum %02lus", d, h, m, s);
+    else if (h > 0) snprintf(buf, sizeof(buf), "%luh %02lum %02lus",           h, m, s);
+    else if (m > 0) snprintf(buf, sizeof(buf), "%lum %02lus",                     m, s);
+    else            snprintf(buf, sizeof(buf), "%lus",                               s);
+    return String(buf);
+}
+
 enum stoveStateCode {
     UNKNOWN = -1,
     OFF = 0,
@@ -214,4 +353,3 @@ enum stoveStateCode {
 };
 
 #endif
-
