@@ -314,14 +314,26 @@ void handleRouteDump()
     wm.server->send(200, "application/json", "");
     String out;
     out.reserve(2048);
-    auto flushOut = [&out](bool force) {
-        if (force || out.length() > 1500) { wm.server->sendContent(out); out = ""; }
+    // A client that stops reading (tab closed, page reloaded, weak WiFi) would block
+    // the write for up to 10 s: check first, and stop the dump after 3 s.
+    bool aborted = false;
+    auto flushOut = [&out, &aborted](bool force) {
+        if (aborted || !(force || out.length() > 1500)) return;
+        if (!httpClientWritable(3000)) {
+            aborted = true;
+            out = "";
+            LOGW("http", "/api/dump: the client took no data for 3 s - dump stopped");
+            wm.server->client().stop();
+            return;
+        }
+        wm.server->sendContent(out);
+        out = "";
     };
     out += "{";
     bool firstReg = true;
 
     for (auto& r : regs) {
-        if (!r.enabled) continue;
+        if (!r.enabled || aborted) continue;
 
         if (!firstReg) out += ",";
         firstReg = false;
@@ -330,7 +342,7 @@ void handleRouteDump()
         out += "\":{";
 
         bool firstAddr = true;
-        for (int addr = 0; addr <= 0xFF; addr++) {
+        for (int addr = 0; addr <= 0xFF && !aborted; addr++) {
             if (!addrs[addr]) continue;
             if (filterUnknown && r.isKnownFn((byte)addr)) continue;
             esp_task_wdt_reset();
@@ -363,9 +375,10 @@ void handleRouteDump()
         out += "}";
     }
 
+    if (aborted) return;
     out += "}";
     flushOut(true);
-    wm.server->sendContent("");  // terminate the chunked response
+    if (!aborted) wm.server->sendContent("");  // terminate the chunked response
 }
 
 void handleRouteRemote()

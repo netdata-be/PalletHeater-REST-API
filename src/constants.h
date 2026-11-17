@@ -23,7 +23,11 @@
 #define ENABLE_RX 18
 #define ONBOARD_LED 2
 #define LED 14
-#define WDT_TIMEOUT 5
+// Task watchdog for the loop task (and IDLE0), in seconds. Not 5: one
+// WiFiClient::write() to a client that stops reading waits up to 10 x 1 s
+// (WIFI_CLIENT_MAX_WRITE_RETRY) without returning, which reset the controller
+// during /api/dump. Long handlers still feed it themselves.
+#define WDT_TIMEOUT 15
 #endif
 
 const char* ntpServer = "nl.pool.ntp.org";
@@ -70,7 +74,7 @@ SemaphoreHandle_t stoveMutex = NULL;
 // sensor task, e.g. { StoveBusLock lock; ... }.
 // Take the stove bus lock, waiting at most maxMs (0 = as long as needed). Waits in
 // steps of 0.5 s and feeds the task watchdog in between: the loop task is watched
-// with a 5 s timeout, and the sensor task can hold the lock for seconds when the
+// (WDT_TIMEOUT), and the sensor task can hold the lock for seconds when the
 // stove answers slowly. Returns false when it gave up.
 static bool stoveLockTake(uint32_t maxMs = 0)
 {
@@ -95,6 +99,28 @@ EasyLed led(LED, EasyLed::ActiveLevel::High);
 EasyLed onboardLED(ONBOARD_LED, EasyLed::ActiveLevel::High);
 
 WiFiManager wm;
+
+// Wait until the web client of the current request can take more data, feeding
+// the task watchdog meanwhile. A write to a client that stopped reading blocks in
+// WiFiClient::write() for up to 10 s; check first and give up after maxMs.
+static bool httpClientWritable(uint32_t maxMs = 3000)
+{
+    WiFiClient c = wm.server->client();
+    int fd = c.fd();
+    if (fd < 0 || !c.connected()) return false;
+    uint32_t t0 = millis();
+    for (;;) {
+        fd_set set;
+        FD_ZERO(&set);
+        FD_SET(fd, &set);
+        struct timeval tv = { 0, 200000 };
+        int r = select(fd + 1, nullptr, &set, nullptr, &tv);
+        if (r < 0) return false;
+        if (r > 0 && FD_ISSET(fd, &set)) return true;
+        esp_task_wdt_reset();
+        if (millis() - t0 >= maxMs) return false;
+    }
+}
 WiFiManagerParameter custom_hydro_mode("hydro", "hydro_mode", "0", 2);
 
 WiFiManagerParameter custom_ntp_server("ntp_server", "NTP server", "nl.pool.ntp.org", 20);

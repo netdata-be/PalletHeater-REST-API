@@ -38,7 +38,7 @@ static RTC_NOINIT_ATTR RtcDiag rtcDiag;
 static bool rtcReady = false;
 
 // ── Breadcrumb: what the loop task is doing ───────────────────────────
-// The loop task is watched by the task watchdog (5 s). Each step of loop() and
+// The loop task is watched by the task watchdog (WDT_TIMEOUT). Each step of loop() and
 // each web request notes here what it is doing; the block is in RTC memory, so
 // after a watchdog reset or crash the next start can tell where it got stuck.
 // When the task watchdog fires, esp_task_wdt_isr_user_handler() (called by the
