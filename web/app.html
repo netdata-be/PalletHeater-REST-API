@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#111418">
-<title>PalletHeater</title>
+<title>OpenPelletBridge</title>
 <style>
 :root{
   --bg:#f4f5f7;--card:#fff;--text:#16191d;--muted:#69707a;--line:#e3e6ea;
@@ -28,6 +28,8 @@ body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 -apple-syste
 header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
 .bar{max-width:1100px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;gap:12px}
 .bar h1{font-size:17px;margin:0;font-weight:650;flex:1}
+.bar h1 .ver{font-size:12px;font-weight:500;color:var(--muted);margin-left:4px;font-variant-numeric:tabular-nums}
+@media (max-width:560px){.bar h1{font-size:15px;min-width:0}.bar h1 .ver{display:block;margin-left:0;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 .conn{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
 .dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
 .dot.ok{background:var(--ok)}.dot.err{background:var(--err)}.dot.warn{background:var(--warn)}
@@ -282,12 +284,12 @@ body:not(.debug) .d{display:none!important}
 .hyp td.v{white-space:nowrap;font-weight:650;font-variant-numeric:tabular-nums;text-align:right}
 .hyp td.o{color:var(--muted);min-width:180px}
 .hyp td.h{min-width:200px}
-@media (max-width:420px){main{padding:12px;gap:12px;grid-template-columns:1fr}.big-temps{gap:16px}.big-temps .v{font-size:24px}.bar{gap:8px}.conn span:last-child{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+@media (max-width:420px){main{padding:12px;gap:12px;grid-template-columns:1fr}.big-temps{gap:16px}.big-temps .v{font-size:24px}.bar{gap:8px}.conn span:last-child{max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 </style>
 </head>
 <body>
 <header><div class="bar">
-  <h1>PalletHeater</h1>
+  <h1>OpenPelletBridge <span class="ver" id="appVer"></span></h1>
   <button id="expertBtn" class="xbtn" type="button" aria-pressed="false" data-i="expert"></button>
   <button id="debugBtn" class="xbtn" type="button" aria-pressed="false" data-i="debug"></button>
   <div class="conn"><span class="dot" id="dot"></span><span id="conn">…</span></div>
@@ -493,7 +495,7 @@ body:not(.debug) .d{display:none!important}
     </form>
     <form id="wifiForm" class="mqform" hidden autocomplete="off">
       <div class="tsub" style="grid-column:1/-1;margin:0" data-i="wifiIpSettings"></div>
-      <label><span>Hostname</span><input id="wfHost" spellcheck="false" placeholder="palletheater"></label>
+      <label><span>Hostname</span><input id="wfHost" spellcheck="false" placeholder="openpelletbridge"></label>
       <label><span data-i="wifiMode"></span><select id="wfMode"><option value="dhcp">DHCP</option><option value="static" data-i="wifiStatic"></option></select></label>
       <label class="wfs"><span data-i="wifiIp"></span><input id="wfIp" spellcheck="false" placeholder="192.168.1.50"></label>
       <label class="wfs"><span data-i="wifiMask"></span><input id="wfMask" spellcheck="false" placeholder="255.255.255.0"></label>
@@ -514,7 +516,7 @@ body:not(.debug) .d{display:none!important}
       <label><span>Port</span><input id="mqPort" type="number" min="1" max="65535" placeholder="1883"></label>
       <label><span data-i="mqttUser"></span><input id="mqUser" spellcheck="false"></label>
       <label><span data-i="mqttPass"></span><input id="mqPass" type="password" autocomplete="new-password"></label>
-      <label><span data-i="mqttPrefix"></span><input id="mqPrefix" placeholder="palletheater" spellcheck="false"></label>
+      <label><span data-i="mqttPrefix"></span><input id="mqPrefix" placeholder="openpelletbridge" spellcheck="false"></label>
       <label><span data-i="mqttDisc"></span><input type="checkbox" id="mqDisc"></label>
       <label><span data-i="mqttDiscPrefix"></span><input id="mqDiscPrefix" placeholder="homeassistant" spellcheck="false"></label>
       <div class="actions" style="justify-content:flex-end;grid-column:1/-1;margin-top:4px"><button type="button" id="mqCancel" data-i="cancel"></button><button type="submit" class="primary" id="mqSave" data-i="save2"></button></div>
@@ -563,7 +565,7 @@ const I18N = {
     heating:"Heating", setPoint:"Set point", fumes:"Fumes", flamePower:"Flame power", roomFan:"Room fan (Multifuoco)", roomFanHint:"Off = NATURAL MODE (fan off)",
     energySaving:"Energy saving", esHint:"Stop when warm, restart when it cools down", esStart:"Restart below set point", esStop:"Stop above set point",
     restartsAt:"Restarts at {0}", esRestartAt:"Energy saving · restarts at {0}", esReduced:"Energy saving · reduced power", reducedPower:"Reduced power (set point reached)",
-    ctrlFw:"Controller firmware", ctrlBuilt:"Built on",
+    ctrlFw:"Controller firmware", ctrlBuilt:"Built on", builtFor:"Firmware built for",
     wifiOther:"Other network", wifiIpBtn:"IP settings", wifiChange:"Change WiFi network", wifiIpSettings:"Hostname and IP address", wifiScan:"Scan", wifiScanning:"Scanning…",
     wifiSsidManual:"Other / hidden network", wifiCurrent:"current", wifiSwitch:"Switch", wifiPassLen:"The WiFi password must be 8 – 63 characters (or empty for an open network)",
     wifiSwitching:"Switching to {0} – open the app again in a moment", wifiLastChange:"Last network change: {0}.",
@@ -590,17 +592,17 @@ const I18N = {
     hypNote:"Live values are read from the stove every 30 s while debug mode is on. The observations come from dumps on 16 and 17/11/2026 (including a brazier cleaning at flame 3).",
     brazier:"Brazier cleaning", brazierIn:"in {0} min", brazierEvery:"in {0} min (every {1} min)", brazierNow:"in progress",
     h_brazier:"While burning the stove cleans the brazier at a fixed interval (EEPROM 0x02, in minutes): the fume fan speeds up and the stove briefly shows 'Brazier cleaning'. RAM 0x32 counts down the minutes to the next cleaning. Only shown while the stove is working.",
-    fwUpdate:"Upload PalletHeater firmware", fwHint:"Upload a firmware.bin (from .pio/build/…)", fwPick:"Choose file…", fwBadFile:"Choose the firmware .bin file",
+    fwUpdate:"Upload OpenPelletBridge firmware", fwHint:"Upload a firmware.bin (from .pio/build/…)", fwPick:"Choose file…", fwBadFile:"Choose the firmware .bin file",
     fwConfirm:"Install {0} ({1} MB)? The controller restarts afterwards; the stove keeps running.", fwProgress:"Uploading… {0}% · {1} KB/s",
-    ghTitle:"PalletHeater firmware", ghCheck:"Check for update", ghInstall:"Install {0}", ghNotes:"Release notes",
+    ghTitle:"OpenPelletBridge firmware", ghCheck:"Check for update", ghInstall:"Install {0}", ghNotes:"Release notes",
     ghChecking:"Checking GitHub…", ghDownloading:"Downloading and installing… {0}%", ghNever:"Not checked yet", ghError:"Check failed: {0}",
     ghAvail:"New version {0} available (since {1}) – you have {2}", ghUpToDate:"Up to date ({0})", ghDev:"Development build {1} – latest release {0}",
     ghConfirm:"Install {0} from GitHub? The controller downloads it, restarts and is unreachable for about a minute; the stove keeps running.",
     ghConfirmDev:"This controller runs development build {1}. Install release {0} from GitHub instead? It restarts and is unreachable for about a minute; the stove keeps running.",
     ghAuto:"Check for updates automatically", ghAutoHint:"2 min after start-up, then daily (GitHub)",
-    h_ghUpdate:"New versions of the PalletHeater firmware (the ESP32 controller, NOT the stove) are published as GitHub releases of github.com/netdata-be/PalletHeater-REST-API. The controller checks the latest release (automatically once a day, or with the button) and installs it only when you ask: it downloads the image over HTTPS, verifies it and restarts. Settings are kept. A development build (version not from a release tag) is not offered an update, but you can install the release over it.",
+    h_ghUpdate:"New versions of the OpenPelletBridge firmware (the ESP32 controller, NOT the stove) are published as GitHub releases of github.com/netdata-be/PalletHeater-REST-API. The controller checks the latest release (automatically once a day, or with the button) and installs it only when you ask: it downloads the image over HTTPS, verifies it and restarts. Settings are kept. A development build (version not from a release tag) is not offered an update, but you can install the release over it.",
     fwRestarting:"Installed – controller restarts…", fwNoAnswer:"No answer after the restart – reload the page", fwFailed:"Update failed: {0}",
-    h_fwUpdate:"This is the firmware of the PalletHeater controller (the ESP32), NOT of the pellet stove itself: the stove firmware cannot be changed this way. Installs it over HTTP (POST /api/update), several times faster than ArduinoOTA. Use the firmware.bin from .pio/build/<environment>/. The controller restarts after the update; the stove itself is not affected. Requires the API key (or the OTA password).", esNoRestartSub:"Energy saving · no automatic restart", stopsAt:"Stops at {0}", useSwitch:"Use the switch to turn energy saving off",
+    h_fwUpdate:"This is the firmware of the OpenPelletBridge controller (the ESP32), NOT of the pellet stove itself: the stove firmware cannot be changed this way. Installs it over HTTP (POST /api/update), several times faster than ArduinoOTA. Use the firmware.bin from .pio/build/<environment>/. The controller restarts after the update; the stove itself is not affected. Requires the API key (or the OTA password).", esNoRestartSub:"Energy saving · no automatic restart", stopsAt:"Stops at {0}", useSwitch:"Use the switch to turn energy saving off",
     status:"Status", history:"History", temperatures:"Temperatures", room:"Room", fumeTemp:"Fume temperature", showTable:"Show as table",
     histEmpty:"No history yet. The controller records a point every 2 minutes once it has the time (NTP) and stove data.", histErr:"Could not load history: {0}",
     remoteCard:"Remote control", remoteNote:"Read-only mirror of what the remote shows. Buttons cannot be pressed from here.",
@@ -615,7 +617,7 @@ const I18N = {
     copyTo:"Copy to…", copyAll:"All other programs", confirmCopy:"Copy the settings of {0} to {1}? This overwrites them on the stove.", copied:"Copied {0} to {1}",
     timeStep:"Times must be on a 10 minute boundary (e.g. 06:30)",
     nextOn:"Next: {0} turns the stove on at {1} ({2})", nextOff:"Next: {0} turns the stove off at {1} ({2})", noTimers:"No timers active", today:"today", tomorrow:"tomorrow",
-    device:"Device", apiDocs:"API docs", devicePage:"Device page", restart:"Restart", confirmRestart:"Restart the PalletHeater controller?", restarting:"Restarting… the page reconnects automatically",
+    device:"Device", apiDocs:"API docs", devicePage:"Device page", restart:"Restart", confirmRestart:"Restart the OpenPelletBridge controller?", restarting:"Restarting… the page reconnects automatically",
     turnOn:"Turn on", turnOff:"Turn off", confirmOff:"Turn the stove off?", powerOnSent:"Power on sent", powerOffSent:"Power off sent",
     failed:"{0} failed: {1}", updated:"Updated {0}", offline:"Offline", waiting:"Waiting for stove data…", stale:"Stove data {0} s old",
     roomSrc:"Room ({0})", srcRemote:"remote", srcStove:"stove", srcLabel:"Temperature source", srcRemoteLong:"Remote control sensor", srcStoveLong:"Stove sensor", unknown:"Unknown",
@@ -686,7 +688,7 @@ const I18N = {
     heating:"Verwarming", setPoint:"Gewenste temp.", fumes:"Rookgas", flamePower:"Vlamvermogen", roomFan:"Ventilator (Multifuoco)", roomFanHint:"Uit = NATURAL MODE (ventilator uit)",
     energySaving:"Energy saving", esHint:"Stopt als het warm is, herstart als het afkoelt", esStart:"Herstart onder gewenste temp.", esStop:"Stop boven gewenste temp.",
     restartsAt:"Herstart bij {0}", esRestartAt:"Energy saving · herstart bij {0}", esReduced:"Energy saving · gereduceerd vermogen", reducedPower:"Gereduceerd vermogen (gewenste temperatuur bereikt)",
-    ctrlFw:"Firmware controller", ctrlBuilt:"Gebouwd op",
+    ctrlFw:"Firmware controller", ctrlBuilt:"Gebouwd op", builtFor:"Firmware gebouwd voor",
     wifiOther:"Ander netwerk", wifiIpBtn:"IP-instellingen", wifiChange:"WiFi-netwerk wijzigen", wifiIpSettings:"Hostname en IP-adres", wifiScan:"Zoeken", wifiScanning:"Zoeken…",
     wifiSsidManual:"Ander / verborgen netwerk", wifiCurrent:"huidig", wifiSwitch:"Overschakelen", wifiPassLen:"Het WiFi-wachtwoord moet 8 – 63 tekens zijn (of leeg voor een open netwerk)",
     wifiSwitching:"Overschakelen naar {0} – open de app straks opnieuw", wifiLastChange:"Laatste netwerkwissel: {0}.",
@@ -713,17 +715,17 @@ const I18N = {
     hypNote:"De live waarden worden elke 30 s van de kachel gelezen zolang debug aan staat. De waarnemingen komen uit dumps van 16 en 17/11/2026 (o.a. een branderreiniging op vlam 3).",
     brazier:"Branderreiniging", brazierIn:"over {0} min", brazierEvery:"over {0} min (elke {1} min)", brazierNow:"bezig",
     h_brazier:"Tijdens het branden reinigt de kachel de brander op een vast interval (EEPROM 0x02, in minuten): de rookgasventilator draait harder en de kachel toont kort 'Brander reinigen'. RAM 0x32 telt de minuten af tot de volgende reiniging. Enkel zichtbaar terwijl de kachel brandt.",
-    fwUpdate:"Upload PalletHeater firmware", fwHint:"Upload een firmware.bin (uit .pio/build/…)", fwPick:"Kies bestand…", fwBadFile:"Kies het firmware-bestand (.bin)",
+    fwUpdate:"Upload OpenPelletBridge firmware", fwHint:"Upload een firmware.bin (uit .pio/build/…)", fwPick:"Kies bestand…", fwBadFile:"Kies het firmware-bestand (.bin)",
     fwConfirm:"{0} ({1} MB) installeren? De controller herstart daarna; de kachel blijft gewoon werken.", fwProgress:"Uploaden… {0}% · {1} KB/s",
-    ghTitle:"PalletHeater-firmware", ghCheck:"Zoek update", ghInstall:"Installeer {0}", ghNotes:"Release-notes",
+    ghTitle:"OpenPelletBridge-firmware", ghCheck:"Zoek update", ghInstall:"Installeer {0}", ghNotes:"Release-notes",
     ghChecking:"GitHub nakijken…", ghDownloading:"Downloaden en installeren… {0}%", ghNever:"Nog niet nagekeken", ghError:"Nakijken mislukt: {0}",
     ghAvail:"Nieuwe versie {0} beschikbaar (sinds {1}) – je hebt {2}", ghUpToDate:"Up-to-date ({0})", ghDev:"Ontwikkelversie {1} – laatste release {0}",
     ghConfirm:"{0} van GitHub installeren? De controller downloadt ze, herstart en is ongeveer een minuut onbereikbaar; de kachel blijft gewoon werken.",
     ghConfirmDev:"Deze controller draait ontwikkelversie {1}. Release {0} van GitHub in de plaats installeren? Hij herstart en is ongeveer een minuut onbereikbaar; de kachel blijft gewoon werken.",
     ghAuto:"Automatisch zoeken naar updates", ghAutoHint:"2 min na het opstarten, daarna dagelijks (GitHub)",
-    h_ghUpdate:"Nieuwe versies van de PalletHeater-firmware (de ESP32-controller, NIET de kachel) verschijnen als GitHub-release van github.com/netdata-be/PalletHeater-REST-API. De controller kijkt de laatste release na (automatisch eens per dag, of met de knop) en installeert ze enkel als jij dat vraagt: hij downloadt het image via HTTPS, controleert het en herstart. Instellingen blijven bewaard. Een ontwikkelversie (versie niet van een release-tag) krijgt geen update aangeboden, maar je kan de release er wel over installeren.",
+    h_ghUpdate:"Nieuwe versies van de OpenPelletBridge-firmware (de ESP32-controller, NIET de kachel) verschijnen als GitHub-release van github.com/netdata-be/PalletHeater-REST-API. De controller kijkt de laatste release na (automatisch eens per dag, of met de knop) en installeert ze enkel als jij dat vraagt: hij downloadt het image via HTTPS, controleert het en herstart. Instellingen blijven bewaard. Een ontwikkelversie (versie niet van een release-tag) krijgt geen update aangeboden, maar je kan de release er wel over installeren.",
     fwRestarting:"Geïnstalleerd – controller herstart…", fwNoAnswer:"Geen antwoord na de herstart – herlaad de pagina", fwFailed:"Update mislukt: {0}",
-    h_fwUpdate:"Dit is de firmware van de PalletHeater-controller (de ESP32), NIET van de pelletkachel zelf: de firmware van de kachel kan je hiermee niet wijzigen. Installeert ze via HTTP (POST /api/update), meerdere keren sneller dan ArduinoOTA. Gebruik firmware.bin uit .pio/build/<omgeving>/. De controller herstart na de update; de kachel zelf merkt er niets van. Vereist de API-key (of het OTA-wachtwoord).", esNoRestartSub:"Energy saving · geen automatische herstart", stopsAt:"Stopt bij {0}", useSwitch:"Gebruik de schakelaar om energy saving uit te zetten",
+    h_fwUpdate:"Dit is de firmware van de OpenPelletBridge-controller (de ESP32), NIET van de pelletkachel zelf: de firmware van de kachel kan je hiermee niet wijzigen. Installeert ze via HTTP (POST /api/update), meerdere keren sneller dan ArduinoOTA. Gebruik firmware.bin uit .pio/build/<omgeving>/. De controller herstart na de update; de kachel zelf merkt er niets van. Vereist de API-key (of het OTA-wachtwoord).", esNoRestartSub:"Energy saving · geen automatische herstart", stopsAt:"Stopt bij {0}", useSwitch:"Gebruik de schakelaar om energy saving uit te zetten",
     status:"Status", history:"Geschiedenis", temperatures:"Temperaturen", room:"Kamer", fumeTemp:"Rookgastemperatuur", showTable:"Toon als tabel",
     histEmpty:"Nog geen geschiedenis. De controller bewaart elke 2 minuten een punt zodra hij de tijd (NTP) en gegevens van de kachel heeft.", histErr:"Geschiedenis laden mislukt: {0}",
     remoteCard:"Afstandsbediening", remoteNote:"Toont enkel wat de afstandsbediening weergeeft. De knoppen werken hier niet.",
@@ -738,7 +740,7 @@ const I18N = {
     copyTo:"Kopieer naar…", copyAll:"Alle andere programma's", confirmCopy:"De instellingen van {0} kopiëren naar {1}? Dit overschrijft ze op de kachel.", copied:"{0} gekopieerd naar {1}",
     timeStep:"Tijden moeten op 10 minuten vallen (bv. 06:30)",
     nextOn:"Volgende: {0} zet de kachel aan om {1} ({2})", nextOff:"Volgende: {0} zet de kachel uit om {1} ({2})", noTimers:"Geen timers actief", today:"vandaag", tomorrow:"morgen",
-    device:"Toestel", apiDocs:"API-documentatie", devicePage:"Toestelpagina", restart:"Herstarten", confirmRestart:"De PalletHeater-controller herstarten?", restarting:"Herstarten… de pagina maakt vanzelf opnieuw verbinding",
+    device:"Toestel", apiDocs:"API-documentatie", devicePage:"Toestelpagina", restart:"Herstarten", confirmRestart:"De OpenPelletBridge-controller herstarten?", restarting:"Herstarten… de pagina maakt vanzelf opnieuw verbinding",
     turnOn:"Aanzetten", turnOff:"Uitzetten", confirmOff:"De kachel uitzetten?", powerOnSent:"Aanzetten verstuurd", powerOffSent:"Uitzetten verstuurd",
     failed:"{0} mislukt: {1}", updated:"Bijgewerkt {0}", offline:"Offline", waiting:"Wachten op gegevens van de kachel…", stale:"Gegevens {0} s oud",
     roomSrc:"Kamer ({0})", srcRemote:"afstandsbed.", srcStove:"kachel", srcLabel:"Temperatuurbron", srcRemoteLong:"Sensor afstandsbediening", srcStoveLong:"Sensor kachel", unknown:"Onbekend",
@@ -1204,7 +1206,7 @@ function fillMqttForm() {
   const c = mqttCfg || {};
   $("mqEnabled").checked = !!c.enabled; $("mqHost").value = c.host || ""; $("mqPort").value = c.port || 1883;
   $("mqUser").value = c.user || ""; $("mqPass").value = ""; $("mqPass").placeholder = c.passwordSet ? t("mqttPassKeep") : "";
-  $("mqPrefix").value = c.prefix || "palletheater"; $("mqDisc").checked = c.discovery !== false; $("mqDiscPrefix").value = c.discoveryPrefix || "homeassistant";
+  $("mqPrefix").value = c.prefix || "openpelletbridge"; $("mqDisc").checked = c.discovery !== false; $("mqDiscPrefix").value = c.discoveryPrefix || "homeassistant";
 }
 async function loadMqtt() {
   try { mqttCfg = (await api("GET", "/api/mqtt")).data; } catch (_) { mqttCfg = null; }
@@ -1215,7 +1217,7 @@ $("mqCancel").onclick = () => { $("mqttForm").hidden = true; };
 $("mqttForm").onsubmit = async e => {
   e.preventDefault();
   const p = { enabled: $("mqEnabled").checked, host: $("mqHost").value.trim(), port: $("mqPort").value || 1883, user: $("mqUser").value.trim(),
-              prefix: $("mqPrefix").value.trim() || "palletheater", discovery: $("mqDisc").checked, discoveryPrefix: $("mqDiscPrefix").value.trim() || "homeassistant" };
+              prefix: $("mqPrefix").value.trim() || "openpelletbridge", discovery: $("mqDisc").checked, discoveryPrefix: $("mqDiscPrefix").value.trim() || "homeassistant" };
   if ($("mqPass").value) p.password = $("mqPass").value;
   try { mqttCfg = await write(t("mqttSaved"), "POST", "/api/mqtt", p); $("mqttForm").hidden = true; } catch (_) {}
   renderMqtt(); setTimeout(loadMqtt, 4000);   // the connection is made from the loop, shortly after saving
@@ -1297,7 +1299,7 @@ $("wifiNetForm").onsubmit = async e => {
   const ssid = $("wnSsid").value === MANUAL ? $("wnManual").value.trim() : $("wnSsid").value, pw = $("wnPass").value;
   if (!ssid) return;
   if (pw && (pw.length < 8 || pw.length > 63)) { toast(t("wifiPassLen"), true); return; }
-  const host = (wifiInfo && wifiInfo.hostname) || "palletheater";
+  const host = (wifiInfo && wifiInfo.hostname) || "openpelletbridge";
   if (!confirm(t("wifiConfirmSwitch", ssid, wifiInfo ? wifiInfo.ssid : "?", host + ".local"))) return;
   try {
     await write(t("wifiSwitching", ssid), "POST", "/api/wifi", { ssid, password: pw });
@@ -1359,6 +1361,7 @@ function renderTime(tm) {
   const d = $("timeDelta"); d.textContent = ""; d.appendChild(pill(fmtDelta(tm.delta), Math.abs(tm.delta) > 120 ? "warn" : ""));
 }
 function render(s) {
+  if (s.controller && s.controller.version) { const v = $("appVer"); v.textContent = s.controller.version; v.title = (s.controller.built || "") + (s.controller.stoveModel ? " · " + s.controller.stoveModel : ""); }
   const st = s.stoveState || {}, code = st.stoveState;
   const alarm = [8, 9, 10, -1].includes(code);
   $("stateLabel").textContent = STATE_NAME[lang][code] ?? st.state ?? "–";
@@ -1470,6 +1473,7 @@ function render(s) {
   } }
   fillDl($("deviceList"), [
     [t("fw"), s.firmwareVersion || "–"],
+    [t("builtFor"), s.controller && s.controller.stoveModel ? s.controller.stoveModel : "–"],
     [t("ctrlFw"), s.controller ? s.controller.version : "–", true],
     [t("ctrlBuilt"), s.controller && s.controller.built ? (d => fmtDate(d) + " " + fmtHM(d))(new Date(s.controller.built)) : "–", true], [t("starts"), s.numberOfStarts ?? "–"], [t("hours"), s.totalRuntime ?? "–"],
     [withHelp(t("service"), "h_service"), s.hoursSinceLastService !== undefined

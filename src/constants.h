@@ -10,7 +10,7 @@
 #include <freertos/semphr.h>
 
 #include "Stove.h"
-#include <palletcore.h>   // pure logic, shared with the native unit tests
+#include <pelletcore.h>   // pure logic, shared with the native unit tests
 
 
 #ifdef ESP32
@@ -60,6 +60,7 @@ extern const char* const BUILD_VERSION;   // git describe, e.g. 674b88d-dirty
 extern const char* const BUILD_BRANCH;
 extern const char* const BUILD_TIME;      // UTC, ISO 8601
 extern const char* const BUILD_ENV;       // PlatformIO environment
+extern const char* const BUILD_STOVE_MODEL; // stove the firmware is built for (custom_stove_model in platformio.ini)
 extern const char webAppHTMLEnd[] asm("_binary_web_app_html_gz_end");
 
 SemaphoreHandle_t stoveMutex = NULL;
@@ -137,9 +138,9 @@ long previousMillisNTP;
 // (AFSTAND. / KACHEL / WIRELESS, manual §18) - that register is not known yet.
 #define wirelessSensorAddr   0xb6
 #define menuEditValueAddr    0x19  // RAM: value being edited in the display menu
-#define palletSensorAddr     0xa4  // Pallet sensor state (5 = active)
+#define palletSensorAddr     0xa4  // Pellet sensor state (5 = active)
 #define augerSpeedAddr       0x0D  // Auger speed (raw / 10 = rpm)
-#define palletLevelAddr      0x89  // Pallet fill level
+#define palletLevelAddr      0x89  // Pellet fill level
 #define displayMenuAddr      0x1a  // Currently displayed menu / display write target
 #define selectedParamAddr    0x18  // Parameter selected in display menu
 #define roomFanAddr          0x19  // Room fan speed (RAM, live)

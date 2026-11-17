@@ -38,7 +38,7 @@ RAM (0x00)
 | 0x4C       | 76         |           |        | Flips between 0 and 255                     |                          |            |
 | 0x4D       | 77         | x         |        | Flip flop 0 / 1                             |                          |   0 -   1  |
 | 0x4F       | 79         |           |        | Random ???                                  |                          |            |
-| 0x50       | 80         | x         | Min    | Time remaining pallets when low             | 0                        |            |
+| 0x50       | 80         | x         | Min    | Time remaining pellets when low             | 0                        |            |
 | 0x55       | 85         |           |        | Looks random                                |                          |            |
 | 0x56       | 86         |           |        | Looks random                                |                          |            |
 | 0x57       | 87         |           |        | Random? Jumps every second                  |                          |            |
@@ -59,7 +59,7 @@ RAM (0x00)
 | 0x80       | 128        | x         | year   | Current year                                | 22                       |   0 -  99  |
 | 0x81       | 129        | x         |        | Low byte of the stove clock as seconds since midnight / 2 (16-bit LE with 0x82; +1 every 2 s). Verified 17/11/2026: 0x82/0x81 = 4/247 -> 1271 × 2 s = 00:42:22, stove clock 00:42:22. Also matches the 16/11 16:32 dump (116/46 -> 16:31:24) | | 0 - 255 |
 | 0x82       | 130        | x         |        | High byte of the seconds-since-midnight / 2 counter (see 0x81); 0 – 168, back to 0 at midnight | | 0 - 168 |
-| 0x89       | 137        | x         | Min    | Countdown till low pallet alerm starts (hypothesis). 16/11/2026, while working: dropped 20 -> 19 and back after ~35 s, first at 19:02, then about every 9.5 – 13.5 min until shutdown; never while off. Possibly the hopper level sensor briefly seeing no pellets (unconfirmed; 0xA4 did not change in the log) | 20 | 20 - 0 |
+| 0x89       | 137        | x         | Min    | Countdown till low pellet alerm starts (hypothesis). 16/11/2026, while working: dropped 20 -> 19 and back after ~35 s, first at 19:02, then about every 9.5 – 13.5 min until shutdown; never while off. Possibly the hopper level sensor briefly seeing no pellets (unconfirmed; 0xA4 did not change in the log) | 20 | 20 - 0 |
 | 0x8F       | 143        | x/2       | °C     | Remote control temp                         |                          |            |
 | 0x96       | 150        |           |        | Unkown 84 - 89                              |                          |            |
 | 0xAB       | 171        |           |        | Looks random                                |                          |            |
@@ -75,13 +75,13 @@ RAM (0x00)
 | 0xDF       | 223        | x/10      | rpm    | Feed rate ???                               |                          |            |
 
 
-Low pallets changes ( To check when pallets are low again)
+Low pellets changes ( To check when pellets are low again)
 
-0x97 (151) =   0 =>  3  ?? |  0 == No Pallets /  3 == All normal => Verified, looks correct
-0xC7 (199) =   2 =>  0  ?? |  2 == No Pallets /  0 == All normal?
-0xBB (187) =   0 => 30     |  0 == No Pallets / 30 == All Normal?
-0xA4 (164) =   5 =>  0     |  5 == No Pallets /  0 == All normal  ======= !!!!
-0x9E (158) =  76 => 77     | 76 == No pallets / 77 == All normal 
+0x97 (151) =   0 =>  3  ?? |  0 == No Pellets /  3 == All normal => Verified, looks correct
+0xC7 (199) =   2 =>  0  ?? |  2 == No Pellets /  0 == All normal?
+0xBB (187) =   0 => 30     |  0 == No Pellets / 30 == All Normal?
+0xA4 (164) =   5 =>  0     |  5 == No Pellets /  0 == All normal  ======= !!!!
+0x9E (158) =  76 => 77     | 76 == No pellets / 77 == All normal 
 
 
 EEPROM (0x20)
@@ -147,8 +147,8 @@ EEPROM (0x20)
 | 0x90       | 144        | x       | °C     | Energy saving Stop offset              |                          | 0 - 3      |
 | 0x91       | 145        | x * -1  | °C     | Energy saving START negative offset    |                          | 0 - 3      |
 | 0xC0       | 192        | x       | id     | Combustion Quality, see lookup         | 76                       |            |
-| 0xC6       | 198        | x       | bool   | Low pallets monitoring                 | 1                        | 0 - 1      |
-| 0xC4       | 196        | x       | bool   | Pallet contact N.O. = 0 / N.C. = 1     | 0                        | 0 - 1      |
+| 0xC6       | 198        | x       | bool   | Low pellets monitoring                 | 1                        | 0 - 1      |
+| 0xC4       | 196        | x       | bool   | Pellet contact N.O. = 0 / N.C. = 1     | 0                        | 0 - 1      |
 | 0xE0       | 224        | x       | error  | Memory Error - Position 1 - See table  |                          |            |
 | 0xE1       | 225        | x       | error  | Memory Error - Position 2 - See table  |                          |            |
 | 0xE2       | 226        | x       | error  | Memory Error - Position 3 - See table  |                          |            |
@@ -223,15 +223,15 @@ Not fully completed yet
 | 12   | Display               |
 | 13   | Installer             |
 | 39   | -- FILL AUGER         |
-| 40   | -- Pallet reserve     |
-| 41   | -- Pallet contact     |
+| 40   | -- Pellet reserve     |
+| 41   | -- Pellet contact     |
 | 42   | -- External Thermo    |
 | 43   | -- Memory             |
 | 51   | ---- Total Hours      |
 | 52   | ---- Interval hours   |
 | 53   | ---- Amount of starts |
 | 54   | ---- Error Memory     |
-| 44   | -- Pallet quality     |
+| 44   | -- Pellet quality     |
 | 46   | -- Instell wireless   |
 | 47   | -- Link wireless      |
 | 49   | -- Wifi               |
@@ -274,12 +274,12 @@ Not fully completed yet
 |   4   | 00000100 | E9          | Ignition temperature not reached within limit                                 |
 |   8   | 00001000 | E7          | Fume temperatuer to low                                                       |
 |  16   | 00010000 | E3          | Temperature inside stove to high                                              |
-|  32   | 00100000 | E1          | Pallet loading door is open for to long or air pressure inside stove is wrong |
+|  32   | 00100000 | E1          | Pellet loading door is open for to long or air pressure inside stove is wrong |
 |  64   | 01000000 | E2          | Pressure sensor error during ignition                                         |
-| 128   | 10000000 | E6          | Auger error - To much pallets are dispatched                                  |
+| 128   | 10000000 | E6          | Auger error - To much pellets are dispatched                                  |
 | 129   | 10000001 | E12         | Fume fan error                                                                |
 | 130   | 10000010 | E11         | Unknown error - Not described in manual                                       |
-| 132   | 10000100 | E19         | External contact N.PEL / Pallet is active                                     |
+| 132   | 10000100 | E19         | External contact N.PEL / Pellet is active                                     |
 | 136   | 10001000 | E13         | Unknown error - Not described in manual                                       |
 | 255   | 11111111 | Power Error | Display shows power error                          
 

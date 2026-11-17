@@ -12,7 +12,7 @@ targets:
     info:
       path: PalletHeater/Info.plist
       properties:
-        NSBluetoothAlwaysUsageDescription: "PalletHeater uses Bluetooth LE to connect to and control your pellet stove."
+        NSBluetoothAlwaysUsageDescription: "OpenPelletBridge uses Bluetooth LE to connect to and control your pellet stove."
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         UILaunchStoryboardName: ""

@@ -296,7 +296,7 @@ static void telnetShowMainMenu(bool full)
         if (cachedLowPallet) {
             tpl("\x1B[41;97m  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  \x1B[0m");
             tpl("\x1B[41;97m  !!                                     !!  \x1B[0m");
-            tpl("\x1B[41;97m  !!    PALLET ALARM — REFILL PELLETS!   !!  \x1B[0m");
+            tpl("\x1B[41;97m  !!    PELLET ALARM — REFILL PELLETS!   !!  \x1B[0m");
             tpl("\x1B[41;97m  !!                                     !!  \x1B[0m");
             tpl("\x1B[41;97m  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  \x1B[0m");
             tpl("");
@@ -739,7 +739,7 @@ static void telnetDrawLiveSelect()
         "Fan speeds",
         "Fume fan RPM",
         "Auger speed",
-        "Pallet alarm",
+        "Pellet alarm",
         "Energy saving",
         "Remote control"
     };
@@ -828,7 +828,7 @@ static void telnetPrintLiveValues()
     }
     if (liveValuesMask & (1 << 4)) tpl("Fume fan RPM: " + String(cachedFumeFanRPM));
     if (liveValuesMask & (1 << 5)) tpl("Auger speed:  " + String(cachedAugerSpeed));
-    if (liveValuesMask & (1 << 6)) tpl("Low pallet:   " + String(cachedLowPallet ? "YES" : "no"));
+    if (liveValuesMask & (1 << 6)) tpl("Low pellet:   " + String(cachedLowPallet ? "YES" : "no"));
     if (liveValuesMask & (1 << 7)) tpl("Energy save:  start=" + String(energySavingStart) + "  stop=" + String(energySavingStop));
     if (liveValuesMask & (1 << 8)) {
         int menuId  = stove.read(ram, displayMenuAddr);

@@ -337,7 +337,7 @@ private struct HostnameEditor: View {
                     Text("Hostname")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    TextField("e.g. palletheater", text: $hostname)
+                    TextField("e.g. openpelletbridge", text: $hostname)
                         .font(.title3)
                         .textFieldStyle(.roundedBorder)
                         .autocorrectionDisabled()

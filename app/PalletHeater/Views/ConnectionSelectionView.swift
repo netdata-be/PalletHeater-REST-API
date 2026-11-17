@@ -31,7 +31,7 @@ struct ConnectionSelectionView: View {
                     }
 
                     VStack(spacing: 8) {
-                        Text("PalletHeater")
+                        Text("OpenPelletBridge")
                             .font(.largeTitle.bold())
                         Text("Choose connection method")
                             .font(.subheadline)

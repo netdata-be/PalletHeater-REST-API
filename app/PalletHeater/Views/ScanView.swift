@@ -27,7 +27,7 @@ struct ScanView: View {
                 }
 
                 VStack(spacing: 8) {
-                    Text("PalletHeater")
+                    Text("OpenPelletBridge")
                         .font(.largeTitle.bold())
                     Text("Pellet stove controller")
                         .font(.subheadline)

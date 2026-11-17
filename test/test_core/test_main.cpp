@@ -1,7 +1,7 @@
-// Unit tests for lib/palletcore (pure logic of the firmware).
+// Unit tests for lib/pelletcore (pure logic of the firmware).
 // Run on the development machine: pio test -e native
 #include <unity.h>
-#include <palletcore.h>
+#include <pelletcore.h>
 
 void setUp() {}
 void tearDown() {}
@@ -229,7 +229,7 @@ static void test_parse_fan_speed()
 // ── Network settings ────────────────────────────────────────────────────────
 static void test_hostname()
 {
-    TEST_ASSERT_TRUE(pc::validHostname("palletheater"));
+    TEST_ASSERT_TRUE(pc::validHostname("openpelletbridge"));
     TEST_ASSERT_TRUE(pc::validHostname("kachel-2"));
     TEST_ASSERT_FALSE(pc::validHostname(""));
     TEST_ASSERT_FALSE(pc::validHostname("-kachel"));

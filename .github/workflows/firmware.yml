@@ -3,10 +3,13 @@
 # the controller finds that release itself (src/fwUpdate.h, /api/firmware).
 #
 # Release:  git tag v1.0.0 && git push origin v1.0.0
-#   palletheater-firmware.bin  OTA image: the web app, POST /api/update or the
+#   openpelletbridge-firmware.bin  OTA image: the web app, POST /api/update or the
 #                              GitHub update of the controller (/api/firmware)
-#   palletheater-factory.bin   complete flash image for a new ESP32, at offset 0:
-#                              esptool.py --chip esp32 write_flash 0x0 palletheater-factory.bin
+#   palletheater-firmware.bin      the same OTA image under the old project name, for
+#                              controllers on v1.0.0 (they only look for this name);
+#                              temporary, drop once no controller runs v1.0.0
+#   openpelletbridge-factory.bin   complete flash image for a new ESP32, at offset 0:
+#                              esptool.py --chip esp32 write_flash 0x0 openpelletbridge-factory.bin
 #   SHA256SUMS
 name: Firmware
 
@@ -70,14 +73,17 @@ jobs:
         run: |
           b=".pio/build/$PIO_ENV"
           mkdir -p dist
+          cp "$b/firmware.bin" dist/openpelletbridge-firmware.bin
+          # same image under the old project name: controllers running v1.0.0
+          # (still "PalletHeater") only look for this asset. Drop once they are updated.
           cp "$b/firmware.bin" dist/palletheater-firmware.bin
           esptool=$(find ~/.platformio/packages -path '*tool-esptoolpy*/esptool.py' | head -1)
           boot_app0=$(find ~/.platformio/packages -path '*framework-arduinoespressif32*/tools/partitions/boot_app0.bin' | head -1)
-          python "$esptool" --chip esp32 merge_bin -o dist/palletheater-factory.bin \
+          python "$esptool" --chip esp32 merge_bin -o dist/openpelletbridge-factory.bin \
             --flash_mode dio --flash_freq 40m --flash_size 4MB \
             0x1000 "$b/bootloader.bin" 0x8000 "$b/partitions.bin" 0xe000 "$boot_app0" 0x10000 "$b/firmware.bin"
           (cd dist && sha256sum *.bin > SHA256SUMS)
-          echo "### PalletHeater ${{ steps.version.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "### OpenPelletBridge ${{ steps.version.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           pio run -e "$PIO_ENV" -t size 2>/dev/null | grep -E "^(RAM|Flash):" >> "$GITHUB_STEP_SUMMARY" || true
           cat dist/SHA256SUMS >> "$GITHUB_STEP_SUMMARY"
@@ -85,7 +91,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: palletheater-${{ steps.version.outputs.version }}
+          name: openpelletbridge-${{ steps.version.outputs.version }}
           path: dist/
           if-no-files-found: error
 
@@ -98,7 +104,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: palletheater-${{ needs.build.outputs.version }}
+          name: openpelletbridge-${{ needs.build.outputs.version }}
           path: dist
 
       - name: Create GitHub release
@@ -109,4 +115,4 @@ jobs:
           # a tag with a suffix (v1.2.0-rc1) becomes a pre-release: the controllers
           # only look at the latest full release
           pre=""; [[ "$TAG" == *-* ]] && pre="--prerelease"
-          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --title "PalletHeater $TAG" --generate-notes $pre
+          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --title "OpenPelletBridge $TAG" --generate-notes $pre

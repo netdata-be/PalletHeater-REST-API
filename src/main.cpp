@@ -107,7 +107,14 @@ void setup()
         Serial.println("An Error has occurred while mounting SPIFFS");
     }
     setup_wifi();
-    MDNS.begin("palletheater");
+    {
+        // mDNS name = the configured hostname (IP settings), default openpelletbridge
+        Preferences prefs;
+        prefs.begin("net", true);
+        String hn = prefs.getString("hostname", "openpelletbridge");
+        prefs.end();
+        MDNS.begin(hn.c_str());
+    }
     MDNS.addService("http", "tcp", 80);
     authInit();
     {
@@ -153,7 +160,7 @@ void setup()
     resetButton.onPressedFor(5000, fullReset);
     resetButton.onPressed(buttonPressed);
 
-    Serial.println("Ready");
+    Serial.printf("Ready - firmware %s for %s\n", BUILD_VERSION, BUILD_STOVE_MODEL);
 
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP());

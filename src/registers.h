@@ -20,8 +20,8 @@ const char* getSelectedParameterName(int id)
         case 145: return "Energy Saving - Stop";
         case 146: return "Energy Saving - Start";
         case 193: return "Combustion quality";
-        case 198: return "Pallet quality";
-        case 199: return "Pallet reserve";
+        case 198: return "Pellet quality";
+        case 199: return "Pellet reserve";
         case 200: return "Multi Comfort Plus";
         case 235: return "WPS";
         case 236: return "Reset";
@@ -68,15 +68,15 @@ const char* getRemoteMenuName(int id)
         case 12: return "Display";
         case 13: return "Installer";
         case 39: return "Installer > Fill Auger";
-        case 40: return "Installer > Pallet reserve";
-        case 41: return "Installer > Pallet contact";
+        case 40: return "Installer > Pellet reserve";
+        case 41: return "Installer > Pellet contact";
         case 42: return "Installer > External Thermo";
         case 43: return "Installer > Memory";
         case 51: return "Installer > Memory > Total Hours";
         case 52: return "Installer > Memory > Interval hours";
         case 53: return "Installer > Memory > Amount of starts";
         case 54: return "Installer > Memory > Error Memory";
-        case 44: return "Installer > Pallet quality";
+        case 44: return "Installer > Pellet quality";
         case 45: return "Installer > Combustion quality";
         case 46: return "Installer > Instell wireless";
         case 47: return "Installer > Link wireless";
@@ -181,7 +181,7 @@ static String getRamValueTxt(byte addr, int val)
         case 0x44: snprintf(buf, sizeof(buf), "%.1f °C (stove room temp)", val / 2.0f); return buf;
         case 0x48: if (!val) return "0 rpm (fume fan stopped)"; snprintf(buf, sizeof(buf), "%d rpm (fume fan)", (val + 25) * 10); return buf;
         case 0x4D: return val ? "1 (flip)" : "0 (flop)";
-        case 0x50: snprintf(buf, sizeof(buf), "%d min remaining (low pallet)", val); return buf;
+        case 0x50: snprintf(buf, sizeof(buf), "%d min remaining (low pellet)", val); return buf;
         case 0x7A: snprintf(buf, sizeof(buf), "%d sec", val);  return buf;
         case 0x7B: {
             const char* days[] = {"", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"};
@@ -234,8 +234,8 @@ static String getEepromValueTxt(byte addr, int val)
         case 0x8F: snprintf(buf, sizeof(buf), "FW patch %d", val);    return buf;
         case 0xBC: { const char* l = getPelletQualityLabel(val);     return l ? l : "Unknown pellet quality"; }
         case 0xC0: { const char* l = getCombustionQualityLabel(val); return l ? l : "Unknown combustion quality"; }
-        case 0xC4: return val ? "Pallet contact N.C." : "Pallet contact N.O.";
-        case 0xC6: return val ? "Low pallet monitoring ON" : "Low pallet monitoring OFF";
+        case 0xC4: return val ? "Pellet contact N.C." : "Pellet contact N.O.";
+        case 0xC6: return val ? "Low pellet monitoring ON" : "Low pellet monitoring OFF";
         case 0xE0: case 0xE1: case 0xE2: case 0xE3: case 0xE4:
             snprintf(buf, sizeof(buf), "%s - %s", getErrorCode(val).c_str(), getErrorDesc(val).c_str());
             return buf;

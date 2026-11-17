@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-BLE OTA upload for PalletHeater.
+BLE OTA upload for OpenPelletBridge.
 
 Usage:
     pip install bleak
@@ -18,7 +18,7 @@ import struct
 import sys
 from bleak import BleakClient, BleakScanner
 
-DEVICE_NAME  = "PalletHeater"
+DEVICE_NAME  = "OpenPelletBridge"
 OTA_SVC_UUID = "a1b20010-1234-5678-abcd-ef0123456789"
 CTRL_UUID    = "a1b20011-1234-5678-abcd-ef0123456789"
 DATA_UUID    = "a1b20012-1234-5678-abcd-ef0123456789"

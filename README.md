@@ -1,4 +1,6 @@
-# PalletHeater – REST API for Micronova pellet stoves
+# OpenPelletBridge – REST API for Micronova pellet stoves
+
+> Formerly **PalletHeater**. Renamed after v1.0.0: the default hostname is now `openpelletbridge.local` (a hostname set under *IP settings* is kept), the default MQTT prefix `openpelletbridge` and the release asset `openpelletbridge-firmware.bin` (releases still carry `palletheater-firmware.bin` for controllers on v1.0.0). JSON fields such as `lowPalletAlarm` and the metric `stove_low_pallet_alarm` keep their names for compatibility.
 
 ESP32 firmware that connects to the serial bus of a Micronova based pellet stove and exposes it over:
 
@@ -35,8 +37,8 @@ N-channel MOSFETs convert the 3.3 V TTL of the ESP32 to the 5 V TTL the stove ex
 
 1. Flash the firmware (see [Development](#development)).
 2. On first boot the device starts a WiFi captive portal. Connect to it and enter your WiFi credentials and NTP server.
-3. Once connected, the device is reachable on its IP address or on `http://palletheater.local` (mDNS).
-4. Open `http://palletheater.local/` for the web app, `http://palletheater.local/device` for the fallback page or `http://palletheater.local/api` for Swagger UI.
+3. Once connected, the device is reachable on its IP address or on `http://openpelletbridge.local` (mDNS).
+4. Open `http://openpelletbridge.local/` for the web app, `http://openpelletbridge.local/device` for the fallback page or `http://openpelletbridge.local/api` for Swagger UI.
 
 <img src="img/settings.png" width="200">
 
@@ -44,7 +46,7 @@ Hold the reset button for 5 seconds to wipe the WiFi settings and restart the ca
 
 ## Web app
 
-`http://palletheater.local/` (also `/app`) is a single page web app built into the firmware ([web/app.html](web/app.html)). It has no external dependencies, so it also works without internet access, and adapts to phone and desktop screens and to light/dark mode.
+`http://openpelletbridge.local/` (also `/app`) is a single page web app built into the firmware ([web/app.html](web/app.html)). It has no external dependencies, so it also works without internet access, and adapts to phone and desktop screens and to light/dark mode.
 
 - **Status:** stove state, room / set point / fume temperatures, the sensor the room temperature comes from (derived from the readings), the wireless sensor setting, sensors, fume fan, auger speed, pellet level, error memory, stove vs NTP clock, firmware, starts and working hours. Refreshes every 5 s from `/api/state`.
 - **Alerts:** a banner for alarms (states 8 – 10), an active error code, no answer from the stove, low pellets, stale data and an unreachable controller.
@@ -63,7 +65,7 @@ To change the app, edit `web/app.html` and rebuild; it is embedded gzipped via `
 
 ## API conventions
 
-- **Base URL:** `http://<device-ip>` or `http://palletheater.local`. Port 80, plain HTTP. Only expose it on a trusted network.
+- **Base URL:** `http://<device-ip>` or `http://openpelletbridge.local`. Port 80, plain HTTP. Only expose it on a trusted network.
 - **API key (optional):** see [Authentication](#authentication).
 - **Request parameters:** write operations take **query parameters** (form-encoded bodies also work), e.g. `POST /api/flame?power=3`. Only the timer endpoints take a **JSON body**.
 - **Responses:** always `application/json`, except `/metrics` (Prometheus text), `/`, `/api` (HTML) and `/restart` (plain text).
@@ -90,8 +92,8 @@ The controller generates a random 128-bit API key (32 hex characters) on first b
 When the key is **required**, every route needs one of these headers, otherwise the response is `401`:
 
 ```bash
-curl -H "X-API-Key: <key>" http://palletheater.local/api/state
-curl -H "Authorization: Bearer <key>" http://palletheater.local/metrics
+curl -H "X-API-Key: <key>" http://openpelletbridge.local/api/state
+curl -H "Authorization: Bearer <key>" http://openpelletbridge.local/metrics
 ```
 
 Always reachable without key: `/` and `/app` (web app), `/device` (fallback page), `/api` + `/api-specs.json` (API docs, use **Authorize** in Swagger UI) and `/api/auth`.
@@ -108,11 +110,11 @@ For Prometheus:
 
 ```yaml
 scrape_configs:
-  - job_name: palletheater
+  - job_name: openpelletbridge
     authorization:
       credentials: "<key>"
     static_configs:
-      - targets: ["palletheater.local:80"]
+      - targets: ["openpelletbridge.local:80"]
 ```
 
 ## Endpoint overview
@@ -155,14 +157,14 @@ scrape_configs:
 
 ## Endpoint reference
 
-The examples use `curl` against `palletheater.local`.
+The examples use `curl` against `openpelletbridge.local`.
 
 ### `GET /api/state`
 
 Everything you need for a dashboard in one call, served from cache.
 
 ```bash
-curl http://palletheater.local/api/state
+curl http://openpelletbridge.local/api/state
 ```
 
 ```json
@@ -226,7 +228,7 @@ On a serial error the cache keeps the last known value, so a failed read never s
 Checks whether the stove answers on the serial bus.
 
 ```bash
-curl http://palletheater.local/api/health
+curl http://openpelletbridge.local/api/health
 # 200 {"health":"Healthy"}
 # 500 {"health":"Failed to talk to Stove"}
 ```
@@ -234,10 +236,10 @@ curl http://palletheater.local/api/health
 ### `/api/power`
 
 ```bash
-curl http://palletheater.local/api/power
+curl http://openpelletbridge.local/api/power
 # {"stoveState":0,"state":"Off","poweredOn":false}
 
-curl -X POST "http://palletheater.local/api/power?state=on"
+curl -X POST "http://openpelletbridge.local/api/power?state=on"
 # 200 {"result":"Powered on sended","stoveState":1,"state":"Starting","poweredOn":true}
 # 202 {"result":"Stove already on","stoveState":4,"state":"Working","poweredOn":true}
 ```
@@ -252,10 +254,10 @@ curl -X POST "http://palletheater.local/api/power?state=on"
 ### `/api/flame`
 
 ```bash
-curl http://palletheater.local/api/flame
+curl http://openpelletbridge.local/api/flame
 # {"power":2}
 
-curl -X POST "http://palletheater.local/api/flame?power=3"
+curl -X POST "http://openpelletbridge.local/api/flame?power=3"
 # {"result":"success","power":3}
 ```
 
@@ -266,10 +268,10 @@ curl -X POST "http://palletheater.local/api/flame?power=3"
 ### `/api/fan`
 
 ```bash
-curl http://palletheater.local/api/fan
+curl http://openpelletbridge.local/api/fan
 # {"speed":2}
 
-curl -X POST "http://palletheater.local/api/fan?speed=0"
+curl -X POST "http://openpelletbridge.local/api/fan?speed=0"
 # {"result":"success","speed":0}
 ```
 
@@ -280,10 +282,10 @@ curl -X POST "http://palletheater.local/api/fan?speed=0"
 ### `/api/setpoint`
 
 ```bash
-curl http://palletheater.local/api/setpoint
+curl http://openpelletbridge.local/api/setpoint
 # {"setpoint":21}
 
-curl -X POST "http://palletheater.local/api/setpoint?value=22"
+curl -X POST "http://openpelletbridge.local/api/setpoint?value=22"
 # {"result":"success","setpoint":22}
 ```
 
@@ -296,10 +298,10 @@ curl -X POST "http://palletheater.local/api/setpoint?value=22"
 Energy saving: when the room reaches the set point the stove goes to power 1; when it keeps rising to `setpoint + stop` the stove extinguishes (standby); when it drops below `setpoint + start` it restarts. `stop = 0` (OFF) disables energy saving (the stove only modulates); `start = 0` (OFF) means the stove does not restart automatically after stopping. `enabled` is `true` when `stop` is set.
 
 ```bash
-curl http://palletheater.local/api/energysaving
+curl http://openpelletbridge.local/api/energysaving
 # {"energySaving":{"start":-1,"stop":2,"enabled":true,"startTemperature":20,"stopTemperature":23}}
 
-curl -X POST "http://palletheater.local/api/energysaving?start=-1&stop=2"
+curl -X POST "http://openpelletbridge.local/api/energysaving?start=-1&stop=2"
 # {"result":"success","energySaving":{...}}
 ```
 
@@ -315,13 +317,13 @@ Both parameters are optional; pass either one or both.
 Combustion quality and pellet quality correction (installer menu).
 
 ```bash
-curl http://palletheater.local/api/burn
+curl http://openpelletbridge.local/api/burn
 # {"combustionQuality":"0","pelletQuality":"-1"}
 
-curl -X POST "http://palletheater.local/api/burn?combustionQuality=1&pelletQuality=-2"
+curl -X POST "http://openpelletbridge.local/api/burn?combustionQuality=1&pelletQuality=-2"
 # {"result":"success","combustionQuality":"1","pelletQuality":"-2"}
 
-curl -X POST "http://palletheater.local/api/burn?combustionQuality=%2BG"
+curl -X POST "http://openpelletbridge.local/api/burn?combustionQuality=%2BG"
 # {"result":"success","combustionQuality":"+G","pelletQuality":"-2"}
 ```
 
@@ -335,10 +337,10 @@ The leading `+` is optional (`+1` and `1`, `+G` and `G` are equivalent), so an u
 ### `/api/beep`
 
 ```bash
-curl http://palletheater.local/api/beep
+curl http://openpelletbridge.local/api/beep
 # {"enabled":true}
 
-curl -X POST "http://palletheater.local/api/beep?enabled=false"
+curl -X POST "http://openpelletbridge.local/api/beep?enabled=false"
 # {"result":"success","enabled":false}
 ```
 
@@ -351,17 +353,17 @@ curl -X POST "http://palletheater.local/api/beep?enabled=false"
 The stove has its own clock without DST support. The firmware compares it with NTP time.
 
 ```bash
-curl http://palletheater.local/api/time
+curl http://openpelletbridge.local/api/time
 # {"time":{"stove":"2026-11-15 17:50:12","ntp":"2026-11-15 17:50:38","delta":26}}
 
-curl -X PATCH http://palletheater.local/api/time
+curl -X PATCH http://openpelletbridge.local/api/time
 # {"result":"success Synced NTP time to stove","time":{"stove":"2026-11-15 17:51:00","ntp":"2026-11-15 17:51:01","delta":1}}
 ```
 
 `PATCH` writes the current NTP time into the stove clock. Pass `datetime=YYYY-MM-DDTHH:MM[:SS]` (local time) to set a specific time instead, e.g. the browser time:
 
 ```bash
-curl -X PATCH "http://palletheater.local/api/time?datetime=2026-11-16T14:30:00"
+curl -X PATCH "http://openpelletbridge.local/api/time?datetime=2026-11-16T14:30:00"
 ```
 
 The day of the week is written as 1 = Monday … 7 = Sunday, which the chrono timers depend on. The stove has no daylight saving time; set the clock again after the change. The stove clock is read from the stove every 5 min (every 10 s until a valid time has been read); in between the controller lets it tick on, so `stove`, `ntp` and `delta` are current on every request. A clock change made on the stove itself shows up after at most 5 min. A PATCH re-reads the stove clock right away.
@@ -371,12 +373,12 @@ The day of the week is written as 1 = Monday … 7 = Sunday, which the chrono ti
 The stove keeps the last 5 errors in `MemoryPos_1` … `MemoryPos_5`.
 
 ```bash
-curl http://palletheater.local/api/errors
+curl http://openpelletbridge.local/api/errors
 # {"previousErrors":false}
-# {"previousErrors":{"MemoryPos_1":{"id":32,"error":"E1","desc":"Pallet loading door is open for to long or air pressure inside stove is wrong"}}}
+# {"previousErrors":{"MemoryPos_1":{"id":32,"error":"E1","desc":"Pellet loading door is open for to long or air pressure inside stove is wrong"}}}
 
 # clear position 1
-curl -X POST "http://palletheater.local/api/errors?MemoryPos_1=0"
+curl -X POST "http://openpelletbridge.local/api/errors?MemoryPos_1=0"
 # {"action":"MemoryPos_1 set","previousErrors":false}
 ```
 
@@ -389,7 +391,7 @@ curl -X POST "http://palletheater.local/api/errors?MemoryPos_1=0"
 The six chrono programs `PR1` – `PR6`. A disabled program returns its stored times and settings too, with `"enabled": false`. When a program cannot be read (after the serial retries) it is returned as `{"error": "Failed to read timer from stove - RS232 error"}` instead of partial data (and `GET /api/timers/prN` returns `500`).
 
 ```bash
-curl http://palletheater.local/api/timers
+curl http://openpelletbridge.local/api/timers
 ```
 
 ```json
@@ -410,7 +412,7 @@ curl http://palletheater.local/api/timers
 `POST` updates several programs at once. Only the programs and fields present in the body are written:
 
 ```bash
-curl -X POST http://palletheater.local/api/timers \
+curl -X POST http://openpelletbridge.local/api/timers \
   -H "Content-Type: application/json" \
   -d '{"timers":{"PR1":{"enabled":true,"on":"06:30","off":"08:30"},"PR2":{"enabled":false}}}'
 # {"result":"success"}
@@ -446,12 +448,12 @@ Single program, path `pr1` … `pr6`.
 | `DELETE` | – | Disable the program (times and settings are kept) |
 
 ```bash
-curl -X PATCH http://palletheater.local/api/timers/pr1 \
+curl -X PATCH http://openpelletbridge.local/api/timers/pr1 \
   -H "Content-Type: application/json" \
   -d '{"off":"09:00","settings":{"setpoint":22}}'
 # {"result":"success","PR1":{"enabled":true,"on":"06:30","off":"09:00",...}}
 
-curl -X DELETE http://palletheater.local/api/timers/pr1
+curl -X DELETE http://openpelletbridge.local/api/timers/pr1
 # {"result":"success","PR1":{"enabled":false}}
 ```
 
@@ -460,7 +462,7 @@ curl -X DELETE http://palletheater.local/api/timers/pr1
 What the remote control / display currently shows. Useful for reverse engineering.
 
 ```bash
-curl http://palletheater.local/api/remote
+curl http://openpelletbridge.local/api/remote
 # {"displayed_menu":"Main screen","diplayed_menu":"Main screen","selected_parameter":"Flame power","language":"NLD","menuId":0,"parameterId":0,"editValue":0}
 ```
 
@@ -479,8 +481,8 @@ Reverse-engineering aid to find what the remote control does when a key is press
 | `DELETE` | | Stop |
 
 ```bash
-curl -X POST "http://palletheater.local/api/keywatch?address=0x08,0x16,0x24&seconds=60"
-curl "http://palletheater.local/api/keywatch"
+curl -X POST "http://openpelletbridge.local/api/keywatch?address=0x08,0x16,0x24&seconds=60"
+curl "http://openpelletbridge.local/api/keywatch"
 ```
 
 ```json
@@ -504,7 +506,7 @@ Raw register dump for reverse engineering. Each register is read over the serial
 | `address` | Comma separated list, decimal or hex (`0x21,0x34,125`). Default: all 256. |
 
 ```bash
-curl "http://palletheater.local/api/dump?register=ram&address=0x21,0x34"
+curl "http://openpelletbridge.local/api/dump?register=ram&address=0x21,0x34"
 ```
 
 ```json
@@ -527,7 +529,7 @@ The controller keeps one sample every 2 minutes for the last 24 hours (720 sampl
 | `hours` | `1` – `24` (default `24`) |
 
 ```bash
-curl "http://palletheater.local/api/history?hours=6"
+curl "http://openpelletbridge.local/api/history?hours=6"
 ```
 
 ```json
@@ -549,7 +551,7 @@ Log of every stove state change and every change of the active error, with the e
 | `hours` | Optional, 1–720: only return changes from the last N hours. Default: all stored changes |
 
 ```bash
-curl "http://palletheater.local/api/events?hours=24"
+curl "http://openpelletbridge.local/api/events?hours=24"
 ```
 
 ```json
@@ -568,10 +570,10 @@ curl "http://palletheater.local/api/events?hours=24"
 Bluetooth (BLE) can be switched off to give WiFi the radio to itself. The setting is stored in NVS and applied at the next boot: with BLE off, `setupBLE()` and `bleLoop()` are skipped, the BT controller memory is released and WiFi modem sleep is disabled. The iOS app then only works via WiFi.
 
 ```bash
-curl http://palletheater.local/api/bluetooth
+curl http://openpelletbridge.local/api/bluetooth
 # {"enabled":true,"active":true,"restartRequired":false}
 
-curl -X POST "http://palletheater.local/api/bluetooth?enabled=false&restart=true"
+curl -X POST "http://openpelletbridge.local/api/bluetooth?enabled=false&restart=true"
 # {"result":"success - restarting","enabled":false,"active":true,"restartRequired":true}
 ```
 
@@ -585,10 +587,10 @@ curl -X POST "http://palletheater.local/api/bluetooth?enabled=false&restart=true
 MQTT settings and connection status, see [MQTT and Home Assistant](#mqtt-and-home-assistant). Stored in NVS; a change reconnects right away. The password is never returned.
 
 ```bash
-curl -X POST "http://palletheater.local/api/mqtt?enabled=true&host=192.168.1.10&user=ha&password=secret"
-curl http://palletheater.local/api/mqtt
-# {"enabled":true,"host":"192.168.1.10","port":1883,"user":"ha","passwordSet":true,"prefix":"palletheater",
-#  "discovery":true,"discoveryPrefix":"homeassistant","clientId":"palletheater_a1b2c3","connected":true,
+curl -X POST "http://openpelletbridge.local/api/mqtt?enabled=true&host=192.168.1.10&user=ha&password=secret"
+curl http://openpelletbridge.local/api/mqtt
+# {"enabled":true,"host":"192.168.1.10","port":1883,"user":"ha","passwordSet":true,"prefix":"openpelletbridge",
+#  "discovery":true,"discoveryPrefix":"homeassistant","clientId":"openpelletbridge_a1b2c3","connected":true,
 #  "lastError":null,"publishes":42,"commands":0}
 ```
 
@@ -597,7 +599,7 @@ curl http://palletheater.local/api/mqtt
 | `enabled` | `true` / `false` |
 | `host`, `port` | Broker address, port (default 1883) |
 | `user`, `password` | Optional. An empty `password` keeps the stored one, `-` clears it |
-| `prefix` | Topic prefix, default `palletheater` |
+| `prefix` | Topic prefix, default `openpelletbridge` |
 | `discovery`, `discoveryPrefix` | Home Assistant discovery on / off (default on), prefix (default `homeassistant`) |
 
 Only the given parameters change.
@@ -607,12 +609,12 @@ Only the given parameters change.
 WiFi status, the WiFi network and the IP settings. Hostname and IP settings are stored in NVS (shared with the BLE and telnet menus) and take effect after a restart; a network change is done right away. Without any working network, hold the reset button 5 s for the WiFiManager portal.
 
 ```bash
-curl http://palletheater.local/api/wifi
+curl http://openpelletbridge.local/api/wifi
 # {"connected":true,"ssid":"Home","bssid":"…","channel":6,"rssi":-61,"quality":78,"ip":"192.168.50.222","netmask":"255.255.255.0",
-#  "gateway":"192.168.50.1","dns":"192.168.50.1","mac":"…","hostname":"palletheater","sleep":false,
-#  "saved":{"hostname":"palletheater","mode":"dhcp"},"restartRequired":false}
+#  "gateway":"192.168.50.1","dns":"192.168.50.1","mac":"…","hostname":"openpelletbridge","sleep":false,
+#  "saved":{"hostname":"openpelletbridge","mode":"dhcp"},"restartRequired":false}
 
-curl -X POST "http://palletheater.local/api/wifi?mode=static&ip=192.168.50.30&netmask=255.255.255.0&gateway=192.168.50.1&dns=192.168.50.1&restart=true"
+curl -X POST "http://openpelletbridge.local/api/wifi?mode=static&ip=192.168.50.30&netmask=255.255.255.0&gateway=192.168.50.1&dns=192.168.50.1&restart=true"
 ```
 
 | Parameter (POST) | Values |
@@ -631,7 +633,7 @@ curl -X POST "http://palletheater.local/api/wifi?mode=static&ip=192.168.50.30&ne
 Switches the telnet debug menu (port 23) on or off. Applied immediately, no restart, and stored in NVS.
 
 ```bash
-curl -X POST "http://palletheater.local/api/telnet?enabled=false"
+curl -X POST "http://openpelletbridge.local/api/telnet?enabled=false"
 # {"result":"success","enabled":false}
 ```
 
@@ -649,9 +651,9 @@ Example scrape config:
 
 ```yaml
 scrape_configs:
-  - job_name: palletheater
+  - job_name: openpelletbridge
     static_configs:
-      - targets: ["palletheater.local:80"]
+      - targets: ["openpelletbridge.local:80"]
 ```
 
 ### Legacy routes
@@ -677,27 +679,27 @@ Installs new firmware over HTTP. The image is streamed in one request and writte
 Send the `firmware.bin` as multipart field `firmware`. The request always needs either the API key (`X-API-Key` / `Authorization: Bearer`, also when the key is not required for other routes) or the OTA password from `platformio.ini` (`X-OTA-Password`).
 
 ```bash
-curl -H "X-API-Key: <key>" -F "firmware=@.pio/build/esp32doit-devkit-v1-http/firmware.bin" http://palletheater.local/api/update
+curl -H "X-API-Key: <key>" -F "firmware=@.pio/build/esp32doit-devkit-v1-http/firmware.bin" http://openpelletbridge.local/api/update
 # {"result":"success","bytes":1608157,"restarting":true}
 ```
 
-Errors: `401` (no valid key or password), `500` with `result` describing the failure (nothing is activated, the current firmware keeps running). The web app has an *Upload PalletHeater firmware* button under *Device* (expert mode).
+Errors: `401` (no valid key or password), `500` with `result` describing the failure (nothing is activated, the current firmware keeps running). The web app has an *Upload OpenPelletBridge firmware* button under *Device* (expert mode).
 
 ### `/api/firmware`
 
-New versions are published as [GitHub releases](https://github.com/netdata-be/PalletHeater-REST-API/releases) (see [CI and releases](#ci-and-releases)). The controller looks up the latest release (`releases/latest`: no drafts or pre-releases) 2 minutes after start-up and then once a day (`autoCheck`, on by default), or on request. It **never installs on its own**: `action=install` downloads the asset `palletheater-firmware.bin` over HTTPS, the ESP-IDF verifies the image before it is made bootable, and the controller restarts. Settings (NVS) are kept; the stove is not affected.
+New versions are published as [GitHub releases](https://github.com/netdata-be/PalletHeater-REST-API/releases) (see [CI and releases](#ci-and-releases)). The controller looks up the latest release (`releases/latest`: no drafts or pre-releases) 2 minutes after start-up and then once a day (`autoCheck`, on by default), or on request. It **never installs on its own**: `action=install` downloads the asset `openpelletbridge-firmware.bin` over HTTPS, the ESP-IDF verifies the image before it is made bootable, and the controller restarts. Settings (NVS) are kept; the stove is not affected.
 
 HTTPS to GitHub is verified against the Mozilla root CAs in [certs/x509_crt_bundle.bin](certs/x509_crt_bundle.bin) (regenerate with [scripts/gen_ca_bundle.py](scripts/gen_ca_bundle.py)). The check needs a valid clock (NTP).
 
 ```bash
-curl http://palletheater.local/api/firmware
+curl http://openpelletbridge.local/api/firmware
 # {"current":"v1.0.0","devBuild":false,"repo":"netdata-be/PalletHeater-REST-API","state":"idle","autoCheck":true,
 #  "latest":"v1.1.0","published":"2026-11-20T10:00:00Z","releaseUrl":"https://github.com/…/releases/tag/v1.1.0",
 #  "assetAvailable":true,"updateAvailable":true,"checkedSecondsAgo":42,"lastError":null,"lastInstall":null}
 
-curl -X POST "http://palletheater.local/api/firmware?action=check"     # {"result":"started",…}
-curl -X POST "http://palletheater.local/api/firmware?action=install"   # {"result":"started",…}
-curl -X POST "http://palletheater.local/api/firmware?autoCheck=false"
+curl -X POST "http://openpelletbridge.local/api/firmware?action=check"     # {"result":"started",…}
+curl -X POST "http://openpelletbridge.local/api/firmware?action=install"   # {"result":"started",…}
+curl -X POST "http://openpelletbridge.local/api/firmware?autoCheck=false"
 ```
 
 | Field | Meaning |
@@ -709,7 +711,7 @@ curl -X POST "http://palletheater.local/api/firmware?autoCheck=false"
 | `updateAvailable` | `latest` is newer than `current` and has the firmware asset |
 | `lastInstall` | Last update through this route, e.g. `v1.0.0 -> v1.1.0` |
 
-`action=install` without `force` is refused (`400`) when there is no newer release; `409` while a check or update is already running. Poll `GET` to follow the progress; the controller is unreachable for about a minute while it restarts. The web app shows this under *Device* → *PalletHeater firmware*.
+`action=install` without `force` is refused (`400`) when there is no newer release; `409` while a check or update is already running. Poll `GET` to follow the progress; the controller is unreachable for about a minute while it restarts. The web app shows this under *Device* → *OpenPelletBridge firmware*.
 
 ## Reference tables
 
@@ -755,7 +757,7 @@ The `desc` strings in API responses are returned as defined in the firmware and 
 
 The controller can publish the stove values to an MQTT broker and take commands from it. Set it up in the web app (*Expert* → Device → MQTT) or with [`/api/mqtt`](#apimqtt). The connection is retried every 15 s while the broker is unreachable.
 
-Values are plain text (no JSON), retained, under `<prefix>/state/<name>` (prefix default `palletheater`). They are published when they change (checked every 5 s) and all again every 5 minutes. `<prefix>/status` is `online`, or `offline` (last will) when the controller drops off.
+Values are plain text (no JSON), retained, under `<prefix>/state/<name>` (prefix default `openpelletbridge`). They are published when they change (checked every 5 s) and all again every 5 minutes. `<prefix>/status` is `online`, or `offline` (last will) when the controller drops off.
 
 | State topic | Value |
 |---|---|
@@ -786,11 +788,11 @@ Commands go to `<prefix>/set/<name>`. The result is published (not retained) on 
 | `es_stop`, `es_start` | 0 – 3 °C |
 
 ```bash
-mosquitto_sub -h broker -t 'palletheater/#' -v
-mosquitto_pub -h broker -t palletheater/set/setpoint -m 21
+mosquitto_sub -h broker -t 'openpelletbridge/#' -v
+mosquitto_pub -h broker -t openpelletbridge/set/setpoint -m 21
 ```
 
-**Home Assistant.** With *discovery* on (default), the controller also publishes retained configuration messages under `homeassistant/<component>/<client id>/<entity>/config`. Home Assistant (MQTT integration) then creates a device *PalletHeater* with a thermostat (on/off and set point, current room temperature), switches for power and energy saving, numbers for set point, flame power and the energy saving offsets, a select for the fan and sensors / binary sensors for the values above. Nothing else is Home Assistant specific.
+**Home Assistant.** With *discovery* on (default), the controller also publishes retained configuration messages under `homeassistant/<component>/<client id>/<entity>/config`. Home Assistant (MQTT integration) then creates a device *OpenPelletBridge* with a thermostat (on/off and set point, current room temperature), switches for power and energy saving, numbers for set point, flame power and the energy saving offsets, a select for the fan and sensors / binary sensors for the values above. Nothing else is Home Assistant specific.
 
 **Loxone and others.** The state and command topics are plain MQTT and work with any client. Loxone needs an MQTT gateway for this (for example LoxBerry with the MQTT Gateway plugin) unless your Miniserver supports MQTT itself; check that for your Loxone version. Discovery can be switched off when Home Assistant is not used. Alternatively Loxone can call the REST API directly with virtual HTTP inputs and outputs.
 
@@ -798,10 +800,10 @@ mosquitto_pub -h broker -t palletheater/set/setpoint -m 21
 
 | Interface | Details |
 |---|---|
-| BLE | GATT server `PalletHeater`, see [BLE_API.md](BLE_API.md). Also supports firmware updates over BLE ([ble_ota.py](ble_ota.py)). |
+| BLE | GATT server `OpenPelletBridge`, see [BLE_API.md](BLE_API.md). Also supports firmware updates over BLE ([ble_ota.py](ble_ota.py)). |
 | Telnet | Port 23, interactive menu for reading and writing values. |
 | ArduinoOTA | Hostname `Pelletheater`, port 3232, password protected. Slow; prefer [`/api/update`](#post-apiupdate). |
-| mDNS | `palletheater.local`, service `_http._tcp`. |
+| mDNS | `openpelletbridge.local`, service `_http._tcp`. |
 
 ## Development
 
@@ -821,12 +823,12 @@ pio device monitor -e esp32doit-devkit-v1-serial
 
 ### CI and releases
 
-[.github/workflows/firmware.yml](.github/workflows/firmware.yml) runs the unit tests and builds the firmware on every push to `master`, every pull request and on demand (*Run workflow*). The images are kept as workflow artifact `palletheater-<version>` (Actions → run → *Artifacts*):
+[.github/workflows/firmware.yml](.github/workflows/firmware.yml) runs the unit tests and builds the firmware on every push to `master`, every pull request and on demand (*Run workflow*). The images are kept as workflow artifact `openpelletbridge-<version>` (Actions → run → *Artifacts*):
 
 | File | Use |
 |---|---|
-| `palletheater-firmware.bin` | OTA image: web app upload, `POST /api/update`, `/api/firmware` |
-| `palletheater-factory.bin` | Complete flash image for a new ESP32: `esptool.py --chip esp32 write_flash 0x0 palletheater-factory.bin` |
+| `openpelletbridge-firmware.bin` | OTA image: web app upload, `POST /api/update`, `/api/firmware` |
+| `openpelletbridge-factory.bin` | Complete flash image for a new ESP32: `esptool.py --chip esp32 write_flash 0x0 openpelletbridge-factory.bin` |
 | `SHA256SUMS` | Checksums |
 
 A tag `vX.Y.Z` also creates a GitHub release with these files, which the controllers then offer as update:
@@ -839,7 +841,7 @@ The firmware version is `git describe --tags`, so the release build reports exac
 
 ### Unit tests
 
-The pure logic (timer and clock encodings, fan and pellet decisions, error debounce, quality labels, address lists, MQTT payloads) lives in [lib/palletcore](lib/palletcore/src/palletcore.h) without Arduino dependencies. It is tested on the development machine:
+The pure logic (timer and clock encodings, fan and pellet decisions, error debounce, quality labels, address lists, MQTT payloads) lives in [lib/pelletcore](lib/pelletcore/src/pelletcore.h) without Arduino dependencies. It is tested on the development machine:
 
 ```bash
 pio test -e native

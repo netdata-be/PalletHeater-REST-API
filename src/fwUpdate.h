@@ -21,7 +21,8 @@
 #ifndef FW_REPO
 #define FW_REPO "netdata-be/PalletHeater-REST-API"
 #endif
-#define FW_ASSET "palletheater-firmware.bin"
+#define FW_ASSET "openpelletbridge-firmware.bin"
+#define FW_ASSET_OLD "palletheater-firmware.bin"   // name up to v1.0.0 (PalletHeater), accepted as fallback
 static const unsigned long FW_FIRST_CHECK_MS = 2UL * 60UL * 1000UL;
 static const unsigned long FW_CHECK_EVERY_MS = 24UL * 3600UL * 1000UL;
 
@@ -46,7 +47,7 @@ static void fwBeginHttps(HTTPClient& http, WiFiClientSecure& client, const Strin
 {
     client.setCACertBundle(caBundle);
     client.setTimeout(15);   // seconds
-    http.setUserAgent("PalletHeater-ESP32");
+    http.setUserAgent("OpenPelletBridge-ESP32");
     http.setTimeout(15000);
     http.setConnectTimeout(10000);
     http.begin(client, url);
@@ -61,6 +62,7 @@ static String fwDoCheck()
     http.useHTTP10(true);   // no chunked encoding: the JSON is parsed straight from the stream
     fwBeginHttps(http, client, "https://api.github.com/repos/" FW_REPO "/releases/latest");
     http.addHeader("Accept", "application/vnd.github+json");
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);   // a renamed repository answers 301 to its new location
     int code = http.GET();
     if (code == 404) { http.end(); return "no release published yet"; }
     if (code != 200) {
@@ -83,7 +85,10 @@ static String fwDoCheck()
     if (!*tag) return "release without tag";
     String url; size_t size = 0;
     for (JsonObject a : doc["assets"].as<JsonArray>()) {
-        if (strcmp(a["name"] | "", FW_ASSET) == 0) { url = a["browser_download_url"] | ""; size = a["size"] | 0; }
+        const char* n = a["name"] | "";
+        bool cur = strcmp(n, FW_ASSET) == 0;
+        if (cur || (strcmp(n, FW_ASSET_OLD) == 0 && !url.length())) { url = a["browser_download_url"] | ""; size = a["size"] | 0; }
+        if (cur) break;
     }
     fwLatest = tag;
     fwReleaseUrl = doc["html_url"] | "";
@@ -252,6 +257,7 @@ void handleRouteFirmware()
     pc::Version v;
     json["devBuild"] = !pc::parseVersion(BUILD_VERSION, v) || v.ahead > 0 || v.dirty;
     json["repo"] = FW_REPO;
+    json["stoveModel"] = BUILD_STOVE_MODEL;
     json["state"] = FW_STATE_STR[st];
     json["autoCheck"] = fwAutoCheck;
     if (st != FW_CHECKING && fwLatest.length()) {

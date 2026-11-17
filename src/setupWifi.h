@@ -36,7 +36,7 @@ void setup_wifi() // Setup WiFiManager and connect to WiFi
     {
         Preferences prefs;
         prefs.begin("net", true);
-        String hn = prefs.getString("hostname", "palletheater");
+        String hn = prefs.getString("hostname", "openpelletbridge");
         String nc = prefs.getString("netcfg", "dhcp");
         prefs.end();
         wm.setHostname(hn.c_str());
@@ -59,7 +59,7 @@ void setup_wifi() // Setup WiFiManager and connect to WiFi
             }
         }
     }
-    wm.setTitle("Palletheater REST API");
+    wm.setTitle("OpenPelletBridge REST API");
     wm.setWiFiAutoReconnect(true);
     std::vector<const char *> menu = {"wifi","wifinoscan","info","param","sep", "custom","sep","restart","erase"};
     wm.setMenu(menu);

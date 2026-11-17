@@ -1,14 +1,14 @@
-# PalletHeater BLE API
+# OpenPelletBridge BLE API
 
 BLE can be switched off via `POST /api/bluetooth?enabled=false` or the web app (applied after a restart); the GATT server described here is then not started.
 
-The ESP32 firmware exposes a GATT server over NimBLE-Arduino. It advertises under the name **PalletHeater** and contains two services: the stove control service and an OTA firmware-update service.
+The ESP32 firmware exposes a GATT server over NimBLE-Arduino. It advertises under the name **OpenPelletBridge** and contains two services: the stove control service and an OTA firmware-update service.
 
 ## Connection parameters
 
 | Parameter | Value |
 |---|---|
-| Device name | `PalletHeater` |
+| Device name | `OpenPelletBridge` |
 | MTU | 185 bytes |
 | TX power | +9 dBm |
 | Advertising interval | 40 – 80 ms |
@@ -45,7 +45,7 @@ Read-only. Updated by the sensor task from the stove UART.
 |---|---|
 | 0 | Off |
 | 1 | Starting |
-| 2 | Pallet loading |
+| 2 | Pellet loading |
 | 3 | Ignition |
 | 4 | Working |
 | 5 | Cleaning |
@@ -147,7 +147,7 @@ Stored in stove EEPROM.
 
 ---
 
-### Low Pallet Alarm
+### Low Pellet Alarm
 
 | Field | Value |
 |---|---|
@@ -440,5 +440,5 @@ Settings that survive restart are stored in ESP32 NVS under namespace `net`:
 
 | Key | Default | Description |
 |---|---|---|
-| `hostname` | `palletheater` | mDNS / DHCP hostname |
+| `hostname` | `openpelletbridge` | mDNS / DHCP hostname |
 | `netcfg` | `dhcp` | IP configuration string (same format as Net Config characteristic) |

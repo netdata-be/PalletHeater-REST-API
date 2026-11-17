@@ -12,14 +12,14 @@ void handleRouteIndex() {
     char page[1600];
     snprintf(page, sizeof(page),
         "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
-        "<title>PalletHeater</title>"
+        "<title>OpenPelletBridge</title>"
         "<style>body{font-family:sans-serif;max-width:480px;margin:40px auto;padding:0 16px}"
         "a{display:block;margin:8px 0;padding:10px 14px;background:#f0f0f0;border-radius:6px;"
         "text-decoration:none;color:#222}a:hover{background:#ddd}"
         "table{border-collapse:collapse;width:100%%}"
         "td{padding:6px 8px;border-bottom:1px solid #eee}td:first-child{color:#666;width:120px}"
         "</style></head><body>"
-        "<h2>PalletHeater</h2>"
+        "<h2>OpenPelletBridge</h2>"
         "<table>"
         "<tr><td>IP</td><td>%s</td></tr>"
         "<tr><td>SSID</td><td>%s</td></tr>"

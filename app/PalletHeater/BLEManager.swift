@@ -51,7 +51,7 @@ enum BLEState {
     var label: String {
         switch self {
         case .idle:         return "Tap to scan"
-        case .scanning:     return "Scanning for PalletHeater…"
+        case .scanning:     return "Scanning for OpenPelletBridge…"
         case .connecting:   return "Connecting…"
         case .connected:    return "Connected"
         case .disconnected: return "Reconnecting…"

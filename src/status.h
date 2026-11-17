@@ -147,6 +147,7 @@ void getStatus()
     obj_ctrl["built"]   = BUILD_TIME;
     obj_ctrl["branch"]  = BUILD_BRANCH;
     obj_ctrl["env"]     = BUILD_ENV;
+    obj_ctrl["stoveModel"] = BUILD_STOVE_MODEL;
 
     if (json.overflowed()) log_e("getStatus: JSON document too small");
     serializeJson(json, buffer);

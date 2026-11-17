@@ -718,7 +718,7 @@ static NimBLECharacteristic* makeChar(NimBLEService* svc, const char* uuid,
 }
 
 void setupBLE() {
-    NimBLEDevice::init("PalletHeater");
+    NimBLEDevice::init("OpenPelletBridge");
     NimBLEDevice::setMTU(185);
     NimBLEDevice::setPower(ESP_PWR_LVL_P9);
     NimBLEDevice::setCustomGapHandler(bleGapLogger);
@@ -743,7 +743,7 @@ void setupBLE() {
     charRoomTemp   = makeChar(stoveSvc, CHAR_ROOM_TEMP_UUID,    RN,  "Room Temp (int16 LE x10 degC)");
     charFumeTemp   = makeChar(stoveSvc, CHAR_FUME_TEMP_UUID,    RN,  "Fume Temp (degC)");
     charBeep       = makeChar(stoveSvc, CHAR_BEEP_UUID,         RWN, "Beep (0=off 1=on)");
-    charLowPallet  = makeChar(stoveSvc, CHAR_LOW_PALLET_UUID,   RN,  "Low Pallet Alarm (0=ok 1=alarm)");
+    charLowPallet  = makeChar(stoveSvc, CHAR_LOW_PALLET_UUID,   RN,  "Low Pellet Alarm (0=ok 1=alarm)");
     charFumeFanRpm = makeChar(stoveSvc, CHAR_FUME_FAN_RPM_UUID, RN,  "Fume Fan RPM (uint16 LE)");
     charCombustion = makeChar(stoveSvc, CHAR_COMBUSTION_UUID,   RWN, "Combustion Quality (2=-3 3=-2 4=-1 5=0 6=+1 7=+2 8=+3 76=+G)");
     charPellet     = makeChar(stoveSvc, CHAR_PELLET_UUID,       RWN, "Pellet Quality (0=-5 1=-4 2=-3 3=-2 4=-1 5=0 6=+1 7=+2 8=+3 9=+4 10=+5)");
@@ -758,7 +758,7 @@ void setupBLE() {
     {
         Preferences prefs;
         prefs.begin("net", true);
-        String hn = prefs.getString("hostname", "palletheater");
+        String hn = prefs.getString("hostname", "openpelletbridge");
         prefs.end();
         const uint32_t RWN = NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY;
         charHostname = makeChar(stoveSvc, CHAR_HOSTNAME_UUID, RWN, "Hostname (UTF-8, takes effect after restart)");
@@ -836,7 +836,7 @@ void setupBLE() {
 
     // Enable NimBLE-Arduino info logs so disconnect reason codes are visible.
     esp_log_level_set("NimBLEServer", ESP_LOG_INFO);
-    Serial.println("BLE GATT started — name: PalletHeater");
+    Serial.println("BLE GATT started — name: OpenPelletBridge");
 }
 
 // Called from loop() — notifies changed characteristic values every 2 s.

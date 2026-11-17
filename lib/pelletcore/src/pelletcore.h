@@ -1,5 +1,5 @@
 #pragma once
-// Pure logic of the PalletHeater firmware: encodings and decisions that do not
+// Pure logic of the OpenPelletBridge firmware: encodings and decisions that do not
 // touch the hardware. No Arduino dependencies, so it is used by the firmware and
 // by the native unit tests (test/, `pio test -e native`).
 #include <cstdint>

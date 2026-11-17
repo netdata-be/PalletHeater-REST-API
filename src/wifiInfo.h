@@ -129,7 +129,7 @@ void handleRouteWifi()
     bool restart = false;
     if (wm.server->method() == HTTP_POST) {
         auto arg = [](const char* k) { String v = wm.server->arg(k); v.trim(); return v; };
-        String err, hostname = netGet("hostname", "palletheater"), netcfg = netGet("netcfg", "dhcp");
+        String err, hostname = netGet("hostname", "openpelletbridge"), netcfg = netGet("netcfg", "dhcp");
         bool pend = false;
         if (wm.server->hasArg("hostname")) {
             String h = arg("hostname");
@@ -201,7 +201,7 @@ void handleRouteWifi()
     json["sleep"] = WiFi.getSleep();
     String nc = netGet("netcfg", "dhcp");
     JsonObject saved = json.createNestedObject("saved");
-    saved["hostname"] = netGet("hostname", "palletheater");
+    saved["hostname"] = netGet("hostname", "openpelletbridge");
     if (nc.startsWith("static,")) {
         saved["mode"] = "static";
         String r = nc.substring(7);

@@ -2,7 +2,7 @@
 // MQTT: publishes the cached stove values and accepts commands, in both
 // directions. Optional Home Assistant MQTT discovery.
 //
-// Topics (base = prefix, default "palletheater"):
+// Topics (base = prefix, default "openpelletbridge"):
 //   <base>/status                 online / offline (retained, last will)
 //   <base>/state/<name>           plain values, retained, e.g. room_temp = 21.5,
 //                                 power = ON / OFF. Published on change (checked
@@ -26,7 +26,7 @@ struct MqttConfig {
     uint16_t port = 1883;
     String user;
     String pass;
-    String prefix = "palletheater";
+    String prefix = "openpelletbridge";
     bool   discovery = true;
     String discoveryPrefix = "homeassistant";
 };
@@ -55,7 +55,7 @@ static void mqttLoadConfig()
     mqttCfg.port            = p.getUShort("port", 1883);
     mqttCfg.user            = p.getString("user", "");
     mqttCfg.pass            = p.getString("pass", "");
-    mqttCfg.prefix          = p.getString("prefix", "palletheater");
+    mqttCfg.prefix          = p.getString("prefix", "openpelletbridge");
     mqttCfg.discovery       = p.getBool("disc", true);
     mqttCfg.discoveryPrefix = p.getString("discpre", "homeassistant");
     p.end();
@@ -149,9 +149,10 @@ static void mqttDiscoveryEntity(const char* component, const char* id, const cha
     }
     JsonObject dev = o.createNestedObject("device");
     dev.createNestedArray("identifiers").add(mqttClientId);
-    dev["name"] = "PalletHeater";
-    dev["manufacturer"] = "Micronova (PalletHeater controller)";
-    dev["model"] = cachedFirmwareVersion;
+    dev["name"] = "OpenPelletBridge";
+    dev["manufacturer"] = "Micronova (OpenPelletBridge controller)";
+    dev["model"] = BUILD_STOVE_MODEL;                 // the stove this firmware is built for
+    if (cachedFirmwareVersion[0] && strcmp(cachedFirmwareVersion, "Unknown") != 0) dev["hw_version"] = cachedFirmwareVersion;   // firmware of the stove board
     dev["sw_version"] = BUILD_VERSION;
     dev["configuration_url"] = "http://" + WiFi.localIP().toString() + "/app";
     if (fill) fill(o);
@@ -283,7 +284,7 @@ void mqttSetup()
 {
     mqttLoadConfig();
     uint64_t mac = ESP.getEfuseMac();
-    char id[24]; snprintf(id, sizeof(id), "palletheater_%06x", (uint32_t)(mac >> 24) & 0xFFFFFF);
+    char id[32]; snprintf(id, sizeof(id), "openpelletbridge_%06x", (uint32_t)(mac >> 24) & 0xFFFFFF);
     mqttClientId = id;
     mqtt.setBufferSize(1024);     // discovery messages are ~600 bytes
     mqtt.setSocketTimeout(2);     // do not block the loop long when the broker is down
