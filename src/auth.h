@@ -43,8 +43,9 @@ void authInit()
 void authCollectHeaders()
 {
     // Content-Type: /api/update must only touch the upload for multipart requests (httpUpdate.h)
-    static const char* keys[] = { "X-API-Key", "Authorization", "X-OTA-Password", "Content-Type" };
-    wm.server->collectHeaders(keys, 4);
+    // Accept-Encoding: the web app and spec are only served gzipped (routesBasic.h)
+    static const char* keys[] = { "X-API-Key", "Authorization", "X-OTA-Password", "Content-Type", "Accept-Encoding" };
+    wm.server->collectHeaders(keys, 5);
 }
 
 static bool constantTimeEquals(const String& a, const String& b)

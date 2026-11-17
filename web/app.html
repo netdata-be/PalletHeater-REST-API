@@ -242,6 +242,12 @@ details.tbl th:first-child,details.tbl td:first-child{text-align:left}
 .remote-info{flex:1;min-width:200px}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;overflow-wrap:anywhere}
 .keybtns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+[hidden]{display:none!important}   /* class display rules must not override the hidden attribute */
+.mqform{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;padding:4px 0 12px;font-size:13px}
+.mqform label{display:flex;flex-direction:column;gap:3px;color:var(--muted)}
+.mqform label:has(input[type=checkbox]){flex-direction:row;align-items:center;justify-content:space-between;color:var(--text)}
+.mqform input:not([type=checkbox]){width:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:7px 10px;color:var(--text)}
+@media (max-width:420px){.mqform{grid-template-columns:1fr}}
 .fwprog{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin:0 0 10px}
 .fwprog div{height:100%;width:0;background:var(--accent);transition:width .2s}
 .keybtns button{padding:5px 10px;font-size:13px}
@@ -447,6 +453,15 @@ body:not(.debug) .d{display:none!important}
       <span class="lbl">API-key<span class="hint mono" id="keyVal">–</span></span>
       <span class="keybtns"><button id="keyShow" data-i="keyShow"></button><button id="keyCopy" data-i="keyCopy"></button><button id="keyRotate" data-i="keyRotate"></button></span>
     </div>
+    <div class="row" id="ghRow" hidden>
+      <span class="lbl"><span data-i="ghTitle"></span><span data-help="ghUpdate"></span><span class="hint" id="ghHint">&nbsp;</span><a class="hint" id="ghNotes" target="_blank" rel="noopener" data-i="ghNotes" hidden></a></span>
+      <span class="keybtns"><button id="ghCheck" data-i="ghCheck"></button><button id="ghInstall" class="primary" hidden></button></span>
+    </div>
+    <div id="ghProg" class="fwprog" hidden><div id="ghBar"></div></div>
+    <div class="row x" id="ghAutoRow" hidden>
+      <span class="lbl"><span data-i="ghAuto"></span><span class="hint" data-i="ghAutoHint"></span></span>
+      <label class="switch"><input type="checkbox" id="ghAuto"><span></span></label>
+    </div>
     <div class="row x" id="fwRow">
       <span class="lbl"><span data-i="fwUpdate"></span><span data-help="fwUpdate"></span><span class="hint" id="fwHint" data-i="fwHint"></span></span>
       <span class="keybtns"><input type="file" id="fwFile" accept=".bin,application/octet-stream" hidden><button id="fwPick" data-i="fwPick"></button></span>
@@ -457,9 +472,53 @@ body:not(.debug) .d{display:none!important}
     <div class="actions">
       <a class="x" href="/api"><button data-i="apiDocs"></button></a>
       <a class="x" href="/metrics"><button>Metrics</button></a>
-      <a class="x" href="/"><button data-i="devicePage"></button></a>
+      <a class="x" href="/device"><button data-i="devicePage"></button></a>
       <button class="danger" id="restart" data-i="restart"></button>
     </div>
+  </section>
+
+  <!-- Network -->
+  <section class="card" id="wifiCard">
+    <h2><span><span data-i="wifiTitle"></span><span data-help="wifi"></span></span><span class="keybtns"><button id="wifiNetBtn" data-i="wifiOther"></button><button id="wifiEditBtn" data-i="wifiIpBtn"></button></span></h2>
+    <dl id="wifiList"></dl>
+    <p class="muted" id="wifiNote" style="font-size:12px;margin:8px 0 0" hidden></p>
+    <form id="wifiNetForm" class="mqform" hidden autocomplete="off">
+      <div class="tsub" style="grid-column:1/-1;margin:0" data-i="wifiChange"></div>
+      <label style="grid-column:1/-1"><span data-i="wifiNet"></span>
+        <span style="display:flex;gap:6px"><select id="wnSsid" style="flex:1;min-width:0"></select><button type="button" id="wnScan" data-i="wifiScan"></button></span></label>
+      <label id="wnManualRow" hidden style="grid-column:1/-1"><span data-i="wifiSsidManual"></span><input id="wnManual" spellcheck="false" maxlength="32"></label>
+      <label style="grid-column:1/-1"><span data-i="mqttPass"></span><input id="wnPass" type="password" autocomplete="new-password" maxlength="63"></label>
+      <p class="muted" style="grid-column:1/-1;margin:0" data-i="wifiChangeNote"></p>
+      <div class="actions" style="justify-content:flex-end;grid-column:1/-1;margin-top:4px"><button type="button" id="wnCancel" data-i="cancel"></button><button type="submit" class="primary" data-i="wifiSwitch"></button></div>
+    </form>
+    <form id="wifiForm" class="mqform" hidden autocomplete="off">
+      <div class="tsub" style="grid-column:1/-1;margin:0" data-i="wifiIpSettings"></div>
+      <label><span>Hostname</span><input id="wfHost" spellcheck="false" placeholder="palletheater"></label>
+      <label><span data-i="wifiMode"></span><select id="wfMode"><option value="dhcp">DHCP</option><option value="static" data-i="wifiStatic"></option></select></label>
+      <label class="wfs"><span data-i="wifiIp"></span><input id="wfIp" spellcheck="false" placeholder="192.168.1.50"></label>
+      <label class="wfs"><span data-i="wifiMask"></span><input id="wfMask" spellcheck="false" placeholder="255.255.255.0"></label>
+      <label class="wfs"><span>Gateway</span><input id="wfGw" spellcheck="false" placeholder="192.168.1.1"></label>
+      <label class="wfs"><span>DNS</span><input id="wfDns" spellcheck="false" placeholder="192.168.1.1"></label>
+      <p class="muted" style="grid-column:1/-1;margin:0" data-i="wifiFormNote"></p>
+      <div class="actions" style="justify-content:flex-end;grid-column:1/-1;margin-top:4px"><button type="button" id="wfCancel" data-i="cancel"></button><button type="button" id="wfSave" data-i="save2"></button><button type="submit" class="primary" id="wfSaveRestart" data-i="wifiSaveRestart"></button></div>
+    </form>
+  </section>
+
+  <!-- MQTT -->
+  <section class="card" id="mqttCard">
+    <h2><span><span>MQTT</span><span data-help="mqtt"></span></span><button id="mqttEdit" data-i="mqttEdit"></button></h2>
+    <dl id="mqttList"></dl>
+    <form id="mqttForm" class="mqform" hidden autocomplete="off">
+      <label><span data-i="mqttEnabled"></span><input type="checkbox" id="mqEnabled"></label>
+      <label><span>Broker</span><input id="mqHost" placeholder="192.168.1.10" spellcheck="false"></label>
+      <label><span>Port</span><input id="mqPort" type="number" min="1" max="65535" placeholder="1883"></label>
+      <label><span data-i="mqttUser"></span><input id="mqUser" spellcheck="false"></label>
+      <label><span data-i="mqttPass"></span><input id="mqPass" type="password" autocomplete="new-password"></label>
+      <label><span data-i="mqttPrefix"></span><input id="mqPrefix" placeholder="palletheater" spellcheck="false"></label>
+      <label><span data-i="mqttDisc"></span><input type="checkbox" id="mqDisc"></label>
+      <label><span data-i="mqttDiscPrefix"></span><input id="mqDiscPrefix" placeholder="homeassistant" spellcheck="false"></label>
+      <div class="actions" style="justify-content:flex-end;grid-column:1/-1;margin-top:4px"><button type="button" id="mqCancel" data-i="cancel"></button><button type="submit" class="primary" id="mqSave" data-i="save2"></button></div>
+    </form>
   </section>
 
   <!-- Known EEPROM parameters (debug only) -->
@@ -505,6 +564,21 @@ const I18N = {
     energySaving:"Energy saving", esHint:"Stop when warm, restart when it cools down", esStart:"Restart below set point", esStop:"Stop above set point",
     restartsAt:"Restarts at {0}", esRestartAt:"Energy saving · restarts at {0}", esReduced:"Energy saving · reduced power", reducedPower:"Reduced power (set point reached)",
     ctrlFw:"Controller firmware", ctrlBuilt:"Built on",
+    wifiOther:"Other network", wifiIpBtn:"IP settings", wifiChange:"Change WiFi network", wifiIpSettings:"Hostname and IP address", wifiScan:"Scan", wifiScanning:"Scanning…",
+    wifiSsidManual:"Other / hidden network", wifiCurrent:"current", wifiSwitch:"Switch", wifiPassLen:"The WiFi password must be 8 – 63 characters (or empty for an open network)",
+    wifiSwitching:"Switching to {0} – open the app again in a moment", wifiLastChange:"Last network change: {0}.",
+    wifiChangeNote:"The controller switches right away and uses DHCP on the new network. Without a connection within 25 s it goes back to the current network; once connected, open the app on the new network within 5 minutes (hostname.local), otherwise it also goes back.",
+    wifiConfirmSwitch:"Switch the controller to \"{0}\"? It leaves \"{1}\" now. Open the app again on {2} within 5 minutes; without a connection or without a visit it returns to \"{1}\" by itself.",
+    wifiTitle:"Network (WiFi)", wifiNet:"Network", wifiSignal:"Signal", wifiIp:"IP address", wifiMask:"Netmask", wifiChannel:"Channel", wifiDown:"not connected",
+    wifiMode:"Address", wifiStatic:"Static", wifiStaticShort:"static", wifiSaveRestart:"Save and restart", wifiSaved:"Network settings saved – active after a restart",
+    wifiRestartReq:"Saved settings differ from the running ones: active after a restart.", wifiConfirmed:"New static address: open the app on it within 5 minutes, otherwise the controller goes back to DHCP.",
+    wifiConfirmRestart:"Save and restart the controller? It will then be reachable on {0}. With a new static address, open the app there within 5 minutes; otherwise it switches back to DHCP by itself.",
+    wifiFormNote:"Changes take effect after a restart. A new static address must be confirmed: open the app on it within 5 minutes, otherwise the controller returns to DHCP.",
+    h_wifi:"WiFi connection and IP settings of the controller. Use 'Other network' to switch to another WiFi network (with automatic fall back), 'IP settings' for hostname and DHCP / static IP. Without any working network: hold the reset button 5 s and connect to the access point 'Pellet heater controller' (WiFiManager portal).",
+    mqttConn:"connected", mqttNotConn:"not connected", mqttLastError:"Last error", mqttCounts:"Published / commands",
+    mqttEdit:"Settings", mqttEnabled:"MQTT on", mqttUser:"User", mqttPass:"Password", mqttPrefix:"Topic prefix", mqttDisc:"Home Assistant discovery", mqttDiscPrefix:"Discovery prefix",
+    mqttNone:"Not available (older firmware)", mqttOff:"Off", mqttConnected:"Connected to {0} – topics {1}/…", mqttDisconnected:"Not connected to {0}: {1}", mqttPassKeep:"unchanged", mqttSaved:"MQTT settings saved", cancel:"Cancel",
+    h_mqtt:"Publishes the stove values to an MQTT broker and accepts commands. Values are plain text under <prefix>/state/… (e.g. room_temp = 21.5, power = ON), retained, on change and every 5 min. Commands go to <prefix>/set/…: power and energy_saving (ON / OFF or 1 / 0), mode (heat / off), setpoint (7 – 30), flame_power (1 – 4), fan_speed (off / 0 – 3), es_stop and es_start (0 – 3). <prefix>/status is online / offline. With Home Assistant discovery on, the stove appears in Home Assistant by itself (climate, switches, numbers, sensors). Other systems such as Loxone (through an MQTT gateway) or Node-RED use the same topics; discovery can stay off for them.",
     parTitle:"Parameters (EEPROM)", h_par:"Settings and presets stored in the stove EEPROM, read live (GET /api/dump). 'Verified' = checked on this stove, 'documentation' = from the documentation or other Micronova maps but not checked here. The presets per power level are the values the stove uses at each flame power; the row of the current actual flame power is highlighted.",
     parPresets:"Presets per power level", parSettings:"Settings and counters", parLevel:"Level", parAuger:"Auger value", parFume:"Fume fan target", parNow:"now",
     parRaw:"Raw", parName:"Parameter", parMeaning:"Value", stOk:"verified", stDoc:"documentation",
@@ -518,6 +592,13 @@ const I18N = {
     h_brazier:"While burning the stove cleans the brazier at a fixed interval (EEPROM 0x02, in minutes): the fume fan speeds up and the stove briefly shows 'Brazier cleaning'. RAM 0x32 counts down the minutes to the next cleaning. Only shown while the stove is working.",
     fwUpdate:"Upload PalletHeater firmware", fwHint:"Upload a firmware.bin (from .pio/build/…)", fwPick:"Choose file…", fwBadFile:"Choose the firmware .bin file",
     fwConfirm:"Install {0} ({1} MB)? The controller restarts afterwards; the stove keeps running.", fwProgress:"Uploading… {0}% · {1} KB/s",
+    ghTitle:"PalletHeater firmware", ghCheck:"Check for update", ghInstall:"Install {0}", ghNotes:"Release notes",
+    ghChecking:"Checking GitHub…", ghDownloading:"Downloading and installing… {0}%", ghNever:"Not checked yet", ghError:"Check failed: {0}",
+    ghAvail:"New version {0} available (since {1}) – you have {2}", ghUpToDate:"Up to date ({0})", ghDev:"Development build {1} – latest release {0}",
+    ghConfirm:"Install {0} from GitHub? The controller downloads it, restarts and is unreachable for about a minute; the stove keeps running.",
+    ghConfirmDev:"This controller runs development build {1}. Install release {0} from GitHub instead? It restarts and is unreachable for about a minute; the stove keeps running.",
+    ghAuto:"Check for updates automatically", ghAutoHint:"2 min after start-up, then daily (GitHub)",
+    h_ghUpdate:"New versions of the PalletHeater firmware (the ESP32 controller, NOT the stove) are published as GitHub releases of github.com/netdata-be/PalletHeater-REST-API. The controller checks the latest release (automatically once a day, or with the button) and installs it only when you ask: it downloads the image over HTTPS, verifies it and restarts. Settings are kept. A development build (version not from a release tag) is not offered an update, but you can install the release over it.",
     fwRestarting:"Installed – controller restarts…", fwNoAnswer:"No answer after the restart – reload the page", fwFailed:"Update failed: {0}",
     h_fwUpdate:"This is the firmware of the PalletHeater controller (the ESP32), NOT of the pellet stove itself: the stove firmware cannot be changed this way. Installs it over HTTP (POST /api/update), several times faster than ArduinoOTA. Use the firmware.bin from .pio/build/<environment>/. The controller restarts after the update; the stove itself is not affected. Requires the API key (or the OTA password).", esNoRestartSub:"Energy saving · no automatic restart", stopsAt:"Stops at {0}", useSwitch:"Use the switch to turn energy saving off",
     status:"Status", history:"History", temperatures:"Temperatures", room:"Room", fumeTemp:"Fume temperature", showTable:"Show as table",
@@ -606,6 +687,21 @@ const I18N = {
     energySaving:"Energy saving", esHint:"Stopt als het warm is, herstart als het afkoelt", esStart:"Herstart onder gewenste temp.", esStop:"Stop boven gewenste temp.",
     restartsAt:"Herstart bij {0}", esRestartAt:"Energy saving · herstart bij {0}", esReduced:"Energy saving · gereduceerd vermogen", reducedPower:"Gereduceerd vermogen (gewenste temperatuur bereikt)",
     ctrlFw:"Firmware controller", ctrlBuilt:"Gebouwd op",
+    wifiOther:"Ander netwerk", wifiIpBtn:"IP-instellingen", wifiChange:"WiFi-netwerk wijzigen", wifiIpSettings:"Hostname en IP-adres", wifiScan:"Zoeken", wifiScanning:"Zoeken…",
+    wifiSsidManual:"Ander / verborgen netwerk", wifiCurrent:"huidig", wifiSwitch:"Overschakelen", wifiPassLen:"Het WiFi-wachtwoord moet 8 – 63 tekens zijn (of leeg voor een open netwerk)",
+    wifiSwitching:"Overschakelen naar {0} – open de app straks opnieuw", wifiLastChange:"Laatste netwerkwissel: {0}.",
+    wifiChangeNote:"De controller schakelt meteen over en gebruikt DHCP op het nieuwe netwerk. Zonder verbinding binnen 25 s keert hij terug naar het huidige netwerk; eens verbonden: open de app binnen 5 minuten op het nieuwe netwerk (hostname.local), anders keert hij ook terug.",
+    wifiConfirmSwitch:"De controller overschakelen naar \"{0}\"? Hij verlaat nu \"{1}\". Open de app binnen 5 minuten opnieuw op {2}; zonder verbinding of zonder bezoek keert hij zelf terug naar \"{1}\".",
+    wifiTitle:"Netwerk (WiFi)", wifiNet:"Netwerk", wifiSignal:"Signaal", wifiIp:"IP-adres", wifiMask:"Netmasker", wifiChannel:"Kanaal", wifiDown:"niet verbonden",
+    wifiMode:"Adres", wifiStatic:"Vast", wifiStaticShort:"vast", wifiSaveRestart:"Bewaren en herstarten", wifiSaved:"Netwerkinstellingen bewaard – actief na een herstart",
+    wifiRestartReq:"De bewaarde instellingen verschillen van de actieve: actief na een herstart.", wifiConfirmed:"Nieuw vast adres: open de app daarop binnen 5 minuten, anders gaat de controller terug naar DHCP.",
+    wifiConfirmRestart:"Bewaren en de controller herstarten? Hij is daarna bereikbaar op {0}. Bij een nieuw vast adres: open de app daar binnen 5 minuten, anders schakelt hij zelf terug naar DHCP.",
+    wifiFormNote:"Wijzigingen zijn actief na een herstart. Een nieuw vast adres moet bevestigd worden: open de app daarop binnen 5 minuten, anders gaat de controller terug naar DHCP.",
+    h_wifi:"WiFi-verbinding en IP-instellingen van de controller. Met 'Ander netwerk' schakel je over naar een ander WiFi-netwerk (met automatische terugval), met 'IP-instellingen' stel je hostname en DHCP / vast IP in. Zonder werkend netwerk: houd de resetknop 5 s ingedrukt en verbind met het toegangspunt 'Pellet heater controller' (WiFiManager-portaal).",
+    mqttConn:"verbonden", mqttNotConn:"niet verbonden", mqttLastError:"Laatste fout", mqttCounts:"Gepubliceerd / commando's",
+    mqttEdit:"Instellen", mqttEnabled:"MQTT aan", mqttUser:"Gebruiker", mqttPass:"Wachtwoord", mqttPrefix:"Topic-prefix", mqttDisc:"Home Assistant discovery", mqttDiscPrefix:"Discovery-prefix",
+    mqttNone:"Niet beschikbaar (oudere firmware)", mqttOff:"Uit", mqttConnected:"Verbonden met {0} – topics {1}/…", mqttDisconnected:"Niet verbonden met {0}: {1}", mqttPassKeep:"ongewijzigd", mqttSaved:"MQTT-instellingen bewaard", cancel:"Annuleren",
+    h_mqtt:"Publiceert de waarden van de kachel naar een MQTT-broker en aanvaardt commando's. Waarden staan als gewone tekst onder <prefix>/state/… (bv. room_temp = 21.5, power = ON), retained, bij elke wijziging en elke 5 min. Commando's gaan naar <prefix>/set/…: power en energy_saving (ON / OFF of 1 / 0), mode (heat / off), setpoint (7 – 30), flame_power (1 – 4), fan_speed (off / 0 – 3), es_stop en es_start (0 – 3). <prefix>/status is online / offline. Met Home Assistant discovery aan verschijnt de kachel vanzelf in Home Assistant (thermostaat, schakelaars, getallen, sensoren). Andere systemen zoals Loxone (via een MQTT-gateway) of Node-RED gebruiken dezelfde topics; discovery mag voor hen uit.",
     parTitle:"Parameters (EEPROM)", h_par:"Instellingen en presets in het EEPROM van de kachel, live gelezen (GET /api/dump). 'Bevestigd' = nagekeken op deze kachel, 'documentatie' = uit de documentatie of andere Micronova-overzichten maar hier niet nagekeken. De presets per vermogen zijn de waarden die de kachel per vlamvermogen gebruikt; de rij van het huidige werkelijke vlamvermogen is gemarkeerd.",
     parPresets:"Presets per vermogen", parSettings:"Instellingen en tellers", parLevel:"Niveau", parAuger:"Schroefwaarde", parFume:"Doeltoerental rookgasventilator", parNow:"nu",
     parRaw:"Ruw", parName:"Parameter", parMeaning:"Waarde", stOk:"bevestigd", stDoc:"documentatie",
@@ -619,6 +715,13 @@ const I18N = {
     h_brazier:"Tijdens het branden reinigt de kachel de brander op een vast interval (EEPROM 0x02, in minuten): de rookgasventilator draait harder en de kachel toont kort 'Brander reinigen'. RAM 0x32 telt de minuten af tot de volgende reiniging. Enkel zichtbaar terwijl de kachel brandt.",
     fwUpdate:"Upload PalletHeater firmware", fwHint:"Upload een firmware.bin (uit .pio/build/…)", fwPick:"Kies bestand…", fwBadFile:"Kies het firmware-bestand (.bin)",
     fwConfirm:"{0} ({1} MB) installeren? De controller herstart daarna; de kachel blijft gewoon werken.", fwProgress:"Uploaden… {0}% · {1} KB/s",
+    ghTitle:"PalletHeater-firmware", ghCheck:"Zoek update", ghInstall:"Installeer {0}", ghNotes:"Release-notes",
+    ghChecking:"GitHub nakijken…", ghDownloading:"Downloaden en installeren… {0}%", ghNever:"Nog niet nagekeken", ghError:"Nakijken mislukt: {0}",
+    ghAvail:"Nieuwe versie {0} beschikbaar (sinds {1}) – je hebt {2}", ghUpToDate:"Up-to-date ({0})", ghDev:"Ontwikkelversie {1} – laatste release {0}",
+    ghConfirm:"{0} van GitHub installeren? De controller downloadt ze, herstart en is ongeveer een minuut onbereikbaar; de kachel blijft gewoon werken.",
+    ghConfirmDev:"Deze controller draait ontwikkelversie {1}. Release {0} van GitHub in de plaats installeren? Hij herstart en is ongeveer een minuut onbereikbaar; de kachel blijft gewoon werken.",
+    ghAuto:"Automatisch zoeken naar updates", ghAutoHint:"2 min na het opstarten, daarna dagelijks (GitHub)",
+    h_ghUpdate:"Nieuwe versies van de PalletHeater-firmware (de ESP32-controller, NIET de kachel) verschijnen als GitHub-release van github.com/netdata-be/PalletHeater-REST-API. De controller kijkt de laatste release na (automatisch eens per dag, of met de knop) en installeert ze enkel als jij dat vraagt: hij downloadt het image via HTTPS, controleert het en herstart. Instellingen blijven bewaard. Een ontwikkelversie (versie niet van een release-tag) krijgt geen update aangeboden, maar je kan de release er wel over installeren.",
     fwRestarting:"Geïnstalleerd – controller herstart…", fwNoAnswer:"Geen antwoord na de herstart – herlaad de pagina", fwFailed:"Update mislukt: {0}",
     h_fwUpdate:"Dit is de firmware van de PalletHeater-controller (de ESP32), NIET van de pelletkachel zelf: de firmware van de kachel kan je hiermee niet wijzigen. Installeert ze via HTTP (POST /api/update), meerdere keren sneller dan ArduinoOTA. Gebruik firmware.bin uit .pio/build/<omgeving>/. De controller herstart na de update; de kachel zelf merkt er niets van. Vereist de API-key (of het OTA-wachtwoord).", esNoRestartSub:"Energy saving · geen automatische herstart", stopsAt:"Stopt bij {0}", useSwitch:"Gebruik de schakelaar om energy saving uit te zetten",
     status:"Status", history:"Geschiedenis", temperatures:"Temperaturen", room:"Kamer", fumeTemp:"Rookgastemperatuur", showTable:"Toon als tabel",
@@ -815,7 +918,7 @@ function helpBtn(key) {
     ev.stopPropagation();
     if (popOwner === b) { hidePop(); return; }
     hidePop();
-    pop.textContent = t(key); if (key !== "h_hyp") pop.appendChild(el("span", "src", t("manualRef")));   // the hypotheses are not from the manual
+    pop.textContent = t(key); if (!["h_hyp", "h_par", "h_mqtt", "h_wifi", "h_ghUpdate"].includes(key)) pop.appendChild(el("span", "src", t("manualRef")));   // these texts are not from the manual
     pop.style.display = "block";
     const r = b.getBoundingClientRect(), w = Math.min(340, window.innerWidth - 24);
     pop.style.maxWidth = w + "px";
@@ -1023,7 +1126,203 @@ $("fwFile").onchange = async () => {
   xhr.send(fd);
 };
 
+// ---------- firmware update from GitHub Releases (/api/firmware) ----------
+let fwInfo = null, fwFastT = null;
+function waitRestartThenReload(hint) {
+  const waitBack = async (n) => {
+    try { const r = await fetch("/api/state", { cache: "no-store" }); if (r.ok || r.status === 401) { location.reload(); return; } } catch (_) {}
+    if (n > 0) setTimeout(() => waitBack(n - 1), 2000); else hint.textContent = t("fwNoAnswer");
+  };
+  setTimeout(() => waitBack(60), 5000);
+}
+function renderFw() {
+  const f = fwInfo, hint = $("ghHint"), inst = $("ghInstall"), notes = $("ghNotes");
+  $("ghRow").hidden = $("ghAutoRow").hidden = !f;   // older firmware without /api/firmware
+  if (!f) return;
+  $("ghAuto").checked = !!f.autoCheck;
+  const working = ["checking", "downloading", "restarting"].includes(f.state);
+  const p = f.progress || {}, pct = p.total ? Math.round(p.done / p.total * 100) : 0;
+  let txt;
+  if (f.state === "checking") txt = t("ghChecking");
+  else if (f.state === "downloading") txt = t("ghDownloading", pct);
+  else if (f.state === "restarting") txt = t("fwRestarting");
+  else if (f.state === "error") txt = t("ghError", f.lastError || "?");
+  else if (!f.latest) txt = t("ghNever");
+  else if (f.updateAvailable) txt = t("ghAvail", f.latest, f.published ? fmtDate(new Date(f.published)) : "?", f.current);
+  else if (f.devBuild) txt = t("ghDev", f.latest, f.current);
+  else txt = t("ghUpToDate", f.latest);
+  hint.textContent = txt;
+  notes.hidden = !f.releaseUrl || working; if (f.releaseUrl) notes.href = f.releaseUrl;
+  $("ghCheck").disabled = working;
+  $("ghProg").hidden = !(f.state === "downloading" || f.state === "restarting");
+  $("ghBar").style.width = (f.state === "restarting" ? 100 : pct) + "%";
+  const canInstall = !working && !!f.latest && f.assetAvailable && (f.updateAvailable || f.devBuild);
+  inst.hidden = !canInstall; if (canInstall) inst.textContent = t("ghInstall", f.latest);
+  clearTimeout(fwFastT);
+  if (f.state === "restarting") { waitRestartThenReload(hint); return; }
+  if (working) fwFastT = setTimeout(loadFw, 1500);   // follow the check / download closely
+}
+async function loadFw() { try { fwInfo = (await api("GET", "/api/firmware")).data; } catch (_) { fwInfo = null; } renderFw(); }
+async function fwAction(params, label) {
+  try { fwInfo = (await api("POST", "/api/firmware", params)).data; toast(label); }
+  catch (e) { toast(t("failed", label, e.message), true); }
+  loadFw();
+}
+$("ghCheck").onclick = () => fwAction({ action: "check" }, t("ghChecking"));
+$("ghInstall").onclick = async () => {
+  const f = fwInfo; if (!f) return;
+  if (!confirm(t(f.updateAvailable ? "ghConfirm" : "ghConfirmDev", f.latest, f.current))) return;
+  const p = { action: "install" }; if (!f.updateAvailable) p.force = true;
+  fwAction(p, t("ghDownloading", 0));
+};
+$("ghAuto").onchange = async e => {
+  try { fwInfo = await write(t("save2"), "POST", "/api/firmware", { autoCheck: e.target.checked }); renderFw(); }
+  catch (_) { e.target.checked = !e.target.checked; }
+};
+
 $("restart").onclick = async () => { if (!confirm(t("confirmRestart"))) return; try { await fetch("/restart", { headers: storedKey() ? { "X-API-Key": storedKey() } : {} }); } catch (_) {} toast(t("restarting")); };
+
+
+// ---------- MQTT (expert) ----------
+let mqttCfg = null;
+function renderMqtt() {
+  const c = mqttCfg;
+  if (!c) { fillDl($("mqttList"), [[t("status"), t("mqttNone")]]); $("mqttEdit").disabled = true; return; }
+  $("mqttEdit").disabled = false;
+  const st = !c.enabled ? pill(t("mqttOff"), "") : c.connected ? pill(t("mqttConn"), "ok") : pill(t("mqttNotConn"), "err");
+  const rows = [[t("status"), st]];
+  if (c.enabled || c.host) rows.push(["Broker", c.host ? c.host + ":" + c.port : "–"]);
+  if (c.enabled && !c.connected && c.lastError) rows.push([t("mqttLastError"), c.lastError]);
+  rows.push([t("mqttPrefix"), c.prefix + "/…"],
+    [t("mqttDisc"), c.discovery ? t("on") + " (" + c.discoveryPrefix + "/…)" : t("off")],
+    [t("mqttUser"), c.user || "–"],
+    ["Client-id", c.clientId || "–", true],
+    [t("mqttCounts"), (c.publishes ?? 0) + " / " + (c.commands ?? 0), true]);
+  fillDl($("mqttList"), rows);
+}
+function fillMqttForm() {
+  const c = mqttCfg || {};
+  $("mqEnabled").checked = !!c.enabled; $("mqHost").value = c.host || ""; $("mqPort").value = c.port || 1883;
+  $("mqUser").value = c.user || ""; $("mqPass").value = ""; $("mqPass").placeholder = c.passwordSet ? t("mqttPassKeep") : "";
+  $("mqPrefix").value = c.prefix || "palletheater"; $("mqDisc").checked = c.discovery !== false; $("mqDiscPrefix").value = c.discoveryPrefix || "homeassistant";
+}
+async function loadMqtt() {
+  try { mqttCfg = (await api("GET", "/api/mqtt")).data; } catch (_) { mqttCfg = null; }
+  renderMqtt();
+}
+$("mqttEdit").onclick = () => { const f = $("mqttForm"); f.hidden = !f.hidden; if (!f.hidden) fillMqttForm(); };
+$("mqCancel").onclick = () => { $("mqttForm").hidden = true; };
+$("mqttForm").onsubmit = async e => {
+  e.preventDefault();
+  const p = { enabled: $("mqEnabled").checked, host: $("mqHost").value.trim(), port: $("mqPort").value || 1883, user: $("mqUser").value.trim(),
+              prefix: $("mqPrefix").value.trim() || "palletheater", discovery: $("mqDisc").checked, discoveryPrefix: $("mqDiscPrefix").value.trim() || "homeassistant" };
+  if ($("mqPass").value) p.password = $("mqPass").value;
+  try { mqttCfg = await write(t("mqttSaved"), "POST", "/api/mqtt", p); $("mqttForm").hidden = true; } catch (_) {}
+  renderMqtt(); setTimeout(loadMqtt, 4000);   // the connection is made from the loop, shortly after saving
+};
+
+
+// ---------- WiFi / network ----------
+let wifiInfo = null;
+function renderWifi() {
+  const w = wifiInfo;
+  if (!w) { fillDl($("wifiList"), [[t("status"), t("mqttNone")]]); $("wifiEditBtn").disabled = true; $("wifiNetBtn").disabled = true; return; }
+  $("wifiEditBtn").disabled = false; $("wifiNetBtn").disabled = false;
+  const q = w.quality, sig = w.connected ? pill(w.rssi + " dBm · " + q + "%", q >= 50 ? "ok" : q >= 30 ? "warn" : "err") : pill(t("wifiDown"), "err");
+  const sv = w.saved || {};
+  fillDl($("wifiList"), [
+    [t("wifiNet"), w.ssid || "–"],
+    [t("wifiSignal"), sig],
+    [t("wifiIp"), w.ip + (sv.mode === "static" ? " (" + t("wifiStaticShort") + ")" : " (DHCP)")],
+    [t("wifiMask"), w.netmask, true],
+    ["Gateway", w.gateway],
+    ["DNS", w.dns, true],
+    ["Hostname", w.hostname + ".local"],
+    ["MAC", w.mac, true],
+    [t("wifiChannel"), w.channel + (w.bssid ? " · " + w.bssid : ""), true],
+  ]);
+  const note = $("wifiNote"), msgs = [];
+  if (w.restartRequired) msgs.push(t("wifiRestartReq"));
+  if (w.confirmSecondsLeft !== undefined) msgs.push(t("wifiConfirmed"));
+  if (w.lastChange) msgs.push(t("wifiLastChange", w.lastChange));
+  note.hidden = !msgs.length; note.textContent = msgs.join(" ");
+}
+function fillWifiForm() {
+  const w = wifiInfo || {}, sv = w.saved || {};
+  $("wfHost").value = sv.hostname || w.hostname || "";
+  $("wfMode").value = sv.mode || "dhcp";
+  $("wfIp").value = sv.ip || w.ip || ""; $("wfMask").value = sv.netmask || w.netmask || "";
+  $("wfGw").value = sv.gateway || w.gateway || ""; $("wfDns").value = sv.dns || w.dns || "";
+  showWfStatic();
+}
+function showWfStatic() { document.querySelectorAll("#wifiForm .wfs").forEach(e => e.hidden = $("wfMode").value !== "static"); }
+$("wfMode").onchange = showWfStatic;
+async function loadWifi() { try { wifiInfo = (await api("GET", "/api/wifi")).data; } catch (_) { wifiInfo = null; } renderWifi(); }
+$("wifiEditBtn").onclick = () => { const f = $("wifiForm"); f.hidden = !f.hidden; $("wifiNetForm").hidden = true; if (!f.hidden) fillWifiForm(); };
+// change the WiFi network: scan, pick, password, switch (with automatic fall back)
+let wifiScanTimer = null;
+const MANUAL = "__manual__";
+let wnPicked = false;   // the user chose an entry himself: keep it when the list refreshes
+function fillScan(list) {
+  const sel = $("wnSsid"), cur = wifiInfo ? wifiInfo.ssid : "", keep = wnPicked ? sel.value : "";
+  sel.innerHTML = "";
+  for (const n of list || []) {
+    const o = new Option((n.secure ? "🔒 " : "") + n.ssid + " · " + n.quality + "%" + (n.ssid === cur ? " (" + t("wifiCurrent") + ")" : ""), n.ssid);
+    sel.add(o);
+  }
+  sel.add(new Option(t("wifiSsidManual") + "…", MANUAL));
+  if (keep && [...sel.options].some(o => o.value === keep)) sel.value = keep;
+  else if (list && list.length) sel.value = list.find(n => n.ssid !== cur)?.ssid || list[0].ssid;
+  $("wnManualRow").hidden = sel.value !== MANUAL;
+}
+async function scanWifi(refresh) {
+  clearTimeout(wifiScanTimer);
+  $("wnScan").disabled = true; $("wnScan").textContent = t("wifiScanning");
+  try {
+    const r = (await api("GET", "/api/wifi/scan", refresh ? { refresh: true } : undefined)).data;
+    if (r.scanning) { wifiScanTimer = setTimeout(() => scanWifi(false), 1500); return; }
+    fillScan(r.networks);
+  } catch (_) { fillScan([]); }
+  $("wnScan").disabled = false; $("wnScan").textContent = t("wifiScan");
+}
+$("wnSsid").onchange = () => { wnPicked = true; $("wnManualRow").hidden = $("wnSsid").value !== MANUAL; };
+$("wnScan").onclick = () => scanWifi(true);
+$("wifiNetBtn").onclick = () => {
+  const f = $("wifiNetForm"); f.hidden = !f.hidden; $("wifiForm").hidden = true;
+  if (!f.hidden) { $("wnPass").value = ""; wnPicked = false; fillScan([]); scanWifi(true); }
+};
+$("wnCancel").onclick = () => { $("wifiNetForm").hidden = true; };
+$("wifiNetForm").onsubmit = async e => {
+  e.preventDefault();
+  const ssid = $("wnSsid").value === MANUAL ? $("wnManual").value.trim() : $("wnSsid").value, pw = $("wnPass").value;
+  if (!ssid) return;
+  if (pw && (pw.length < 8 || pw.length > 63)) { toast(t("wifiPassLen"), true); return; }
+  const host = (wifiInfo && wifiInfo.hostname) || "palletheater";
+  if (!confirm(t("wifiConfirmSwitch", ssid, wifiInfo ? wifiInfo.ssid : "?", host + ".local"))) return;
+  try {
+    await write(t("wifiSwitching", ssid), "POST", "/api/wifi", { ssid, password: pw });
+    $("wifiNetForm").hidden = true;
+    toast(t("wifiSwitching", ssid));
+  } catch (_) {}
+};
+
+$("wfCancel").onclick = () => { $("wifiForm").hidden = true; };
+async function saveWifi(restart) {
+  const p = { hostname: $("wfHost").value.trim(), mode: $("wfMode").value };
+  if (p.mode === "static") Object.assign(p, { ip: $("wfIp").value.trim(), netmask: $("wfMask").value.trim(), gateway: $("wfGw").value.trim(), dns: $("wfDns").value.trim() });
+  if (restart) {
+    const target = p.mode === "static" ? p.ip : p.hostname + ".local";
+    if (!confirm(t("wifiConfirmRestart", target))) return;
+    p.restart = true;
+  }
+  try {
+    wifiInfo = await write(restart ? t("restarting") : t("wifiSaved"), "POST", "/api/wifi", p);
+    $("wifiForm").hidden = true; renderWifi();
+    if (restart && p.mode === "static" && p.ip !== location.hostname) setTimeout(() => { location.href = location.protocol + "//" + p.ip + "/"; }, 8000);
+  } catch (_) {}
+}
+$("wfSave").onclick = () => saveWifi(false);
+$("wifiForm").onsubmit = e => { e.preventDefault(); saveWifi(true); };
 
 // ---------- alerts ----------
 function renderAlerts() {
@@ -1957,7 +2256,7 @@ function applyExpert() {
 }
 $("expertBtn").onclick = () => {
   expert = !expert; try { localStorage.setItem("expert", expert ? "1" : "0"); } catch (_) {}
-  applyExpert(); renderHistory();
+  applyExpert(); renderHistory(); renderMqtt(); renderWifi();
 };
 $("debugBtn").onclick = () => {
   debug = !debug; try { localStorage.setItem("debug", debug ? "1" : "0"); } catch (_) {}
@@ -2234,7 +2533,8 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) { po
 
 applyStatic(); applyExpert(); renderTimers();
 // Read the remote first so the page starts in the right language
-pollRemote().finally(() => poll().then(() => { loadTimers(); loadHistory(); loadBt(); loadSecurity(); loadHyp(); loadParams(); }));
+pollRemote().finally(() => poll().then(() => { loadTimers(); loadHistory(); loadBt(); loadSecurity(); loadMqtt(); loadWifi(); loadFw(); loadHyp(); loadParams(); }));
+setInterval(() => { if (!document.hidden && !offline) { loadMqtt(); loadWifi(); if (!fwInfo || !["checking", "downloading", "restarting"].includes(fwInfo.state)) loadFw(); } }, 30000);
 </script>
 </body>
 </html>

@@ -2322,7 +2322,7 @@
           "Status"
         ],
         "summary": "Log of stove state changes and errors",
-        "description": "Every change of the stove state and of the active error (both read ~1 s), with the exact time. The stove does not store when an error happened; this log is the only source for that. The last 200 entries are kept and persisted to SPIFFS. Recorded once NTP time is available. Oldest first. Errors are only logged once they last 30 s or the stove is in an alarm state. Changes of the pellet reserve registers (RAM 0xA4, 0x89) are logged as type pellet.",
+        "description": "Every change of the stove state and of the active error (both read ~1 s), with the exact time. The stove does not store when an error happened; this log is the only source for that. The last 200 entries are kept and persisted to SPIFFS. Recorded once NTP time is available. Oldest first. Errors are only logged once they last 30 s (3 minutes in the transitional states 1, 2, 3, 5, 6) or the stove is in an alarm state. Changes of the pellet reserve registers (RAM 0xA4, 0x89) are logged as type pellet.",
         "parameters": [
           {
             "name": "hours",
@@ -2820,6 +2820,362 @@
         },
         "tags": [
           "Diagnostics"
+        ]
+      }
+    },
+    "/api/mqtt": {
+      "get": {
+        "summary": "MQTT settings and status",
+        "description": "Settings (without the password) and connection status. See the README section 'MQTT and Home Assistant' for the topics.",
+        "responses": {
+          "200": {
+            "description": "Settings and status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MqttSettings"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Device"
+        ]
+      },
+      "post": {
+        "summary": "Change the MQTT settings",
+        "description": "Only the given parameters change. Stored in NVS; reconnects right away. An empty password keeps the stored one, '-' clears it.",
+        "parameters": [
+          {
+            "name": "enabled",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "MQTT on / off"
+          },
+          {
+            "name": "host",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Broker host or IP"
+          },
+          {
+            "name": "port",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "default": 1883
+            },
+            "description": "Broker port"
+          },
+          {
+            "name": "user",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "User (optional)"
+          },
+          {
+            "name": "password",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Password; empty keeps the stored one, '-' clears it"
+          },
+          {
+            "name": "prefix",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "palletheater"
+            },
+            "description": "Topic prefix"
+          },
+          {
+            "name": "discovery",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": true
+            },
+            "description": "Home Assistant MQTT discovery"
+          },
+          {
+            "name": "discoveryPrefix",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "homeassistant"
+            },
+            "description": "Discovery prefix"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Settings and status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MqttSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid value"
+          }
+        },
+        "tags": [
+          "Device"
+        ]
+      }
+    },
+    "/api/wifi": {
+      "get": {
+        "summary": "WiFi status and IP settings",
+        "responses": {
+          "200": {
+            "description": "Status and settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WifiInfo"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Device"
+        ]
+      },
+      "post": {
+        "summary": "Change hostname / DHCP or static IP",
+        "description": "Stored in NVS, active after a restart. A new static IP must be confirmed by any HTTP request within 5 minutes after the restart, otherwise the controller returns to DHCP.",
+        "parameters": [
+          {
+            "name": "hostname",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "1 - 32 letters, digits or '-'"
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "dhcp",
+                "static"
+              ]
+            },
+            "description": "Address mode"
+          },
+          {
+            "name": "ip",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Static IP"
+          },
+          {
+            "name": "netmask",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Static netmask"
+          },
+          {
+            "name": "gateway",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Static gateway (same subnet)"
+          },
+          {
+            "name": "dns",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "DNS server (default: the gateway)"
+          },
+          {
+            "name": "restart",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Restart right away"
+          },
+          {
+            "name": "ssid",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 32
+            },
+            "description": "Switch to this WiFi network now (DHCP). Handled on its own; other parameters are ignored. Falls back to the previous network when it cannot connect within 25 s or is not reached within 5 minutes."
+          },
+          {
+            "name": "password",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "WiFi password: empty (open network) or 8 - 63 characters"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Status and settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WifiInfo"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid value"
+          }
+        },
+        "tags": [
+          "Device"
+        ]
+      }
+    },
+    "/api/wifi/scan": {
+      "get": {
+        "summary": "WiFi networks in range",
+        "description": "Asynchronous scan: returns {scanning:true} while it runs, poll again.",
+        "parameters": [
+          {
+            "name": "refresh",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Start a new scan"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Scan state or result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WifiScan"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Device"
+        ]
+      }
+    },
+    "/api/firmware": {
+      "get": {
+        "summary": "Firmware update status (GitHub releases)",
+        "description": "Running version and the latest GitHub release of netdata-be/PalletHeater-REST-API. Checked 2 min after start-up and then daily when autoCheck is on. Never installs on its own.",
+        "responses": {
+          "200": {
+            "description": "Update status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Firmware"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Device"
+        ]
+      },
+      "post": {
+        "summary": "Check for or install a firmware release",
+        "description": "action=check looks up the latest release; action=install downloads palletheater-firmware.bin over HTTPS, verifies and activates it and restarts the controller (unreachable for about a minute). Both run in the background: poll GET for state and progress. The stove is not affected.",
+        "parameters": [
+          {
+            "name": "action",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "check",
+                "install"
+              ]
+            }
+          },
+          {
+            "name": "force",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Install even when the release is not newer (e.g. over a development build)"
+          },
+          {
+            "name": "autoCheck",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Daily automatic check on / off"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Started (result = started) or setting saved (result = success)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Firmware"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameter, no release known, or no newer version without force",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Firmware"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A check or update is already running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Firmware"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Device"
         ]
       }
     }
@@ -3662,6 +4018,260 @@
                 }
               }
             }
+          }
+        }
+      },
+      "MqttSettings": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string",
+            "description": "Only on POST"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "user": {
+            "type": "string"
+          },
+          "passwordSet": {
+            "type": "boolean"
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "discovery": {
+            "type": "boolean"
+          },
+          "discoveryPrefix": {
+            "type": "string"
+          },
+          "clientId": {
+            "type": "string",
+            "description": "MQTT client id, also the Home Assistant device id"
+          },
+          "connected": {
+            "type": "boolean"
+          },
+          "lastError": {
+            "type": "string",
+            "nullable": true
+          },
+          "publishes": {
+            "type": "integer"
+          },
+          "commands": {
+            "type": "integer"
+          }
+        }
+      },
+      "WifiInfo": {
+        "type": "object",
+        "properties": {
+          "connected": {
+            "type": "boolean"
+          },
+          "ssid": {
+            "type": "string"
+          },
+          "bssid": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "integer"
+          },
+          "rssi": {
+            "type": "integer",
+            "description": "dBm, 0 when not connected"
+          },
+          "quality": {
+            "type": "integer",
+            "description": "Signal quality in %"
+          },
+          "ip": {
+            "type": "string"
+          },
+          "netmask": {
+            "type": "string"
+          },
+          "gateway": {
+            "type": "string"
+          },
+          "dns": {
+            "type": "string"
+          },
+          "mac": {
+            "type": "string"
+          },
+          "hostname": {
+            "type": "string"
+          },
+          "sleep": {
+            "type": "boolean",
+            "description": "WiFi modem sleep"
+          },
+          "saved": {
+            "type": "object",
+            "description": "Settings in NVS, used at the next boot",
+            "properties": {
+              "hostname": {
+                "type": "string"
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "dhcp",
+                  "static"
+                ]
+              },
+              "ip": {
+                "type": "string"
+              },
+              "gateway": {
+                "type": "string"
+              },
+              "netmask": {
+                "type": "string"
+              },
+              "dns": {
+                "type": "string"
+              }
+            }
+          },
+          "restartRequired": {
+            "type": "boolean"
+          },
+          "confirmSecondsLeft": {
+            "type": "integer",
+            "description": "Only while a new static IP waits for confirmation"
+          },
+          "result": {
+            "type": "string",
+            "description": "Only on POST"
+          },
+          "lastChange": {
+            "type": "string",
+            "description": "Outcome of the last network change"
+          },
+          "switching": {
+            "type": "boolean",
+            "description": "Only in the response to a network change"
+          }
+        }
+      },
+      "WifiScan": {
+        "type": "object",
+        "properties": {
+          "scanning": {
+            "type": "boolean"
+          },
+          "networks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "ssid": {
+                  "type": "string"
+                },
+                "rssi": {
+                  "type": "integer"
+                },
+                "quality": {
+                  "type": "integer"
+                },
+                "channel": {
+                  "type": "integer"
+                },
+                "secure": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      },
+      "Firmware": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string",
+            "description": "POST only"
+          },
+          "current": {
+            "type": "string",
+            "example": "v1.0.0",
+            "description": "Running version (git describe)"
+          },
+          "devBuild": {
+            "type": "boolean",
+            "description": "Not exactly a release tag (commits after it, uncommitted changes or no tag)"
+          },
+          "repo": {
+            "type": "string",
+            "example": "netdata-be/PalletHeater-REST-API"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "checking",
+              "downloading",
+              "restarting",
+              "error"
+            ]
+          },
+          "autoCheck": {
+            "type": "boolean"
+          },
+          "latest": {
+            "type": "string",
+            "nullable": true,
+            "example": "v1.1.0"
+          },
+          "published": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "releaseUrl": {
+            "type": "string"
+          },
+          "assetAvailable": {
+            "type": "boolean",
+            "description": "The release has palletheater-firmware.bin"
+          },
+          "updateAvailable": {
+            "type": "boolean"
+          },
+          "checkedSecondsAgo": {
+            "type": "integer",
+            "nullable": true
+          },
+          "progress": {
+            "type": "object",
+            "properties": {
+              "done": {
+                "type": "integer"
+              },
+              "total": {
+                "type": "integer"
+              }
+            },
+            "description": "While downloading"
+          },
+          "lastError": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastInstall": {
+            "type": "string",
+            "nullable": true,
+            "example": "v1.0.0 -> v1.1.0"
           }
         }
       }

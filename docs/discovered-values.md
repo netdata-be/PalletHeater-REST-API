@@ -373,6 +373,7 @@ Not verified with a controlled change unless stated. Sources: a full RAM + EEPRO
 | RAM 0xE0–0xFF | All 0x20 (spaces) except E8 / EA / FD | Looks like a text buffer, empty on the main screen (test: dump while a menu or message is shown) |
 | EEPROM 0x92–0xB9 | Rows of 5 values, the 5th equal to the 4th (stove has 4 power levels), 4 rows repeated twice | Installer table per power level (auger time / fume fan); which row is which is unknown |
 | RAM 0x96, 0x9E, 0xAF | Change by ±1–2 between reads; 0xAF rose 68 → 75 in an hour | Raw sensor (ADC) values; meaning unknown |
+| RAM 0x33 (start-up) | 17/11/2026 12:31: shows 32 (E1) for ~45 s during the start-up check (state 1), then clears; not stored in the error memory | Pre-warning of the start-up check, not an error. The firmware now waits 3 min before counting an error in the transitional states (1, 2, 3, 5, 6), 30 s otherwise, and at once in an alarm state |
 | RAM 0x33 | Shows 129 (E12, fume fan) for 1–5 s when the stove enters and leaves brazier cleaning, while the stove keeps running and nothing is stored in the error memory | Short pre-warning, not an error. The firmware only counts an error after 30 s or when the stove is in an alarm state (8, 9, 10) |
 | RAM 0x32 | 37 at 16:06, 0 at 16:43 (brazier cleaning started), 35 at 16:54 | Confirmed: minutes until the next brazier cleaning (cycle ≈ 45 min at flame 2) |
 

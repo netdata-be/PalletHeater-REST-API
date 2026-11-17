@@ -2,7 +2,7 @@
 
 ESP32 firmware that connects to the serial bus of a Micronova based pellet stove and exposes it over:
 
-- a **web app** on `/app` to monitor and control the stove from any browser,
+- a **web app** on `/` to monitor and control the stove from any browser,
 - an **HTTP REST API** (this document),
 - a **BLE GATT service** (see [BLE_API.md](BLE_API.md)), used by the iOS app in [app/](app/),
 - **Prometheus metrics** on `/metrics`,
@@ -19,6 +19,7 @@ The full OpenAPI 3 specification is in [docs/openapi.json](docs/openapi.json). T
 - [Endpoint overview](#endpoint-overview)
 - [Endpoint reference](#endpoint-reference)
 - [Reference tables](#reference-tables)
+- [MQTT and Home Assistant](#mqtt-and-home-assistant)
 - [Other interfaces](#other-interfaces)
 - [Development](#development)
 
@@ -35,7 +36,7 @@ N-channel MOSFETs convert the 3.3 V TTL of the ESP32 to the 5 V TTL the stove ex
 1. Flash the firmware (see [Development](#development)).
 2. On first boot the device starts a WiFi captive portal. Connect to it and enter your WiFi credentials and NTP server.
 3. Once connected, the device is reachable on its IP address or on `http://palletheater.local` (mDNS).
-4. Open `http://palletheater.local/app` for the web app, `http://palletheater.local/` for the landing page or `http://palletheater.local/api` for Swagger UI.
+4. Open `http://palletheater.local/` for the web app, `http://palletheater.local/device` for the fallback page or `http://palletheater.local/api` for Swagger UI.
 
 <img src="img/settings.png" width="200">
 
@@ -43,7 +44,7 @@ Hold the reset button for 5 seconds to wipe the WiFi settings and restart the ca
 
 ## Web app
 
-`http://palletheater.local/app` is a single page web app built into the firmware ([web/app.html](web/app.html)). It has no external dependencies, so it also works without internet access, and adapts to phone and desktop screens and to light/dark mode.
+`http://palletheater.local/` (also `/app`) is a single page web app built into the firmware ([web/app.html](web/app.html)). It has no external dependencies, so it also works without internet access, and adapts to phone and desktop screens and to light/dark mode.
 
 - **Status:** stove state, room / set point / fume temperatures, the sensor the room temperature comes from (derived from the readings), the wireless sensor setting, sensors, fume fan, auger speed, pellet level, error memory, stove vs NTP clock, firmware, starts and working hours. Refreshes every 5 s from `/api/state`.
 - **Alerts:** a banner for alarms (states 8 – 10), an active error code, no answer from the stove, low pellets, stale data and an unreachable controller.
@@ -54,10 +55,11 @@ Hold the reset button for 5 seconds to wipe the WiFi settings and restart the ca
 - **Help:** (i) buttons next to settings, clock, timers and error codes with explanations taken from the stove manual (FWAR01).
 - **Clock:** sync the stove clock to NTP or to the browser time.
 - **Expert / Debug:** two toggles in the header (remembered per browser). *Expert* shows technical details: wireless sensor setting, fume fan, auger, brazier cleaning countdown, controller firmware / build / uptime, firmware upload, API / metrics links and the history table. *Debug* shows research and diagnostics: raw registers (room fan power RAM 0x0A, pellet reserve sensor / counter, raw remote edit value), serial errors and retries, the telnet switch, a table of the known EEPROM parameters (presets per power level, settings, counters) and a table of the register hypotheses with live values (read with `/api/dump` only while debug is on).
+- **Network and MQTT:** a *Network (WiFi)* card (network, signal, IP address, gateway, hostname; DHCP or static IP and hostname can be changed) and an *MQTT* card (connection status, broker, topic prefix, discovery; settings). A small page with links is on `/device`.
 - **Unreachable:** when the controller does not answer every card is greyed out and disabled; when only the stove does not answer (state −1) every card except *Device* is.
 - **Language:** Dutch when the remote control language is NLD, otherwise English; `/app?lang=nl` / `/app?lang=en` overrides it.
 
-To change the app, edit `web/app.html` and rebuild; it is embedded via `board_build.embed_txtfiles` like the OpenAPI spec.
+To change the app, edit `web/app.html` and rebuild; it is embedded gzipped via `board_build.embed_files` like the OpenAPI spec.
 
 ## API conventions
 
@@ -92,7 +94,7 @@ curl -H "X-API-Key: <key>" http://palletheater.local/api/state
 curl -H "Authorization: Bearer <key>" http://palletheater.local/metrics
 ```
 
-Always reachable without key: `/` (device page), `/app` (web app), `/api` + `/api-specs.json` (API docs, use **Authorize** in Swagger UI) and `/api/auth`.
+Always reachable without key: `/` and `/app` (web app), `/device` (fallback page), `/api` + `/api-specs.json` (API docs, use **Authorize** in Swagger UI) and `/api/auth`.
 
 | Call | Effect |
 |---|---|
@@ -136,12 +138,16 @@ scrape_configs:
 | `GET` | [`/api/history`](#get-apihistory) | Last 24 h of temperatures (RAM ring buffer) |
 | `GET` | [`/api/events`](#get-apievents) | Log of stove state changes and errors with exact times |
 | `GET` `POST` | [`/api/bluetooth`](#apibluetooth) | Enable / disable Bluetooth (BLE) |
+| `GET` `POST` | [`/api/mqtt`](#apimqtt) | MQTT settings and status |
+| `GET` `POST` | [`/api/wifi`](#apiwifi) | WiFi status, network, hostname and DHCP / static IP |
+| `GET` | [`/api/wifi/scan`](#apiwifi) | WiFi networks in range |
 | `GET` `POST` | [`/api/telnet`](#apitelnet) | Enable / disable the telnet menu |
 | `GET` `POST` | [`/api/auth`](#authentication) | API key status, require, rotate |
 | `POST` | [`/api/update`](#post-apiupdate) | Firmware update over HTTP |
+| `GET` `POST` | [`/api/firmware`](#apifirmware) | Check GitHub for a new firmware release and install it |
 | `GET` | [`/metrics`](#get-metrics) | Prometheus metrics |
-| `GET` | [`/app`](#web-app) | Web app |
-| `GET` | `/` | Landing page (IP, SSID, RSSI, uptime) |
+| `GET` | [`/`](#web-app) | Web app (also on `/app`) |
+| `GET` | `/device` | Small fallback page (IP, SSID, RSSI, uptime, links) |
 | `GET` | `/restart` | Reboot the ESP32 |
 | `GET` | `/api` | Swagger UI |
 | `GET` | `/api-specs.json` | OpenAPI specification |
@@ -555,7 +561,7 @@ curl "http://palletheater.local/api/events?hours=24"
 ]}
 ```
 
-`t` is Unix time (UTC). For `type: "state"`, `from` and `to` are stove state codes (see `/api/state`); `from` is `null` for the first change after the log was empty. For `type: "error"`, `id` is the raw error value and `error` the code (`id` 0 / `error` null = error cleared). Errors are only logged once they last 30 s or the stove is in an alarm state; RAM 0x33 briefly shows E12 when brazier cleaning starts and stops, which is not an error. For `type: "pellet"`, `register` is `0xA4` (pellet reserve sensor) or `0x89` (pellet reserve counter) with the old and new value; these are logged to find out how the pellet reserve works. Oldest first. The web app uses the error entries to show when each error memory entry occurred.
+`t` is Unix time (UTC). For `type: "state"`, `from` and `to` are stove state codes (see `/api/state`); `from` is `null` for the first change after the log was empty. For `type: "error"`, `id` is the raw error value and `error` the code (`id` 0 / `error` null = error cleared). Errors are only logged once they last 30 s (3 minutes during start-up, pellet loading, ignition, brazier cleaning and shut-down) or the stove is in an alarm state; RAM 0x33 briefly shows E12 when brazier cleaning starts and stops and E1 during the start-up check, which are not errors. For `type: "pellet"`, `register` is `0xA4` (pellet reserve sensor) or `0x89` (pellet reserve counter) with the old and new value; these are logged to find out how the pellet reserve works. Oldest first. The web app uses the error entries to show when each error memory entry occurred.
 
 ### `/api/bluetooth`
 
@@ -573,6 +579,52 @@ curl -X POST "http://palletheater.local/api/bluetooth?enabled=false&restart=true
 |---|---|
 | `enabled` | `true`, `false` |
 | `restart` | `true` to restart the controller right away when the setting changed (the stove keeps running) |
+
+### `/api/mqtt`
+
+MQTT settings and connection status, see [MQTT and Home Assistant](#mqtt-and-home-assistant). Stored in NVS; a change reconnects right away. The password is never returned.
+
+```bash
+curl -X POST "http://palletheater.local/api/mqtt?enabled=true&host=192.168.1.10&user=ha&password=secret"
+curl http://palletheater.local/api/mqtt
+# {"enabled":true,"host":"192.168.1.10","port":1883,"user":"ha","passwordSet":true,"prefix":"palletheater",
+#  "discovery":true,"discoveryPrefix":"homeassistant","clientId":"palletheater_a1b2c3","connected":true,
+#  "lastError":null,"publishes":42,"commands":0}
+```
+
+| Parameter (POST) | Values |
+|---|---|
+| `enabled` | `true` / `false` |
+| `host`, `port` | Broker address, port (default 1883) |
+| `user`, `password` | Optional. An empty `password` keeps the stored one, `-` clears it |
+| `prefix` | Topic prefix, default `palletheater` |
+| `discovery`, `discoveryPrefix` | Home Assistant discovery on / off (default on), prefix (default `homeassistant`) |
+
+Only the given parameters change.
+
+### `/api/wifi`
+
+WiFi status, the WiFi network and the IP settings. Hostname and IP settings are stored in NVS (shared with the BLE and telnet menus) and take effect after a restart; a network change is done right away. Without any working network, hold the reset button 5 s for the WiFiManager portal.
+
+```bash
+curl http://palletheater.local/api/wifi
+# {"connected":true,"ssid":"Home","bssid":"…","channel":6,"rssi":-61,"quality":78,"ip":"192.168.50.222","netmask":"255.255.255.0",
+#  "gateway":"192.168.50.1","dns":"192.168.50.1","mac":"…","hostname":"palletheater","sleep":false,
+#  "saved":{"hostname":"palletheater","mode":"dhcp"},"restartRequired":false}
+
+curl -X POST "http://palletheater.local/api/wifi?mode=static&ip=192.168.50.30&netmask=255.255.255.0&gateway=192.168.50.1&dns=192.168.50.1&restart=true"
+```
+
+| Parameter (POST) | Values |
+|---|---|
+| `hostname` | 1 – 32 letters, digits or `-` |
+| `mode` | `dhcp` or `static` (then `ip`, `netmask`, `gateway`, optional `dns`; checked: valid netmask, gateway in the same subnet) |
+| `restart` | `true` to restart right away |
+| `ssid`, `password` | Switch to another WiFi network now (password empty for an open network, else 8 – 63 characters). Uses DHCP on the new network. Handled on its own: other parameters in the same request are ignored |
+
+`GET /api/wifi/scan` lists the networks in range: `{"scanning":true}` while the scan runs (a few seconds, poll again), then `{"scanning":false,"networks":[{"ssid":"Home","rssi":-61,"quality":78,"channel":6,"secure":true}]}`, strongest first per network. `?refresh=true` starts a new scan.
+
+**Lock-out protection:** when the controller cannot connect to a new network within 25 s, or nobody reaches it there within 5 minutes, it restores the previous network and IP settings and restarts (`lastChange` tells what happened). After a restart with a new static address the controller waits up to 5 minutes for any HTTP request (opening the web app on the new address is enough). Without one it switches back to DHCP and restarts. `confirmSecondsLeft` shows the remaining time.
 
 ### `/api/telnet`
 
@@ -629,7 +681,35 @@ curl -H "X-API-Key: <key>" -F "firmware=@.pio/build/esp32doit-devkit-v1-http/fir
 # {"result":"success","bytes":1608157,"restarting":true}
 ```
 
-Errors: `401` (no valid key or password), `500` with `result` describing the failure (nothing is activated, the current firmware keeps running). The web app has a *Firmware update* button under *Device*.
+Errors: `401` (no valid key or password), `500` with `result` describing the failure (nothing is activated, the current firmware keeps running). The web app has an *Upload PalletHeater firmware* button under *Device* (expert mode).
+
+### `/api/firmware`
+
+New versions are published as [GitHub releases](https://github.com/netdata-be/PalletHeater-REST-API/releases) (see [CI and releases](#ci-and-releases)). The controller looks up the latest release (`releases/latest`: no drafts or pre-releases) 2 minutes after start-up and then once a day (`autoCheck`, on by default), or on request. It **never installs on its own**: `action=install` downloads the asset `palletheater-firmware.bin` over HTTPS, the ESP-IDF verifies the image before it is made bootable, and the controller restarts. Settings (NVS) are kept; the stove is not affected.
+
+HTTPS to GitHub is verified against the Mozilla root CAs in [certs/x509_crt_bundle.bin](certs/x509_crt_bundle.bin) (regenerate with [scripts/gen_ca_bundle.py](scripts/gen_ca_bundle.py)). The check needs a valid clock (NTP).
+
+```bash
+curl http://palletheater.local/api/firmware
+# {"current":"v1.0.0","devBuild":false,"repo":"netdata-be/PalletHeater-REST-API","state":"idle","autoCheck":true,
+#  "latest":"v1.1.0","published":"2026-11-20T10:00:00Z","releaseUrl":"https://github.com/…/releases/tag/v1.1.0",
+#  "assetAvailable":true,"updateAvailable":true,"checkedSecondsAgo":42,"lastError":null,"lastInstall":null}
+
+curl -X POST "http://palletheater.local/api/firmware?action=check"     # {"result":"started",…}
+curl -X POST "http://palletheater.local/api/firmware?action=install"   # {"result":"started",…}
+curl -X POST "http://palletheater.local/api/firmware?autoCheck=false"
+```
+
+| Field | Meaning |
+|---|---|
+| `current` | Running version (`git describe` at build time) |
+| `devBuild` | The running version is not exactly a release tag (commits after the tag, uncommitted changes or no tag at all). A build without a tag is never offered an update; install a release over it with `action=install&force=true`. |
+| `state` | `idle`, `checking`, `downloading`, `restarting` or `error` (`lastError`) |
+| `progress` | `{done,total}` bytes while downloading |
+| `updateAvailable` | `latest` is newer than `current` and has the firmware asset |
+| `lastInstall` | Last update through this route, e.g. `v1.0.0 -> v1.1.0` |
+
+`action=install` without `force` is refused (`400`) when there is no newer release; `409` while a check or update is already running. Poll `GET` to follow the progress; the controller is unreachable for about a minute while it restarts. The web app shows this under *Device* → *PalletHeater firmware*.
 
 ## Reference tables
 
@@ -671,6 +751,49 @@ Errors: `401` (no valid key or password), `500` with `result` describing the fai
 
 The `desc` strings in API responses are returned as defined in the firmware and may differ slightly in wording from this table.
 
+## MQTT and Home Assistant
+
+The controller can publish the stove values to an MQTT broker and take commands from it. Set it up in the web app (*Expert* → Device → MQTT) or with [`/api/mqtt`](#apimqtt). The connection is retried every 15 s while the broker is unreachable.
+
+Values are plain text (no JSON), retained, under `<prefix>/state/<name>` (prefix default `palletheater`). They are published when they change (checked every 5 s) and all again every 5 minutes. `<prefix>/status` is `online`, or `offline` (last will) when the controller drops off.
+
+| State topic | Value |
+|---|---|
+| `state`, `state_code` | Stove state text (`Working`, `Standby`, …) and code (see [Stove states](#stove-states)) |
+| `power` | `ON` / `OFF` |
+| `mode` | `heat` / `off` (for the Home Assistant thermostat) |
+| `room_temp`, `stove_temp`, `remote_temp`, `fume_temp` | °C |
+| `setpoint` | °C, 7 – 30 |
+| `flame_power`, `flame_actual` | Set and actual flame power, 1 – 4 |
+| `fan_speed`, `fan_running`, `fan_power` | Room fan speed 0 – 3, `ON` / `OFF`, raw power (RAM 0x0A) |
+| `energy_saving`, `es_stop`, `es_start` | `ON` / `OFF`, stop above and restart below the set point in °C (0 – 3) |
+| `fume_fan_rpm`, `auger` | Fume fan rpm, auger speed |
+| `brazier_minutes` | Minutes to the next brazier cleaning (empty when the stove is not working) |
+| `error_active`, `error` | `ON` / `OFF`, the active error (`E9 Ignition …`) or `none` |
+| `low_pellets` | `ON` / `OFF` |
+| `hours_service`, `total_hours`, `starts`, `wifi_rssi` | Counters and WiFi signal (dBm) |
+
+Commands go to `<prefix>/set/<name>`. The result is published (not retained) on `<prefix>/result`, e.g. `setpoint 21: ok`.
+
+| Command topic | Payload |
+|---|---|
+| `power` | `ON` / `OFF` (also `1` / `0`, `true` / `false`) |
+| `mode` | `heat` / `off` |
+| `setpoint` | 7 – 30 (`21` or `21.0`) |
+| `flame_power` | 1 – 4 |
+| `fan_speed` | `off` or 0 – 3 |
+| `energy_saving` | `ON` / `OFF`. Off sets both offsets to 0 (the stove has no separate switch); on restores the last offsets (default +1 / −1) |
+| `es_stop`, `es_start` | 0 – 3 °C |
+
+```bash
+mosquitto_sub -h broker -t 'palletheater/#' -v
+mosquitto_pub -h broker -t palletheater/set/setpoint -m 21
+```
+
+**Home Assistant.** With *discovery* on (default), the controller also publishes retained configuration messages under `homeassistant/<component>/<client id>/<entity>/config`. Home Assistant (MQTT integration) then creates a device *PalletHeater* with a thermostat (on/off and set point, current room temperature), switches for power and energy saving, numbers for set point, flame power and the energy saving offsets, a select for the fan and sensors / binary sensors for the values above. Nothing else is Home Assistant specific.
+
+**Loxone and others.** The state and command topics are plain MQTT and work with any client. Loxone needs an MQTT gateway for this (for example LoxBerry with the MQTT Gateway plugin) unless your Miniserver supports MQTT itself; check that for your Loxone version. Discovery can be switched off when Home Assistant is not used. Alternatively Loxone can call the REST API directly with virtual HTTP inputs and outputs.
+
 ## Other interfaces
 
 | Interface | Details |
@@ -696,9 +819,39 @@ pio run -e esp32doit-devkit-v1-serial -t upload
 pio device monitor -e esp32doit-devkit-v1-serial
 ```
 
+### CI and releases
+
+[.github/workflows/firmware.yml](.github/workflows/firmware.yml) runs the unit tests and builds the firmware on every push to `master`, every pull request and on demand (*Run workflow*). The images are kept as workflow artifact `palletheater-<version>` (Actions → run → *Artifacts*):
+
+| File | Use |
+|---|---|
+| `palletheater-firmware.bin` | OTA image: web app upload, `POST /api/update`, `/api/firmware` |
+| `palletheater-factory.bin` | Complete flash image for a new ESP32: `esptool.py --chip esp32 write_flash 0x0 palletheater-factory.bin` |
+| `SHA256SUMS` | Checksums |
+
+A tag `vX.Y.Z` also creates a GitHub release with these files, which the controllers then offer as update:
+
+```bash
+git tag v1.0.0 && git push origin v1.0.0
+```
+
+The firmware version is `git describe --tags`, so the release build reports exactly `v1.0.0`. A tag with a suffix (`v1.1.0-rc1`) becomes a pre-release, which the controllers ignore.
+
+### Unit tests
+
+The pure logic (timer and clock encodings, fan and pellet decisions, error debounce, quality labels, address lists, MQTT payloads) lives in [lib/palletcore](lib/palletcore/src/palletcore.h) without Arduino dependencies. It is tested on the development machine:
+
+```bash
+pio test -e native
+```
+
+### Source layout
+
+`src/main.cpp` only holds `setup()`, `loop()` and the route table. The rest is split into headers that main.cpp includes in a fixed order (one translation unit, because [src/constants.h](src/constants.h) defines the globals): `stoveCache.h` (reading the stove, sensor task), `stoveControl.h` (writing settings), `registers.h` (register names, `/api/dump`, `/api/remote`), `stoveClock.h`, `routesBasic.h`, `routesTimers.h`, `routesControl.h`, `status.h` (`/api/state`), `history.h`, `events.h`, `routesDevice.h`, `mqtt.h`, `wifiInfo.h`, `fwUpdate.h` (GitHub update), plus the older `auth.h`, `bleUart.h`, `httpUpdate.h`, `keyWatch.h`, `metrics.h`, `telnetMenu.h`.
+
 ### Updating the API documentation
 
-[docs/openapi.json](docs/openapi.json) is the single source of truth. It is embedded in the firmware at build time via `board_build.embed_txtfiles` and served on `/api-specs.json`. When you add or change an endpoint:
+[docs/openapi.json](docs/openapi.json) is the single source of truth. It is embedded in the firmware at build time, gzipped like the web app ([scripts/gzip_assets.py](scripts/gzip_assets.py), saves ~240 KB of flash), and served on `/api-specs.json` with `Content-Encoding: gzip`. Browsers handle that; with curl use `--compressed` (without `Accept-Encoding: gzip` the answer is `406`). When you add or change an endpoint:
 
 1. Update `docs/openapi.json` and this README.
 2. Validate the spec, e.g. `pipx run openapi-spec-validator docs/openapi.json`.

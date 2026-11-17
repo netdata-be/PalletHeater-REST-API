@@ -1,0 +1,404 @@
+#pragma once
+// Register names and descriptions: remote menus and parameters, RAM / EEPROM
+// value texts, /api/dump and /api/remote.
+//
+// Split out of main.cpp; included there in the original order (single
+// translation unit: the globals live in constants.h).
+
+const char* getSelectedParameterName(int id)
+{
+    switch (id)
+    {
+        case 0:   return nullptr;
+        case 71:  return "Multi Comfort";
+        case 76:  return "Beep";
+        case 79:  return "Display settings";
+        case 80:  return "Language";
+        case 123: return "State Stove";
+        case 128: return "Flame power";
+        case 130: return "MultiFuoco";
+        case 145: return "Energy Saving - Stop";
+        case 146: return "Energy Saving - Start";
+        case 193: return "Combustion quality";
+        case 198: return "Pallet quality";
+        case 199: return "Pallet reserve";
+        case 200: return "Multi Comfort Plus";
+        case 235: return "WPS";
+        case 236: return "Reset";
+        case 248: return "Day of week";
+        case 249: return "Hour";
+        case 250: return "min";
+        case 217: return "Instell wireless";
+        case 251: return "Day";
+        case 252: return "Month";
+        case 253: return "year";
+        default:
+        {
+            // CHRONO programs: parameter = EEPROM address + 1 of the program field
+            static const char* const fields[8] = { "On/Off", "Start time", "Stop time", "Set point",
+                                                   "Flame power", "Room fan", nullptr, "Week days" };
+            static char chronoBuf[32];
+            for (int i = 0; i < 6; i++) {
+                int off = id - 1 - timerBases[i];
+                if (off >= 0 && off <= 7 && fields[off]) {
+                    snprintf(chronoBuf, sizeof(chronoBuf), "PR%d - %s", i + 1, fields[off]);
+                    return chronoBuf;
+                }
+            }
+        }
+            static char unknownParamBuf[16];
+            snprintf(unknownParamBuf, sizeof(unknownParamBuf), "(%d)", id);
+            return unknownParamBuf;
+    }
+}
+
+const char* getRemoteMenuName(int id)
+{
+    switch (id)
+    {
+        case 0:  return "Main screen";
+        case 1:  return "Multifuoco";
+        case 2:  return "Chrono";
+        case 3:  return "Language";
+        case 5:  return "Clock";
+        case 7:  return "Multicomfort";
+        case 8:  return "Multi Comfort Plus";
+        case 9:  return "Energy Saving";
+        case 11: return "Beep";
+        case 12: return "Display";
+        case 13: return "Installer";
+        case 39: return "Installer > Fill Auger";
+        case 40: return "Installer > Pallet reserve";
+        case 41: return "Installer > Pallet contact";
+        case 42: return "Installer > External Thermo";
+        case 43: return "Installer > Memory";
+        case 51: return "Installer > Memory > Total Hours";
+        case 52: return "Installer > Memory > Interval hours";
+        case 53: return "Installer > Memory > Amount of starts";
+        case 54: return "Installer > Memory > Error Memory";
+        case 44: return "Installer > Pallet quality";
+        case 45: return "Installer > Combustion quality";
+        case 46: return "Installer > Instell wireless";
+        case 47: return "Installer > Link wireless";
+        case 49: return "Installer > Wifi";
+        case 64: return "Installer > Wifi > WPS";
+        case 65: return "Installer > Wifi > Wifi Reset";
+        case 14: return "State Stove";
+        case 50: return "Installer > Parameters";
+        case 19: return "Installer > Parameters > Factory Reset";
+        case 20: return "Installer > Parameters > Databank";
+        case 21: return "Installer > Parameters > Smoke Ext Settings";
+        case 22: return "Installer > Parameters > Load Settings";
+        case 23: return "Installer > Parameters > MultiFUOCO v1";
+        case 26: return "Installer > Parameters > Reset Alarm";
+        case 25: return "Installer > Parameters > Reset Parthour";
+        case 27: return "Installer > Parameters > Encoder";
+        case 15: return "exit";
+        default:
+            static char unknownMenuBuf[16];
+            snprintf(unknownMenuBuf, sizeof(unknownMenuBuf), "(%d)", id);
+            return unknownMenuBuf;
+    }
+}
+
+static bool isKnownRamAddr(byte addr)
+{
+    switch (addr) {
+        case 0x01: case 0x02: case 0x04: case 0x08: case 0x16: case 0x24: case 0x0A: case 0xA7: case 0x0D: case 0x18: case 0x19: case 0x1A: case 0xB6:
+        case 0x27: case 0x36: case 0x81: case 0x82:
+        case 0x21: case 0x31: case 0x32: case 0x33: case 0x34:
+        case 0x37: case 0x3E: case 0x44: case 0x48: case 0x4D:
+        case 0x50: case 0x7A: case 0x7B: case 0x7C: case 0x7D:
+        case 0x7E: case 0x7F: case 0x80: case 0x8F: case 0xD0:
+        case 0xD3: case 0xDF:
+            return true;
+        default: return false;
+    }
+}
+
+static bool isKnownEepromAddr(byte addr)
+{
+    switch (addr) {
+        case 0x02: case 0x04: case 0x05: case 0x06: case 0x07:
+        case 0x08: case 0x09: case 0x48: case 0x49: case 0x4B:
+        case 0x4F: case 0x7D: case 0x7F: case 0x81: case 0x8A:
+        case 0x8B: case 0x8C: case 0x8D: case 0x8E: case 0x8F:
+        case 0x90: case 0x91: case 0xBC: case 0xC0: case 0xC4:
+        case 0xC6: case 0xE0: case 0xE1: case 0xE2: case 0xE3:
+        case 0xE4: case 0xE7: case 0xEA: case 0xEB: case 0xEC:
+        case 0xEE: case 0xEF:
+            return true;
+        default: return false;
+    }
+}
+
+static String getRamValueTxt(byte addr, int val)
+{
+    if (val < 0) return "read error";
+    char buf[64];
+    switch (addr) {
+        case 0x01: snprintf(buf, sizeof(buf), "%.1f °C (ambient temp)", val / 2.0f);          return buf;
+        case 0x04: if (!val) return "0 (too cold for the room fan)"; snprintf(buf, sizeof(buf), "%d (hot enough for the room fan; follows the flame level)", val); return buf;
+        case 0x0D: snprintf(buf, sizeof(buf), "%.1f rpm (auger speed)", val / 10.0f);          return buf;
+        case 0x18: { const char* p = getSelectedParameterName(val); return p ? p : ""; }
+        case 0x19: snprintf(buf, sizeof(buf), "Menu edit value %d", val); return buf;
+        case 0x08: {   // key pressed on the remote (verified 17/11/2026)
+            if (!val) return "No key pressed";
+            String k = "Key:";
+            if (val & 1) k += " DOWN"; if (val & 2) k += " UP"; if (val & 4) k += " ESC"; if (val & 8) k += " OK";
+            if (val & ~0x0F) k += " +?";
+            return k;
+        }
+        case 0x16: snprintf(buf, sizeof(buf), "Key event count %d (1 = press, +1 per auto-repeat)", val); return buf;
+        case 0x24: snprintf(buf, sizeof(buf), "Key release countdown %d", val); return buf;
+        case 0xB6: return (val & 0x01) ? "Wireless temperature sensor off (INSTELL WIRELESS)" : "Wireless temperature sensor on (INSTELL WIRELESS)";
+        case 0x1A: return getRemoteMenuName(val);
+        case 0x21:
+            switch (val) {
+                case 0:  return "Off";
+                case 1:  return "Starting";
+                case 2:  return "Pellet loading";
+                case 3:  return "Ignition";
+                case 4:  return "Working";
+                case 5:  return "Brazier cleaning";
+                case 6:  return "Final cleaning";
+                case 7:  return "Standby";
+                case 8:  return "Alarm State";
+                case 9:  return "Ignition failure";
+                case 10: return "Alarm";
+                default: snprintf(buf, sizeof(buf), "Unknown state (%d)", val); return buf;
+            }
+        case 0x31: snprintf(buf, sizeof(buf), "%d sec (countdown)", val);    return buf;
+        case 0x32: snprintf(buf, sizeof(buf), "%d min (brazier cleaning countdown)", val); return buf;
+        case 0x33: snprintf(buf, sizeof(buf), "%s - %s", getErrorCode(val).c_str(), getErrorDesc(val).c_str()); return buf;
+        case 0x34: snprintf(buf, sizeof(buf), "Flame power %d", val);        return buf;
+        case 0x37: if (!val) return "0 rpm (fume fan stopped)"; snprintf(buf, sizeof(buf), "%d rpm (fume fan)", (val + 25) * 10); return buf;
+        case 0x36: if (!val) return "0 rpm (fume fan target, stopped)"; snprintf(buf, sizeof(buf), "%d rpm (fume fan target)", (val + 25) * 10); return buf;
+        case 0x02: case 0x27: snprintf(buf, sizeof(buf), "%d (= fume temp - 30)", val); return buf;
+        case 0x81: return "Clock: seconds since midnight / 2 (low byte, with 0x82)";
+        case 0x82: return "Clock: seconds since midnight / 2 (high byte, with 0x81)";
+        case 0x3E: snprintf(buf, sizeof(buf), "%d °C (fume temp)", val);      return buf;
+        case 0x44: snprintf(buf, sizeof(buf), "%.1f °C (stove room temp)", val / 2.0f); return buf;
+        case 0x48: if (!val) return "0 rpm (fume fan stopped)"; snprintf(buf, sizeof(buf), "%d rpm (fume fan)", (val + 25) * 10); return buf;
+        case 0x4D: return val ? "1 (flip)" : "0 (flop)";
+        case 0x50: snprintf(buf, sizeof(buf), "%d min remaining (low pallet)", val); return buf;
+        case 0x7A: snprintf(buf, sizeof(buf), "%d sec", val);  return buf;
+        case 0x7B: {
+            const char* days[] = {"", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"};
+            return (val >= 1 && val <= 7) ? days[val] : "?";
+        }
+        case 0x7C: snprintf(buf, sizeof(buf), "%02d:xx (hour)", val);  return buf;
+        case 0x7D: snprintf(buf, sizeof(buf), "xx:%02d (min)", val);   return buf;
+        case 0x7E: snprintf(buf, sizeof(buf), "Day %d", val);          return buf;
+        case 0x7F: snprintf(buf, sizeof(buf), "Month %d", val);        return buf;
+        case 0x80: snprintf(buf, sizeof(buf), "Year 20%02d", val);     return buf;
+        case 0x8F: snprintf(buf, sizeof(buf), "%.1f °C (remote control temp)", val / 2.0f); return buf;
+        case 0xD0: snprintf(buf, sizeof(buf), "%.1f °C (stove room temp)", val / 2.0f); return buf;
+        case 0xD3: snprintf(buf, sizeof(buf), "%d (follows the actual flame power, min 1; not the fan)", val); return buf;
+        case 0x0A: if (!val) return "Room fan power 0 (off)"; snprintf(buf, sizeof(buf), "Room fan power %d (speed x flame: 9/14/19 flame 1, 21/23/25 flame 2, 27 flame 3 speed 1)", val); return buf;
+        case 0xA7: if (!val) return "Room fan drive (2) 0 (off)"; snprintf(buf, sizeof(buf), "Room fan drive (2) %d (~117 - 1.5 x power 0x0A)", val); return buf;
+        case 0xDF: snprintf(buf, sizeof(buf), "%.1f rpm (feed rate)", val / 10.0f); return buf;
+        default:   return "";
+    }
+}
+
+static String getEepromValueTxt(byte addr, int val)
+{
+    if (val < 0) return "read error";
+    char buf[64];
+    switch (addr) {
+        case 0x02: snprintf(buf, sizeof(buf), "%d min (brazier cleaning interval)", val); return buf;
+        case 0x04: snprintf(buf, sizeof(buf), "%.1f (auger value at ignition)", val / 10.0f); return buf;
+        case 0x05: snprintf(buf, sizeof(buf), "%.1f (auger value at flame power 1)", val / 10.0f); return buf;
+        case 0x06: snprintf(buf, sizeof(buf), "%.1f (auger value at flame power 2)", val / 10.0f); return buf;
+        case 0x07: snprintf(buf, sizeof(buf), "%.1f (auger value at flame power 3)", val / 10.0f); return buf;
+        case 0x08: snprintf(buf, sizeof(buf), "%.1f (auger value at flame power 4)", val / 10.0f); return buf;
+        case 0x09: snprintf(buf, sizeof(buf), "%.1f (auger value level 5, unused)", val / 10.0f); return buf;
+        case 0x48: return val ? "Ext thermostat: Stop" : "Ext thermostat: Modulate";
+        case 0x49: return val ? "Ext thermostat: N.C." : "Ext thermostat: N.O.";
+        case 0x4B: return val ? "Beep enabled" : "Beep disabled";
+        case 0x4F: {
+            const char* langs[] = {"", "ENG", "FRA", "DEU", "NLD", "POR", "SPA", "HRV", "DAN"};
+            return (val >= 1 && val <= 8) ? langs[val] : "Unknown language";
+        }
+        case 0x7D: snprintf(buf, sizeof(buf), "%d °C (setpoint room temp)", val); return buf;
+        case 0x7F: snprintf(buf, sizeof(buf), "Flame power %d", val);             return buf;
+        case 0x81: snprintf(buf, sizeof(buf), "Room fan speed %d", val);           return buf;
+        case 0x90: snprintf(buf, sizeof(buf), "+%d °C (energy saving stop offset)", val);  return buf;
+        case 0x91: snprintf(buf, sizeof(buf), "-%d °C (energy saving start offset)", val); return buf;
+        case 0x8A: snprintf(buf, sizeof(buf), "%c (FW variant char 0)", (char)val); return buf;
+        case 0x8B: snprintf(buf, sizeof(buf), "%c (FW variant char 1)", (char)val); return buf;
+        case 0x8C: snprintf(buf, sizeof(buf), "FW product %d", val);  return buf;
+        case 0x8D: snprintf(buf, sizeof(buf), "FW major %d", val);    return buf;
+        case 0x8E: snprintf(buf, sizeof(buf), "FW minor %d", val);    return buf;
+        case 0x8F: snprintf(buf, sizeof(buf), "FW patch %d", val);    return buf;
+        case 0xBC: { const char* l = getPelletQualityLabel(val);     return l ? l : "Unknown pellet quality"; }
+        case 0xC0: { const char* l = getCombustionQualityLabel(val); return l ? l : "Unknown combustion quality"; }
+        case 0xC4: return val ? "Pallet contact N.C." : "Pallet contact N.O.";
+        case 0xC6: return val ? "Low pallet monitoring ON" : "Low pallet monitoring OFF";
+        case 0xE0: case 0xE1: case 0xE2: case 0xE3: case 0xE4:
+            snprintf(buf, sizeof(buf), "%s - %s", getErrorCode(val).c_str(), getErrorDesc(val).c_str());
+            return buf;
+        case 0xE7: snprintf(buf, sizeof(buf), "%d hours since last service", val); return buf;
+        case 0xEA: snprintf(buf, sizeof(buf), "%d (total runtime low byte)", val); return buf;
+        case 0xEB: snprintf(buf, sizeof(buf), "%d (total runtime high byte)", val); return buf;
+        case 0xEC: snprintf(buf, sizeof(buf), "%d working hours", val); return buf;
+        case 0xEE: snprintf(buf, sizeof(buf), "%d (starts low byte)", val);  return buf;
+        case 0xEF: snprintf(buf, sizeof(buf), "%d (starts high byte)", val); return buf;
+        default:   return "";
+    }
+}
+
+static String jsonEscape(const String& s)
+{
+    String out;
+    out.reserve(s.length() + 4);
+    for (unsigned int i = 0; i < s.length(); i++) {
+        char c = s[i];
+        if      (c == '"')  out += "\\\"";
+        else if (c == '\\') out += "\\\\";
+        else                out += c;
+    }
+    return out;
+}
+
+static void parseAddressList(const String& param, bool out[256])
+{
+    pc::parseAddressList(param.c_str(), out);
+}
+
+void handleRouteDump()
+{
+    if (wm.server->method() != HTTP_GET) { wm.server->send(405); return; }
+
+    // --- register param ---
+    String regParam = wm.server->arg("register");
+    if (regParam.length() == 0) regParam = "ram";
+    regParam.toLowerCase();
+    bool doRam         = regParam.indexOf("all") >= 0 || regParam.indexOf("ram")    >= 0;
+    bool doEeprom      = regParam.indexOf("all") >= 0 || regParam.indexOf("eeprom") >= 0;
+    bool filterUnknown = regParam.indexOf("unknown") >= 0;
+
+    // --- address param ---
+    bool addrs[256];
+    parseAddressList(wm.server->arg("address"), addrs);
+
+    struct RegDef {
+        bool        enabled;
+        byte        type;
+        const char* label;
+        String      (*txtFn)(byte, int);
+        bool        (*isKnownFn)(byte);
+    } regs[] = {
+        { doRam,    ram,    "RAM(0x00)",    getRamValueTxt,    isKnownRamAddr    },
+        { doEeprom, eeprom, "EEPROM(0x20)", getEepromValueTxt, isKnownEepromAddr },
+    };
+
+    // Stream the response in chunks: a full dump of both banks is ~45 KB, and
+    // building it as one String can fail on heap fragmentation, which silently
+    // drops parts of the output and produces truncated / invalid JSON.
+    wm.server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+    wm.server->send(200, "application/json", "");
+    String out;
+    out.reserve(2048);
+    auto flushOut = [&out](bool force) {
+        if (force || out.length() > 1500) { wm.server->sendContent(out); out = ""; }
+    };
+    out += "{";
+    bool firstReg = true;
+
+    for (auto& r : regs) {
+        if (!r.enabled) continue;
+
+        if (!firstReg) out += ",";
+        firstReg = false;
+        out += "\"";
+        out += r.label;
+        out += "\":{";
+
+        bool firstAddr = true;
+        for (int addr = 0; addr <= 0xFF; addr++) {
+            if (!addrs[addr]) continue;
+            if (filterUnknown && r.isKnownFn((byte)addr)) continue;
+            esp_task_wdt_reset();
+            int val      = stove.read(r.type, (byte)addr);
+            uint8_t uval = (val >= 0) ? (uint8_t)val : 0;
+            String  txt  = jsonEscape(r.txtFn((byte)addr, val));
+
+            char header[72];
+            snprintf(header, sizeof(header),
+                "%s\"0x%02X\":{\"Address_int\":%d,\"Value_int\":%d,\"Value_txt\":\"",
+                firstAddr ? "" : ",",
+                addr, addr, (val >= 0 ? val : -1));
+            out += header;
+            out += txt;
+
+            char footer[24];
+            snprintf(footer, sizeof(footer), "\",\"Value_hex\":\"0x%02X\"}", uval);
+            out += footer;
+            firstAddr = false;
+            flushOut(false);
+        }
+        out += "}";
+    }
+
+    out += "}";
+    flushOut(true);
+    wm.server->sendContent("");  // terminate the chunked response
+}
+
+void handleRouteRemote()
+{
+    StaticJsonDocument<200> json;
+    json.clear();
+
+    if (wm.server->method() != HTTP_GET)
+    {
+        wm.server->send(405);
+        return;
+    }
+
+    int menuId = stove.read(ram, displayMenuAddr);
+    if (menuId < 0)
+    {
+        json["error"] = "Failed to read remote menu - RS232 error";
+        serializeJson(json, buffer);
+        wm.server->send(500, "application/json", buffer);
+        return;
+    }
+
+    const char* menuName = getRemoteMenuName(menuId);
+    json["displayed_menu"] = menuName;
+    json["diplayed_menu"]  = menuName;  // deprecated misspelled alias, kept for existing clients
+
+    json["menuId"] = menuId;
+    int paramId = stove.read(ram, selectedParamAddr);
+    json["selected_parameter"] = (paramId >= 0) ? getSelectedParameterName(paramId) : "Unknown";
+    if (paramId >= 0) json["parameterId"] = paramId;          // RAM 0x18, 0 = not editing
+    int editVal = stove.read(ram, menuEditValueAddr);
+    if (editVal >= 0) json["editValue"] = editVal;            // RAM 0x19: value the remote shows while editing
+
+    int langId = stove.read(eeprom, languageAddr);
+    if (langId < 0)
+    {
+        json["language"] = "Unknown";
+    }
+    else
+    {
+        switch (langId)
+        {
+            case 1: json["language"] = "ENG"; break;
+            case 2: json["language"] = "FRA"; break;
+            case 3: json["language"] = "DEU"; break;
+            case 4: json["language"] = "NLD"; break;
+            case 5: json["language"] = "POR"; break;
+            case 6: json["language"] = "SPA"; break;
+            case 7: json["language"] = "HRV"; break;
+            case 8: json["language"] = "DAN"; break;
+            default: json["language"] = "Unknown"; break;
+        }
+    }
+
+    serializeJson(json, buffer);
+    wm.server->send(200, "application/json", buffer);
+}

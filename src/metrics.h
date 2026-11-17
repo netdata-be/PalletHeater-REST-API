@@ -54,6 +54,7 @@ public:
 
     bool canHandle(HTTPMethod method, String uri) override {
         requests_total++;
+        netHttpSeen = true;   // confirms a new static IP, see wifiInfo.h
         switch (method) {
             case HTTP_GET:   requests_get++;   break;
             case HTTP_POST:  requests_post++;  break;
