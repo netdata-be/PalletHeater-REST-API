@@ -4497,6 +4497,7 @@
               },
               "resetReason": {
                 "type": "string",
+                "description": "ESP32 reset reason, plus the cause of a restart the firmware did itself, or after a crash / watchdog reset where the loop task was (and for the task watchdog: for how long, and the task running on each CPU)",
                 "example": "software restart – firmware update from GitHub"
               },
               "bootCount": {

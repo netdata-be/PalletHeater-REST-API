@@ -70,10 +70,30 @@ static bool requestHasValidKey()
 
 bool authOk() { return !apiKeyRequired || requestHasValidKey(); }
 
+static const char* httpMethodName(HTTPMethod m)
+{
+    switch (m) {
+    case HTTP_GET: return "GET"; case HTTP_POST: return "POST"; case HTTP_PUT: return "PUT";
+    case HTTP_DELETE: return "DELETE"; case HTTP_OPTIONS: return "OPTIONS"; case HTTP_HEAD: return "HEAD";
+    default: return "?";
+    }
+}
+// Breadcrumb for a web request: method and URI while the handler runs (liveLog.h)
+static void crumbRequest()
+{
+    crumbf("http %s %s", httpMethodName(wm.server->method()), wm.server->uri().c_str());
+}
+// Wrap a route handler so the breadcrumb shows its request (public routes; authed() does it too)
+std::function<void()> crumbed(std::function<void()> fn)
+{
+    return [fn]() { crumbRequest(); fn(); crumb("http: request done"); };
+}
+
 // Wrap a route handler so it is only executed with a valid key (when required)
 std::function<void()> authed(std::function<void()> fn)
 {
     return [fn]() {
+        crumbRequest();
         if (!authOk()) {
             wm.server->sendHeader("WWW-Authenticate", "Bearer");
             LOGW("http", "401 %s from %s: missing or invalid API key", wm.server->uri().c_str(), wm.server->client().remoteIP().toString().c_str());
@@ -82,6 +102,7 @@ std::function<void()> authed(std::function<void()> fn)
         }
         uint32_t t0 = millis();
         fn();
+        crumb("http: request done");
         uint32_t d = millis() - t0;
         const String& uri = wm.server->uri();
         if (d > 5000) LOGW("http", "slow request: %s took %lu ms", uri.c_str(), (unsigned long)d);

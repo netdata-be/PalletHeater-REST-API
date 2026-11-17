@@ -126,7 +126,7 @@ static void registerRoutes()
     wm.server->on("/api/energysaving", authed(withStoveLock(handleRouteEnergysaving)));
     wm.server->on("/api/errors", authed(withStoveLock(handleRouteErrors)));
     wm.server->on("/api/state", authed(getStatus));
-    wm.server->on("/api/health", withStoveLock(handleRouteHealth));   // public: for monitoring without a key
+    wm.server->on("/api/health", crumbed(withStoveLock(handleRouteHealth)));   // public: for monitoring without a key
     wm.server->on("/api/time", authed(withStoveLock(handleRouteTime)));
     wm.server->on("/api/remote", authed(withStoveLock(handleRouteRemote)));
     wm.server->on("/api/burn", authed(withStoveLock(handleRouteBurn)));
@@ -141,13 +141,13 @@ static void registerRoutes()
     wm.server->on("/api/timers/pr6", authed(withStoveLock(handleRouteTimer)));
     wm.server->on("/api/dump", authed(handleRouteDump));   // takes the bus per register itself
     wm.server->on("/api/keywatch", authed(handleRouteKeyWatch));   // takes the stove lock itself, in the sensor task
-    wm.server->on("/api", handleRouteSwaggerUI);
-    wm.server->on("/api-specs.json", handleRouteSwaggerJSON);
-    wm.server->on("/app", HTTP_GET, handleRouteWebApp);   // also served on / (kept for old links)
+    wm.server->on("/api", crumbed(handleRouteSwaggerUI));
+    wm.server->on("/api-specs.json", crumbed(handleRouteSwaggerJSON));
+    wm.server->on("/app", HTTP_GET, crumbed(handleRouteWebApp));   // also served on / (kept for old links)
     wm.server->on("/api/history", authed(handleRouteHistory));
     wm.server->on("/api/events", authed(handleRouteEvents));
-    wm.server->on("/api/auth", handleRouteAuth);   // public: does its own check
-    wm.server->on("/api/update", HTTP_POST, handleUpdateDone, handleUpdateUpload);   // does its own check
+    wm.server->on("/api/auth", crumbed(handleRouteAuth));   // public: does its own check
+    wm.server->on("/api/update", HTTP_POST, crumbed(handleUpdateDone), crumbed(handleUpdateUpload));   // does its own check
     wm.server->on("/api/telnet", authed(handleRouteTelnet));
     wm.server->on("/api/bluetooth", authed(handleRouteBluetooth));
     wm.server->on("/api/mqtt", authed(handleRouteMqtt));
@@ -158,11 +158,11 @@ static void registerRoutes()
     wm.server->on("/api/busmon", authed(handleRouteBusmon));
     wm.server->on("/api/loglevel", authed(handleRouteLogLevel));
     wm.server->on("/api/diag/reset", authed(handleRouteDiagReset));
-    wm.server->on("/", HTTP_GET, handleRouteWebApp);   // the web app is the start page
-    wm.server->on("/device", handleRouteIndex);          // small fallback page with links
-    wm.server->on("/manifest.webmanifest", HTTP_GET, handleRouteManifest);   // home screen install (public)
-    wm.server->on("/icon.svg", HTTP_GET, handleRouteIconSvg);
-    wm.server->on("/icon-180.png", HTTP_GET, handleRouteIcon180);
+    wm.server->on("/", HTTP_GET, crumbed(handleRouteWebApp));   // the web app is the start page
+    wm.server->on("/device", crumbed(handleRouteIndex));          // small fallback page with links
+    wm.server->on("/manifest.webmanifest", HTTP_GET, crumbed(handleRouteManifest));   // home screen install (public)
+    wm.server->on("/icon.svg", HTTP_GET, crumbed(handleRouteIconSvg));
+    wm.server->on("/icon-180.png", HTTP_GET, crumbed(handleRouteIcon180));
     wm.server->on("/restart", authed(handleRouteRestart));
 }
 
@@ -272,18 +272,22 @@ void setup()
 
 void loop()
 {
+    // crumb(): breadcrumb for a watchdog reset, see liveLog.h
     if (telnetEnabled) {
+        crumb("telnet");
         telnet.loop();
         telnetMenuLoop();
     }
-    if (bleEnabled) bleLoop();
+    if (bleEnabled) { crumb("bluetooth"); bleLoop(); }
     esp_task_wdt_reset();
     // wm.process() only calls handleClient() while the config portal is active.
     // Once connected to WiFi the portal is deactivated, so we must call it
     // explicitly to keep the REST server responsive.
     if (wifiConnected && wm.server) {
+        crumb("http: accepting / reading a request");   // a route handler overwrites it with its request
         wm.server->handleClient();
     }
+    crumb("WiFiManager");
     wm.process();
     // WiFi connected only after WiFiManager had started its config portal (connect
     // timeout at start-up): close the portal and start our own server, otherwise
@@ -304,24 +308,27 @@ void loop()
         esp_task_wdt_init(WDT_TIMEOUT, true);
         esp_task_wdt_add(NULL);
     }
+    crumb("reset button");
     resetButton.read();
+    crumb("ArduinoOTA");
     ArduinoOTA.handle();
 
     unsigned long currentMillis = millis();
     if (previousMillisNTP > currentMillis) { previousMillisNTP = 0; }
 
-    historyTick();
-    eventsTick();
-    mqttLoop();
-    netLoop();
-    fwLoop();
-    diagTick();   // health line, clock drift, remote control (liveDebug.h)
+    crumb("history"); historyTick();
+    crumb("events");  eventsTick();
+    crumb("MQTT");    mqttLoop();
+    crumb("network"); netLoop();
+    crumb("firmware update check"); fwLoop();
+    crumb("diagnostics"); diagTick();   // health line, clock drift, remote control (liveDebug.h)
 
     // Sensor cache is refreshed by a background task on the second core.
 
     // NTP sync + WiFi health check — every 60s
     if (currentMillis - previousMillisNTP >= 60000)
     {
+        crumb("NTP / WiFi check");
         // A WiFi reconnect scans the shared radio and usually drops the BLE link,
         // so normally we wait while a BLE client is connected. But never longer
         // than WIFI_FORCE_RECONNECT_MS: otherwise a long BLE session keeps the
@@ -367,4 +374,5 @@ void loop()
         }
         previousMillisNTP = currentMillis;
     }
+    crumb("loop: between steps");
 }

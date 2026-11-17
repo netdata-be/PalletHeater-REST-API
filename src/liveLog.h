@@ -37,6 +37,52 @@ struct RtcDiag {
 static RTC_NOINIT_ATTR RtcDiag rtcDiag;
 static bool rtcReady = false;
 
+// ── Breadcrumb: what the loop task is doing ───────────────────────────
+// The loop task is watched by the task watchdog (5 s). Each step of loop() and
+// each web request notes here what it is doing; the block is in RTC memory, so
+// after a watchdog reset or crash the next start can tell where it got stuck.
+// When the task watchdog fires, esp_task_wdt_isr_user_handler() (called by the
+// ESP-IDF just before it resets) adds the task running on each CPU at that moment.
+static const uint32_t CRUMB_MAGIC = 0x4F504243;   // "OPBC"
+struct RtcCrumb {
+    uint32_t magic;
+    uint32_t since;        // millis() when the step started
+    uint32_t wdtAt;        // millis() when the task watchdog fired, 0 = it did not
+    char     step[64];     // what the loop task was doing
+    char     cpu[2][16];   // task running on CPU 0 / 1 when the watchdog fired
+};
+static RTC_NOINIT_ATTR RtcCrumb rtcCrumb;
+static String diagCrumb;   // where the previous run was when it crashed, "" = not known / no crash
+
+static void crumb(const char* step)
+{
+    strncpy(rtcCrumb.step, step, sizeof(rtcCrumb.step) - 1);
+    rtcCrumb.step[sizeof(rtcCrumb.step) - 1] = 0;
+    rtcCrumb.since = millis();
+}
+static void crumbf(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
+static void crumbf(const char* fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(rtcCrumb.step, sizeof(rtcCrumb.step), fmt, ap);
+    va_end(ap);
+    rtcCrumb.since = millis();
+}
+// Called by the ESP-IDF task watchdog interrupt (weak symbol in esp_system),
+// right before the reset: only fill in RTC memory, no logging.
+extern "C" void esp_task_wdt_isr_user_handler(void)
+{
+    rtcCrumb.wdtAt = millis();
+    if (!rtcCrumb.wdtAt) rtcCrumb.wdtAt = 1;
+    for (int c = 0; c < 2; c++) {
+        TaskHandle_t t = xTaskGetCurrentTaskHandleForCPU(c);
+        const char* n = t ? pcTaskGetTaskName(t) : "?";
+        strncpy(rtcCrumb.cpu[c], n ? n : "?", sizeof(rtcCrumb.cpu[c]) - 1);
+        rtcCrumb.cpu[c][sizeof(rtcCrumb.cpu[c]) - 1] = 0;
+    }
+}
+
 static void rtcLogWrite(char c)
 {
     rtcDiag.log[rtcDiag.total % sizeof(rtcDiag.log)] = c;
@@ -201,6 +247,7 @@ static String diagResetText()
 {
     String s = resetReasonName(diagReason);
     if (diagNote.length()) s += " – " + diagNote;
+    if (diagCrumb.length()) s += " – " + diagCrumb;
     return s;
 }
 // Remember why we are about to restart (shown after the start), e.g. before
@@ -240,6 +287,23 @@ static void liveLogSetup()
 
     // previous run: the log from RTC memory and our own restart note
     diagReason = esp_reset_reason();
+    // breadcrumb of the previous run: only after a crash (after our own restart it
+    // just shows the restart code path)
+    if (rtcCrumb.magic == CRUMB_MAGIC && diagReason != ESP_RST_POWERON && resetIsCrash(diagReason)) {
+        rtcCrumb.step[sizeof(rtcCrumb.step) - 1] = 0;
+        rtcCrumb.cpu[0][sizeof(rtcCrumb.cpu[0]) - 1] = 0;
+        rtcCrumb.cpu[1][sizeof(rtcCrumb.cpu[1]) - 1] = 0;
+        diagCrumb = String("loop task was in: ") + (rtcCrumb.step[0] ? rtcCrumb.step : "?");
+        if (rtcCrumb.wdtAt) {
+            uint32_t d = rtcCrumb.wdtAt - rtcCrumb.since;
+            char b[96];
+            snprintf(b, sizeof(b), " (for %lu.%lu s); running: CPU0 %s, CPU1 %s",
+                     (unsigned long)(d / 1000), (unsigned long)(d % 1000 / 100), rtcCrumb.cpu[0], rtcCrumb.cpu[1]);
+            diagCrumb += b;
+        }
+    }
+    rtcCrumb.magic = CRUMB_MAGIC; rtcCrumb.wdtAt = 0;
+    crumb("setup");
     bool rtcValid = rtcDiag.magic == RTC_MAGIC && diagReason != ESP_RST_POWERON;
     if (rtcValid) {
         rtcDiag.note[sizeof(rtcDiag.note) - 1] = 0;
