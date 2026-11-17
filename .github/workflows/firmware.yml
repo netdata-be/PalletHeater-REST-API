@@ -66,8 +66,21 @@ jobs:
       - name: Unit tests (native)
         run: pio test -e native
 
+      - name: Check web app (syntax, texts in both languages)
+        run: node scripts/check_webapp.mjs web/app.html
+
+      - name: Validate OpenAPI spec
+        run: |
+          pip install "openapi-spec-validator==0.9.0"
+          python -m openapi_spec_validator docs/openapi.json
+
       - name: Build firmware
         run: pio run -e "$PIO_ENV"
+
+      - name: Build BLE OTA environment
+        # same sources, but its own upload script (scripts/ble_ota_upload.py): make
+        # sure that environment still configures and builds
+        run: pio run -e esp32doit-devkit-v1-ble-ota
 
       - name: Package
         run: |

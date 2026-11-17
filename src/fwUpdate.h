@@ -21,8 +21,7 @@
 #ifndef FW_REPO
 #define FW_REPO "netdata-be/PalletHeater-REST-API"
 #endif
-#define FW_ASSET "openpelletbridge-firmware.bin"
-#define FW_ASSET_OLD "palletheater-firmware.bin"   // name up to v1.0.0 (PalletHeater), accepted as fallback
+#define FW_ASSET PC_FW_ASSET   // the old name PC_FW_ASSET_OLD (up to v1.0.0) is the fallback, see pc::firmwareAssetRank
 static const unsigned long FW_FIRST_CHECK_MS = 2UL * 60UL * 1000UL;
 static const unsigned long FW_CHECK_EVERY_MS = 24UL * 3600UL * 1000UL;
 
@@ -83,12 +82,10 @@ static String fwDoCheck()
     if (de) return String("invalid answer from GitHub: ") + de.c_str();
     const char* tag = doc["tag_name"] | "";
     if (!*tag) return "release without tag";
-    String url; size_t size = 0;
+    String url; size_t size = 0; int best = 0;
     for (JsonObject a : doc["assets"].as<JsonArray>()) {
-        const char* n = a["name"] | "";
-        bool cur = strcmp(n, FW_ASSET) == 0;
-        if (cur || (strcmp(n, FW_ASSET_OLD) == 0 && !url.length())) { url = a["browser_download_url"] | ""; size = a["size"] | 0; }
-        if (cur) break;
+        int r = pc::firmwareAssetRank(a["name"] | "");
+        if (r > best) { best = r; url = a["browser_download_url"] | ""; size = a["size"] | 0; }
     }
     fwLatest = tag;
     fwReleaseUrl = doc["html_url"] | "";

@@ -823,7 +823,7 @@ pio device monitor -e esp32doit-devkit-v1-serial
 
 ### CI and releases
 
-[.github/workflows/firmware.yml](.github/workflows/firmware.yml) runs the unit tests and builds the firmware on every push to `master`, every pull request and on demand (*Run workflow*). The images are kept as workflow artifact `openpelletbridge-<version>` (Actions → run → *Artifacts*):
+[.github/workflows/firmware.yml](.github/workflows/firmware.yml) runs the unit tests, checks the web app ([scripts/check_webapp.mjs](scripts/check_webapp.mjs): script syntax, every text in English and Dutch, no unknown text keys), validates the OpenAPI spec and builds the firmware (plus the BLE OTA environment) on every push to `master`, every pull request and on demand (*Run workflow*). Run the web app check locally with `node scripts/check_webapp.mjs`. The images are kept as workflow artifact `openpelletbridge-<version>` (Actions → run → *Artifacts*):
 
 | File | Use |
 |---|---|

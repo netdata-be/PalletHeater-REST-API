@@ -270,10 +270,10 @@ Not fully completed yet
 |-------|----------|-------------|-------------------------------------------------------------------------------|
 |   0   | 00000000 | -           | No Error                                                                      |
 |   1   | 00000001 | E8          | Fume sensor error                                                             |
-|   2   | 00000010 | E4          | Fume temperature to high                                                      |
+|   2   | 00000010 | E4          | Fume temperature too high                                                      |
 |   4   | 00000100 | E9          | Ignition temperature not reached within limit                                 |
-|   8   | 00001000 | E7          | Fume temperatuer to low                                                       |
-|  16   | 00010000 | E3          | Temperature inside stove to high                                              |
+|   8   | 00001000 | E7          | Fume temperature too low                                                       |
+|  16   | 00010000 | E3          | Temperature inside stove too high                                              |
 |  32   | 00100000 | E1          | Pellet loading door is open for too long or air pressure inside stove is wrong |
 |  64   | 01000000 | E2          | Pressure sensor error during ignition                                         |
 | 128   | 10000000 | E6          | Auger error - Too many pellets dispatched                                  |

@@ -325,4 +325,76 @@ inline bool updateAvailable(const char* current, const char* latest)
     return compareVersion(l, c) > 0;
 }
 
+// ---- Stove states and error codes ------------------------------------------------
+// RAM 0x21 stove state -> English name, and whether the stove counts as "on"
+// (power switch). Unlisted values give "Unknown" / off.
+inline const char* stoveStateName(int state)
+{
+    switch (state) {
+    case -1: return "Unknown [RS232 Serial Error]";
+    case 0:  return "Off";
+    case 1:  return "Starting";
+    case 2:  return "Pellet loading";
+    case 3:  return "Ignition";
+    case 4:  return "Working";
+    case 5:  return "Brazier cleaning";    // periodic cleaning while working, still running
+    case 6:  return "Final cleaning";
+    case 7:  return "Standby";
+    case 8:  return "Alarm State";
+    case 9:  return "Ignition failure";
+    case 10: return "Alarm";
+    default: return "Unknown";
+    }
+}
+inline bool stoveStateIsOn(int state)
+{
+    // 8 (alarm): doStoveOff() still sends a shutdown (6) in this state, so treat it as on
+    return (state >= 1 && state <= 5) || state == 7 || state == 8;
+}
+
+// Error memory / current error (RAM 0x6E): value -> display code and description.
+struct ErrorInfo { int id; const char* code; const char* desc; };
+inline const ErrorInfo* errorTable(int& count)
+{
+    static const ErrorInfo t[] = {
+        {   0, "---",        "No Error" },
+        {   1, "E8",         "Fume sensor error" },
+        {   2, "E4",         "Fume temperature too high" },
+        {   4, "E9",         "Ignition temperature not reached within limit" },
+        {   8, "E7",         "Fume temperature too low" },
+        {  16, "E3",         "Temperature inside stove too high" },
+        {  32, "E1",         "Pellet loading door is open for too long or air pressure inside stove is wrong" },
+        {  64, "E2",         "Pressure sensor error during ignition" },
+        { 128, "E6",         "Auger error - Too many pellets dispatched" },
+        { 129, "E12",        "Fume fan error" },
+        { 130, "E11",        "Unknown error - Not described in manual" },
+        { 132, "E19",        "External contact N.PEL / Pellet is active" },
+        { 136, "E13",        "Unknown error - Not described in manual" },
+        { 255, "PowerError", "Display shows power error" },
+    };
+    count = (int)(sizeof(t) / sizeof(t[0]));
+    return t;
+}
+inline const ErrorInfo* errorInfo(int id)
+{
+    int n; const ErrorInfo* t = errorTable(n);
+    for (int i = 0; i < n; i++) if (t[i].id == id) return &t[i];
+    return nullptr;
+}
+inline const char* errorCode(int id) { const ErrorInfo* e = errorInfo(id); return e ? e->code : "---"; }
+inline const char* errorDesc(int id) { const ErrorInfo* e = errorInfo(id); return e ? e->desc : "Unknown error"; }
+
+// ---- Firmware release asset ----------------------------------------------------
+// Which release asset to download: the current name wins, the name before the
+// rename (PalletHeater, up to v1.0.0) is a fallback. 0 = not a firmware image.
+#define PC_FW_ASSET     "openpelletbridge-firmware.bin"
+#define PC_FW_ASSET_OLD "palletheater-firmware.bin"
+inline int firmwareAssetRank(const char* name)
+{
+    if (!name) return 0;
+    if (strcmp(name, PC_FW_ASSET) == 0) return 2;
+    if (strcmp(name, PC_FW_ASSET_OLD) == 0) return 1;
+    return 0;
+}
+
 } // namespace pc

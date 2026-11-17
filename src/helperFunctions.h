@@ -9,96 +9,10 @@ bool isConnected()
 void getStoveState() // Get detailed stove state
 {
     stoveState = stove.read(ram, stoveStateAddr);
-
-    switch (stoveState)
-    {
-    case OFF:
-        snprintf(StoveStateStr, sizeof(StoveStateStr), "Off");
-        StoveIsOn = false;
-        break;
-    case STARTING:
-        snprintf(StoveStateStr, sizeof(StoveStateStr), "Starting");
-        StoveIsOn = true;
-        break;
-    case PALLET_LOADING:
-        snprintf(StoveStateStr, sizeof(StoveStateStr), "Pellet loading");
-        StoveIsOn = true;
-        break;
-    case IGNITION:
-        snprintf(StoveStateStr, sizeof(StoveStateStr), "Ignition");
-        StoveIsOn = true;
-        break;
-    case WORKING:
-        snprintf(StoveStateStr, sizeof(StoveStateStr), "Working");
-        StoveIsOn = true;
-        break;
-    case BRAZIER_CLEANING:  // periodic cleaning while working, stove is still running
-        snprintf(StoveStateStr, sizeof(StoveStateStr), "Brazier cleaning");
-        StoveIsOn = true;
-        break;
-    case FINAL_CLEANING:
-        snprintf(StoveStateStr, sizeof(StoveStateStr), "Final cleaning");
-        StoveIsOn = false;
-        break;
-    case STANDBY:
-        snprintf(StoveStateStr, sizeof(StoveStateStr), "Standby");
-        StoveIsOn = true;
-        break;
-    case ALARM:  // doStoveOff() still sends a shutdown (6) in this state, so treat it as on
-        snprintf(StoveStateStr, sizeof(StoveStateStr), "Alarm State");
-        StoveIsOn = true;
-        break;
-    case IGNITION_FAILURE:
-        snprintf(StoveStateStr, sizeof(StoveStateStr), "Ignition failure");
-        StoveIsOn = false;
-        break;
-    case ALARM_STATE:
-        snprintf(StoveStateStr, sizeof(StoveStateStr), "Alarm");
-        StoveIsOn = false;
-        break;
-    case UNKNOWN:
-        snprintf(StoveStateStr, sizeof(StoveStateStr), "Unknown [RS232 Serial Error]");
-        StoveIsOn = false;
-        break;
-    }
+    snprintf(StoveStateStr, sizeof(StoveStateStr), "%s", pc::stoveStateName(stoveState));
+    StoveIsOn = pc::stoveStateIsOn(stoveState);
 }
 
-struct ErrorEntry {
-    int id;
-    const char* code;
-    const char* desc;
-};
-
-static const ErrorEntry errorTable[] = {
-    {   0, "---",        "No Error" },
-    {   1, "E8",         "Fume sensor error" },
-    {   2, "E4",         "Fume temperature to high" },
-    {   4, "E9",         "Ignition temperature not reached within limit" },
-    {   8, "E7",         "Fume temperatuer to low" },
-    {  16, "E3",         "Temperature inside stove to high" },
-    {  32, "E1",         "Pellet loading door is open for too long or air pressure inside stove is wrong" },
-    {  64, "E2",         "Pressure sensor error during ignition" },
-    { 128, "E6",         "Auger error - Too many pellets dispatched" },
-    { 129, "E12",        "Fume fan error" },
-    { 130, "E11",        "Unknown error - Not described in manual" },
-    { 132, "E19",        "External contact N.PEL / Pellet is active" },
-    { 136, "E13",        "Unknown error - Not described in manual" },
-    { 255, "PowerError", "Display shows power error" },
-};
-static const int errorTableSize = sizeof(errorTable) / sizeof(errorTable[0]);
-
-String getErrorCode(int error)
-{
-    for (int i = 0; i < errorTableSize; i++) {
-        if (errorTable[i].id == error) return errorTable[i].code;
-    }
-    return "---";
-}
-
-String getErrorDesc(int error)
-{
-    for (int i = 0; i < errorTableSize; i++) {
-        if (errorTable[i].id == error) return errorTable[i].desc;
-    }
-    return "Unknown error";
-}
+// Error table: lib/pelletcore (pc::errorTable), unit tested
+String getErrorCode(int error) { return pc::errorCode(error); }
+String getErrorDesc(int error) { return pc::errorDesc(error); }

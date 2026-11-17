@@ -304,6 +304,52 @@ static void test_update_available()
     TEST_ASSERT_FALSE(pc::updateAvailable("v1.0.0", "nightly"));
 }
 
+static void test_stove_state()
+{
+    TEST_ASSERT_EQUAL_STRING("Off", pc::stoveStateName(0));
+    TEST_ASSERT_EQUAL_STRING("Working", pc::stoveStateName(4));
+    TEST_ASSERT_EQUAL_STRING("Brazier cleaning", pc::stoveStateName(5));
+    TEST_ASSERT_EQUAL_STRING("Unknown [RS232 Serial Error]", pc::stoveStateName(-1));
+    TEST_ASSERT_EQUAL_STRING("Unknown", pc::stoveStateName(42));
+    // on: starting .. brazier cleaning, standby, alarm (shutdown still needed)
+    const bool on[] = { false, true, true, true, true, true, false, true, true, false, false };
+    for (int st = 0; st <= 10; st++) TEST_ASSERT_EQUAL_MESSAGE(on[st], pc::stoveStateIsOn(st), pc::stoveStateName(st));
+    TEST_ASSERT_FALSE(pc::stoveStateIsOn(-1));
+}
+static void test_error_table()
+{
+    TEST_ASSERT_EQUAL_STRING("E1",  pc::errorCode(32));    // false alarm during start-up check (state 1)
+    TEST_ASSERT_EQUAL_STRING("E9",  pc::errorCode(4));
+    TEST_ASSERT_EQUAL_STRING("E12", pc::errorCode(129));
+    TEST_ASSERT_EQUAL_STRING("---", pc::errorCode(0));
+    TEST_ASSERT_EQUAL_STRING("---", pc::errorCode(77));             // unknown value
+    TEST_ASSERT_EQUAL_STRING("Unknown error", pc::errorDesc(77));
+    TEST_ASSERT_EQUAL_STRING("No Error", pc::errorDesc(0));
+    int n; const pc::ErrorInfo* t = pc::errorTable(n);
+    TEST_ASSERT_TRUE(n >= 10);
+    for (int i = 0; i < n; i++) {
+        TEST_ASSERT_TRUE(t[i].code[0] && t[i].desc[0]);
+        for (int j = i + 1; j < n; j++) {
+            TEST_ASSERT_NOT_EQUAL(t[i].id, t[j].id);                  // ids unique
+            if (strcmp(t[i].code, "---") != 0) TEST_ASSERT_TRUE(strcmp(t[i].code, t[j].code) != 0);   // codes unique
+        }
+        TEST_ASSERT_NULL(strstr(t[i].desc, " to high"));              // spelling regressions
+        TEST_ASSERT_NULL(strstr(t[i].desc, " to low"));
+        TEST_ASSERT_NULL(strstr(t[i].desc, "allet"));
+    }
+}
+static void test_firmware_asset()
+{
+    TEST_ASSERT_EQUAL_INT(2, pc::firmwareAssetRank("openpelletbridge-firmware.bin"));
+    TEST_ASSERT_EQUAL_INT(1, pc::firmwareAssetRank("palletheater-firmware.bin"));   // controllers up to v1.0.0
+    TEST_ASSERT_EQUAL_INT(0, pc::firmwareAssetRank("openpelletbridge-factory.bin")); // never the full flash image
+    TEST_ASSERT_EQUAL_INT(0, pc::firmwareAssetRank("SHA256SUMS"));
+    TEST_ASSERT_EQUAL_INT(0, pc::firmwareAssetRank(""));
+    TEST_ASSERT_EQUAL_INT(0, pc::firmwareAssetRank(nullptr));
+    // the old name must stay a fallback: it may not win over the current one
+    TEST_ASSERT_TRUE(pc::firmwareAssetRank(PC_FW_ASSET) > pc::firmwareAssetRank(PC_FW_ASSET_OLD));
+}
+
 int main(int, char**)
 {
     UNITY_BEGIN();
@@ -335,5 +381,8 @@ int main(int, char**)
     RUN_TEST(test_rssi_quality);
     RUN_TEST(test_parse_version);
     RUN_TEST(test_update_available);
+    RUN_TEST(test_stove_state);
+    RUN_TEST(test_error_table);
+    RUN_TEST(test_firmware_asset);
     return UNITY_END();
 }

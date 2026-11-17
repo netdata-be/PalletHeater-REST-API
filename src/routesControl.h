@@ -57,9 +57,9 @@ static bool isKnownErrorId(const String& arg, int& out)
     if (a.length() == 0) return false;
     for (unsigned int i = 0; i < a.length(); i++) if (!isDigit(a[i])) return false;
     int v = a.toInt();
-    for (int i = 0; i < errorTableSize; i++)
-        if (errorTable[i].id == v) { out = v; return true; }
-    return false;
+    if (!pc::errorInfo(v)) return false;   // only values from the error table (lib/pelletcore)
+    out = v;
+    return true;
 }
 
 void handleRouteErrors()
