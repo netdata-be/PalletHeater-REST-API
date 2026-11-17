@@ -4,7 +4,7 @@
 void saveConfigCallback() // Save params to SPIFFS
 {
     if (!spiffsMounted) {
-        LOGW("sys", "SPIFFS not mounted: config portal settings not saved");
+        LOGE("sys", "SPIFFS not mounted: config portal settings not saved");
         return;
     }
     LOGI("sys", "config portal: saving hydro mode '%s'", custom_hydro_mode.getValue());
@@ -79,6 +79,6 @@ void setup_wifi() // Setup WiFiManager and connect to WiFi
     else
     {
         wifiConnected = false;
-        LOGW("wifi", "no WiFi: config portal running");
+        LOGE("wifi", "no WiFi connection within 30 s: config portal running (access point 'Pellet heater controller')");
     }
 }

@@ -76,7 +76,7 @@ Hold the reset button for 5 seconds to wipe the WiFi settings and restart the ca
 
 ![Device, network and MQTT cards](img/app-device.png)
 
-**Live debugging** (*Debug* on). *Firmware log* shows what the controller writes to its serial port, with the time; warnings are orange, errors red. After a restart it starts with the last lines from before it. *Log levels per module* sets how much each part writes.
+**Console** (button *Console* in the header, shown in Debug mode and whenever the stove does not answer; or Ctrl+`). A panel docked at the bottom like the browser's developer tools, with a draggable edge; it stays usable when the stove is unreachable. Three tabs: *Firmware log*, *Stove bus* and *Requests* (the API calls of the page itself with status and duration). *Firmware log* shows what the controller writes to its serial port, with the time; warnings are orange, errors red. After a restart it starts with the last lines from before it. *Log levels per module* sets how much each part writes.
 
 ![Live firmware log](img/app-livelog.png)
 
@@ -93,6 +93,7 @@ Hold the reset button for 5 seconds to wipe the WiFi settings and restart the ca
 - **Status:** stove state, room / set point / fume temperatures, the sensor the room temperature comes from (derived from the readings), the wireless sensor setting, sensors, fume fan, auger speed, pellet level, error memory, stove vs NTP clock, firmware, starts and working hours. Refreshes every 5 s from `/api/state`.
 - **Alerts:** a banner for alarms (states 8 – 10), an active error code, no answer from the stove, low pellets, stale data and an unreachable controller.
 - **Settings backup:** *Back up settings* under *Device* downloads a JSON file with the stove settings, timers, MQTT (without password), network, device options and display choices; *Restore settings* writes the parts you tick back through the normal API (no passwords or API key in the file).
+- **Status dots:** two dots in the header: *Stove* for the serial link between the controller and the stove (green OK, red the stove does not answer, orange data older than 30 s) and the controller dot for the connection between the page and the controller (green with the time of the last update, red offline). On a phone only the stove dot is shown.
 - **Update badge:** when a newer release is available an *Update* button appears in the header, next to the version.
 - **Home screen:** the app has a web app manifest and icon (`/manifest.webmanifest`, `/icon.svg`, `/icon-180.png`), so *Add to Home Screen* (iOS Safari, Android Chrome) gives it its own icon and a full-screen window. (Installing as a real PWA needs HTTPS, which the controller does not have; the home screen shortcut works over HTTP.)
 - **History:** one chart for the last 30 min / 1 / 6 / 12 / 24 h or 7 days (hourly averages, with the share of each hour the stove was burning) (from `/api/history`) with toggles for room, set point, stove sensor, remote sensor, flame power, room fan, fume temperature, auger speed, fume fan speed and vertical lines at the exact stove state changes (from `/api/events`), plus a list of the state changes with their duration. Each quantity has its own lane and scale on a shared time axis, with one crosshair tooltip and a table view.
@@ -141,7 +142,7 @@ curl -H "X-API-Key: <key>" http://openpelletbridge.local/api/state
 curl -H "Authorization: Bearer <key>" http://openpelletbridge.local/metrics
 ```
 
-Always reachable without key: `/` and `/app` (web app), `/device` (fallback page), `/api` + `/api-specs.json` (API docs, use **Authorize** in Swagger UI) and `/api/auth`.
+Always reachable without key: `/` and `/app` (web app), `/device` (fallback page), `/api/health` (for monitoring), `/api` + `/api-specs.json` (API docs, use **Authorize** in Swagger UI) and `/api/auth`.
 
 | Call | Effect |
 |---|---|
@@ -186,6 +187,7 @@ scrape_configs:
 | `GET` | [`/api/log`](#live-debugging) | Live firmware log (cursor) |
 | `GET` `POST` | [`/api/busmon`](#live-debugging) | Live stove bus monitor (cursor) |
 | `GET` `POST` | [`/api/loglevel`](#live-debugging) | Log level per firmware module |
+| `POST` | [`/api/diag/reset`](#live-debugging) | Reset the serial counters (`serial=true`) and / or the crash counter (`crashes=true`) |
 | `GET` | [`/api/events`](#get-apievents) | Log of stove state changes and errors with exact times |
 | `GET` `POST` | [`/api/bluetooth`](#apibluetooth) | Enable / disable Bluetooth (BLE) |
 | `GET` `POST` | [`/api/mqtt`](#apimqtt) | MQTT settings and status |
@@ -258,6 +260,7 @@ curl http://openpelletbridge.local/api/state
 | `temperatures.fume` | Exhaust temperature (°C). |
 | `energySaving` | See [`/api/energysaving`](#apienergysaving). |
 | `lowPalletAlarm` | `1` when the pellet level is low. |
+| `pelletReserve` | `enabled` (installer setting PELLET RESERVE), `sensor` (RAM 0xA4: `5` = the level sensor sees low pellets), `counter` (RAM 0x89) and `minutesLeft`: while the sensor reports low pellets RAM 0x89 counts down from 20 to 0, about one step per minute, to the reserve alarm; `null` otherwise. |
 | `brazierCleaning` | `minutesLeft`: minutes to the next brazier cleaning (RAM 0x32), `null` when the stove is not working; `active`: `true` while the cleaning runs (state 5); `interval`: minutes between cleanings (EEPROM 0x02). |
 | `totalRuntime` | Total working hours. |
 | `augerSpeed` | Auger speed in rpm. |
@@ -266,7 +269,8 @@ curl http://openpelletbridge.local/api/state
 | `time.delta` | NTP time minus stove time, in seconds. |
 | `dataAge` | Seconds since the cache was last refreshed: `fastSeconds` (state, flame, fan, fumes; every ~2 – 4 s) and `slowSeconds` (temperatures, settings, timers; every ~16 – 60 s). `null` until the first refresh. A large value means the stove is not answering. |
 | `serial` | Serial bus counters since boot: reads / writes that failed after all retries, and individual retries. |
-| `currentError` | Active error (RAM `0x33`): `false`, or `{ "id", "error", "desc" }` like the error memory. |
+| `currentError` | Active error: `false`, or `{ "id", "error", "desc", "source" }`. `source` `stove`: an error code of the stove (RAM `0x33`, like the error memory). `source` `controller`: `{"id": -1, "error": "LINK", "desc": "No answer from the stove (serial link down)"}` while the stove does not answer. |
+| Unknown values | Values never read from the stove since the start are `null`; once read, the last known value stays (see `dataAge`). While the stove does not answer `stoveState.poweredOn` and `brazierCleaning.active` are `null` too. |
 | `controller` | Controller (ESP32) firmware build: `version` from `git describe --tags --always --dirty` (`-dirty` = built with uncommitted changes), `built` build time in UTC, `branch`, PlatformIO `env`. Generated by [scripts/buildinfo.py](scripts/buildinfo.py) on every build. Also exported as the Prometheus metric `esp32_build_info`. |
 
 On a serial error the cache keeps the last known value, so a failed read never shows up as `-1` or `255`.
@@ -621,6 +625,9 @@ curl "http://openpelletbridge.local/api/events?hours=24"
 
 `t` is Unix time (UTC). For `type: "state"`, `from` and `to` are stove state codes (see `/api/state`); `from` is `null` for the first change after the log was empty. For `type: "error"`, `id` is the raw error value and `error` the code (`id` 0 / `error` null = error cleared). Errors are only logged once they last 30 s (3 minutes during start-up, pellet loading, ignition, brazier cleaning and shut-down) or the stove is in an alarm state; RAM 0x33 briefly shows E12 when brazier cleaning starts and stops and E1 during the start-up check, which are not errors. For `type: "pellet"`, `register` is `0xA4` (pellet reserve sensor) or `0x89` (pellet reserve counter) with the old and new value; these are logged to find out how the pellet reserve works. Oldest first. The web app uses the error entries to show when each error memory entry occurred.
 
+
+Serial link events: `{"t": …, "type": "link", "up": false}` when the stove stopped answering on the serial bus, `"up": true` when it answered again (the chart draws them red / green). Brazier cleaning (state 5) is not logged as a state change: it is a short periodic step while working.
+
 ### `/api/bluetooth`
 
 Bluetooth (BLE) can be switched off to give WiFi the radio to itself. The setting is stored in NVS and applied at the next boot: with BLE off, `setupBLE()` and `bleLoop()` are skipped, the BT controller memory is released and WiFi modem sleep is disabled. The iOS app then only works via WiFi.
@@ -728,6 +735,10 @@ Kept for backwards compatibility. Use the `/api/...` routes for new integrations
 | `/cq?s=<raw>` | Write the raw combustion quality value. Use `POST /api/burn`. |
 | `/display?menu=<id>` | Force the display to a menu id. |
 
+### Serial link to the stove
+
+The Stove library keeps track of the link: after 2 transactions in a row that failed after all 3 attempts the link is **down**. Then every read and write fails at once without touching the bus (web routes answer `503 The stove does not answer`, `/api/health` `500`), and only the sensor task probes the state register every 5 s. One answer brings the link up again. `/api/state` → `serial.linkUp`, `serial.skipped`, `serial.transactions`; metrics `stove_serial_link_up`, `stove_serial_skipped_total`, `stove_serial_transactions_total`. Losing and regaining the stove are logged (`stove`: error / info).
+
 ### Live debugging
 
 Two cursor based routes behind the web app's *Live debugging* card (Debug mode). Start with `since=0` and pass the `next` of each answer as the next `since`. `lost: true` means the cursor was older than the buffer and entries were overwritten; a cursor from before a restart starts again at the oldest entry.
@@ -767,7 +778,7 @@ curl -X POST "http://openpelletbridge.local/api/loglevel?wifi=debug&bus=debug"
 | `stove` | every **write** to the stove with what it means and **who** did it (web/API with IP and route, MQTT command, Bluetooth app, telnet, or the controller itself); state changes with their duration and **probable cause** (power command and its source, timer program, energy saving with the room temperature, brazier cleaning, error); errors and when they clear; setting changes; low pellets; stove clock more than 60 s off NTP; remote control not heard for 30 min; slow sensor cycles and long waits for the bus. `debug`: measured values when they change (old -> new): temperatures, fumes (steps of 5 °C), actual flame power and room fan, fume fan start / stop / speed, auger, brazier cleaning countdown |
 | `bus` | stove reads / writes that failed after all attempts (`debug`: failed attempts that were retried, and every frame while the telnet bus debug is on) |
 | `update` | firmware updates (GitHub, upload, ArduinoOTA) |
-| `http` | web server; requests refused for a missing API key (401), stove bus busy (503) and slow requests (> 2 s). `debug`: access log (method, path, parameters with secrets masked, client IP) and the duration of each request; the live log's own polling is left out |
+| `http` | web server; requests refused for a missing API key (401), stove bus busy (503) and slow requests (> 5 s). `debug`: access log (method, path, parameters with secrets masked, client IP) and the duration of each request; the live log's own polling is left out |
 | `history` | history files: what was found at start-up, failed writes |
 | `ble` | Bluetooth: connections, commands received, BLE OTA (`debug`: subscriptions and notifications) |
 
@@ -824,7 +835,7 @@ curl -X POST "http://openpelletbridge.local/api/firmware?autoCheck=false"
 
 | `stoveState` | `state` | `poweredOn` |
 |---|---|---|
-| -1 | Unknown [RS232 Serial Error] | false |
+| -1 | No answer (serial link down) | `null` (unknown) |
 | 0 | Off | false |
 | 1 | Starting | true |
 | 2 | Pellet loading | true |

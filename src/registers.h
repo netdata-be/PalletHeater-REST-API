@@ -108,7 +108,7 @@ static bool isKnownRamAddr(byte addr)
         case 0x27: case 0x36: case 0x81: case 0x82:
         case 0x21: case 0x31: case 0x32: case 0x33: case 0x34:
         case 0x37: case 0x3E: case 0x44: case 0x48: case 0x4D:
-        case 0x50: case 0x7A: case 0x7B: case 0x7C: case 0x7D:
+        case 0x50: case 0x7A: case 0x7B: case 0x7C: case 0x7D: case 0x89: case 0xA4:
         case 0x7E: case 0x7F: case 0x80: case 0x8F: case 0xD0:
         case 0xD3: case 0xDF:
             return true;
@@ -181,7 +181,10 @@ static String getRamValueTxt(byte addr, int val)
         case 0x44: snprintf(buf, sizeof(buf), "%.1f °C (stove room temp)", val / 2.0f); return buf;
         case 0x48: if (!val) return "0 rpm (fume fan stopped)"; snprintf(buf, sizeof(buf), "%d rpm (fume fan)", (val + 25) * 10); return buf;
         case 0x4D: return val ? "1 (flip)" : "0 (flop)";
-        case 0x50: snprintf(buf, sizeof(buf), "%d min remaining (low pellet)", val); return buf;
+        case 0x50: snprintf(buf, sizeof(buf), "%d (unknown; stayed 0 during the pellet reserve countdown)", val); return buf;
+        case 0x91: snprintf(buf, sizeof(buf), "%d (pellet reserve phase 2: x 30 s until the stove switches off = %d min)", val, (val + 1) / 2); return buf;
+        case 0x89: snprintf(buf, sizeof(buf), "%d min until the pellet reserve alarm (counts down while RAM 0xA4 = 5, 20 = full)", val); return buf;
+        case 0xA4: return val == 5 ? "5 (level sensor: pellets low)" : "0 (level sensor: pellets OK)";
         case 0x7A: snprintf(buf, sizeof(buf), "%d sec", val);  return buf;
         case 0x7B: {
             const char* days[] = {"", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"};
@@ -270,6 +273,15 @@ static void parseAddressList(const String& param, bool out[256])
 void handleRouteDump()
 {
     if (wm.server->method() != HTTP_GET) { wm.server->send(405); return; }
+    if (stove.linkDown) {
+        wm.server->send(503, "application/json", "{\"error\":\"The stove does not answer (serial connection) - try again later\"}");
+        return;
+    }
+    // The bus lock is taken per register (not for the whole dump), so the sensor
+    // task can read in between: a dump of 60 registers takes several seconds.
+    int failedInRow = 0;
+    char src[96];
+    snprintf(src, sizeof(src), "web/API %s (GET %s)", wm.server->client().remoteIP().toString().c_str(), wm.server->uri().c_str());
 
     // --- register param ---
     String regParam = wm.server->arg("register");
@@ -321,7 +333,15 @@ void handleRouteDump()
             if (!addrs[addr]) continue;
             if (filterUnknown && r.isKnownFn((byte)addr)) continue;
             esp_task_wdt_reset();
-            int val      = stove.read(r.type, (byte)addr);
+            int val = -1;
+            // stove gone during the dump: the remaining registers are reported as
+            // read errors (-1) without trying them, instead of 3 attempts each
+            if (failedInRow < 3 && !stove.linkDown && stoveLockTake(3000)) {
+                CmdSource cs(src);
+                val = stove.read(r.type, (byte)addr);
+                if (stoveMutex) xSemaphoreGiveRecursive(stoveMutex);
+                failedInRow = val < 0 ? failedInRow + 1 : 0;
+            }
             uint8_t uval = (val >= 0) ? (uint8_t)val : 0;
             String  txt  = jsonEscape(r.txtFn((byte)addr, val));
 

@@ -98,19 +98,36 @@ public:
     }
 };
 
-static HttpMetricsHandler httpMetricsHandler;
+static HttpMetricsHandler httpMetricsHandler;   // the counters
+// A WebServer deletes its handlers when it is destroyed (WiFiManager does that when
+// it closes its portal), so each server gets its own small forwarder on the heap.
+class HttpMetricsForwarder : public RequestHandler {
+public:
+    bool canHandle(HTTPMethod method, String uri) override { return httpMetricsHandler.canHandle(method, uri); }
+    bool handle(WebServer&, HTTPMethod, String) override { return false; }
+};
 
 // ---------------------------------------------------------------------------
 // Metrics output
 // ---------------------------------------------------------------------------
 
+// Stove values never read since the start are left out (Prometheus: absent =
+// unknown), instead of exporting the firmware's initial 0s. State, power and
+// the serial counters are always exported.
+static bool metricsStoveKnown = true;
+static bool metricSkipped(const String& m)
+{
+    return !metricsStoveKnown && m.startsWith("stove_") && !m.startsWith("stove_serial_") && m != "stove_state" && m != "stove_powered_on";
+}
 void setMetric(String *p, String metric, String help, String value) {
+  if (metricSkipped(metric)) return;
   *p += "# HELP " + metric + " " + help + "\n";
   *p += "# TYPE " + metric + " gauge\n";
   *p += metric + " " + value + "\n";
 }
 
 void setCounter(String *p, String metric, String help, String value) {
+  if (metricSkipped(metric)) return;
   *p += "# HELP " + metric + " " + help + "\n";
   *p += "# TYPE " + metric + " counter\n";
   *p += metric + " " + value + "\n";
@@ -118,6 +135,7 @@ void setCounter(String *p, String metric, String help, String value) {
 
 String getMetrics() {
   String p = "";
+  metricsStoveKnown = lastFastStatesAt != 0 && lastSlowStatesAt != 0;
 
   int sketch_size    = ESP.getSketchSize();
   int flash_size     = ESP.getFreeSketchSpace();
@@ -172,7 +190,8 @@ String getMetrics() {
 
   // Stove state
   setMetric(&p, "stove_state",                   "Stove state code",                       String(stoveState));
-  setMetric(&p, "stove_powered_on",              "1 if stove is powered on",               String(StoveIsOn ? 1 : 0));
+  if (stoveState != UNKNOWN)   // unknown while the stove does not answer: left out
+    setMetric(&p, "stove_powered_on",            "1 if stove is powered on",               String(StoveIsOn ? 1 : 0));
 
   // Temperatures
   setMetric(&p, "stove_temp_room_c",             "Room ambient temperature in Celsius",             String(ambTemp));
@@ -212,6 +231,7 @@ String getMetrics() {
   setMetric(&p, "stove_remote_last_seen",        "Seconds since last remote control contact", String(cachedRemoteControlLastSeen));
 
   // Timer metrics
+  if (metricsStoveKnown) {
   p.concat("# HELP stove_timer_enabled 1 if timer is enabled\n");
   p.concat("# TYPE stove_timer_enabled gauge\n");
   p.concat("# HELP stove_timer_on_minutes On time in minutes since midnight (-1 = not set)\n");
@@ -249,6 +269,7 @@ String getMetrics() {
     p.concat("stove_timer_flame_power"); p.concat(labels); p.concat(" "); p.concat(String(flame)); p.concat("\n");
     p.concat("stove_timer_room_fan_speed"); p.concat(labels); p.concat(" "); p.concat(String(fan)); p.concat("\n");
   }
+  }
 
   // Counters
   setCounter(&p, "stove_number_of_starts",       "Total number of stove starts",           String(cachedNumberOfStarts));
@@ -256,15 +277,20 @@ String getMetrics() {
   setCounter(&p, "stove_serial_read_errors_total",  "Stove reads that failed after all retries",  String(stove.readErrors));
   setCounter(&p, "stove_serial_write_errors_total", "Stove writes that failed after all retries", String(stove.writeErrors));
   setCounter(&p, "stove_serial_retries_total",      "Individual stove read/write retry attempts", String(stove.retries));
+  setMetric(&p,  "stove_serial_link_up",            "1 when the stove answers on the serial bus, 0 when the link is down", String(stove.linkDown ? 0 : 1));
+  setCounter(&p, "stove_serial_skipped_total",      "Stove reads/writes refused at once because the link was down", String(stove.skipped));
+  setCounter(&p, "stove_serial_transactions_total", "Stove reads + writes (not counting retries)", String(stove.transactions));
 
-  setMetric(&p,  "stove_time_delta_seconds",       "Delta in seconds between NTP time and stove internal clock", String(ntpTimeNow() - stoveTimeNow()));
+  if (stoveTimeReadMs) setMetric(&p, "stove_time_delta_seconds", "Delta in seconds between NTP time and stove internal clock", String(ntpTimeNow() - stoveTimeNow()));
 
   // Firmware version (info metric — value is always 1, label carries the version string)
+  if (metricsStoveKnown) {
   p += "# HELP stove_firmware_info Firmware version of the stove\n";
   p += "# TYPE stove_firmware_info gauge\n";
   {
     String firmwareMetric = String("stove_firmware_info{version=\"") + String(cachedFirmwareVersion) + String("\"} 1\n");
     p += firmwareMetric;
+  }
   }
 
   return p;
@@ -275,6 +301,6 @@ void handleMetrics() {
 }
 
 void httpRouteMetrics() {
-  wm.server->addHandler(&httpMetricsHandler);
+  wm.server->addHandler(new HttpMetricsForwarder());
   wm.server->on("/metrics", authed(handleMetrics));   // Prometheus can send "Authorization: Bearer <key>"
 }

@@ -14,7 +14,8 @@ struct BusEvent {
     uint8_t  flags;     // bit 0 write, bit 1 ok, bit 2 EEPROM
     uint8_t  addr;
     uint8_t  value;     // read result, or the value written
-    uint8_t  attempts;
+    uint8_t  attempts;  // attempt number (1..of)
+    uint8_t  of;        // attempts allowed
     uint8_t  txLen, rxLen;
     uint8_t  tx[4];     // raw bytes sent (last attempt)
     uint8_t  rx[6];     // raw bytes received: echo of tx + the stove's answer
@@ -25,11 +26,11 @@ static portMUX_TYPE busMux = portMUX_INITIALIZER_UNLOCKED;
 static volatile uint32_t busmonUntil = 0;
 static const uint32_t BUSMON_HOLD_MS = 60000;
 
-static void busMonitorHook(bool isWrite, uint8_t type, uint8_t addr, uint8_t value, bool ok, uint8_t attempts,
+static void busMonitorHook(bool isWrite, uint8_t type, uint8_t addr, uint8_t value, bool ok, uint8_t attempts, uint8_t of,
                            const uint8_t* tx, uint8_t txLen, const uint8_t* rx, uint8_t rxLen)
 {
     if ((int32_t)(millis() - busmonUntil) > 0) { Stove::monitor = nullptr; return; }   // nobody watching any more
-    BusEvent e = { (uint32_t)millis(), (uint8_t)((isWrite ? 1 : 0) | (ok ? 2 : 0) | (type == eeprom ? 4 : 0)), addr, value, attempts, 0, 0, {0}, {0} };
+    BusEvent e = { (uint32_t)millis(), (uint8_t)((isWrite ? 1 : 0) | (ok ? 2 : 0) | (type == eeprom ? 4 : 0)), addr, value, attempts, of, 0, 0, {0}, {0} };
     e.txLen = txLen > sizeof(e.tx) ? sizeof(e.tx) : txLen;
     e.rxLen = rxLen > sizeof(e.rx) ? sizeof(e.rx) : rxLen;
     memcpy(e.tx, tx, e.txLen);
@@ -117,13 +118,13 @@ void handleRouteBusmon()
     out += ",\"from\":"; out += from;
     out += ",\"next\":"; out += (uint32_t)(from + n);
     out += ",\"lost\":"; out += lost ? "true" : "false";
-    out += ",\"fields\":[\"ms\",\"write\",\"eeprom\",\"address\",\"value\",\"ok\",\"attempts\",\"text\",\"tx\",\"rx\"],\"events\":[";
+    out += ",\"fields\":[\"ms\",\"write\",\"eeprom\",\"address\",\"value\",\"ok\",\"attempt\",\"of\",\"text\",\"tx\",\"rx\"],\"events\":[";
     for (size_t i = 0; i < n; i++) {
         const BusEvent& e = ev[i];
         bool ok = (e.flags >> 1) & 1, isEeprom = (e.flags >> 2) & 1;
-        char row[48];
-        snprintf(row, sizeof(row), "%s[%lu,%d,%d,%u,%u,%d,%u,\"", i ? "," : "", (unsigned long)e.ms,
-                 e.flags & 1, isEeprom, e.addr, e.value, ok, e.attempts);
+        char row[56];
+        snprintf(row, sizeof(row), "%s[%lu,%d,%d,%u,%u,%d,%u,%u,\"", i ? "," : "", (unsigned long)e.ms,
+                 e.flags & 1, isEeprom, e.addr, e.value, ok, e.attempts, e.of);
         out += row;
         // meaning of the value, from the same register table as /api/dump ("" = unknown register)
         String txt = ok ? (isEeprom ? getEepromValueTxt(e.addr, e.value) : getRamValueTxt(e.addr, e.value)) : String("");
@@ -178,7 +179,7 @@ static void stoveWriteLogger(uint8_t type, uint8_t addr, uint8_t value, bool ok)
     const char* src = cmdSource[0] ? cmdSource : "the controller itself";
     if (ok) LOGI("stove", "write %s 0x%02X = %u%s%s%s by %s", ee ? "EEPROM" : "RAM", addr, value,
                  txt.length() ? " (" : "", txt.c_str(), txt.length() ? ")" : "", src);
-    else    LOGW("stove", "write %s 0x%02X = %u FAILED (not confirmed by the stove), by %s", ee ? "EEPROM" : "RAM", addr, value, src);
+    else    LOGE("stove", "write %s 0x%02X = %u FAILED (not confirmed by the stove), by %s", ee ? "EEPROM" : "RAM", addr, value, src);
     if (ok && !ee && addr == stoveStateAddr) {
         lastStateWriteMs = millis(); lastStateWriteVal = value;
         strncpy(lastStateWriteSrc, src, sizeof(lastStateWriteSrc) - 1);
@@ -235,10 +236,38 @@ void diagTick()
          (unsigned long)avgFast, (unsigned long)diagFastMaxMs, (unsigned long)diagSlowMaxMs, (unsigned long)diagLockWaitMaxMs);
     diagFastCycles = 0; diagFastSumMs = 0; diagFastMaxMs = 0; diagSlowCycles = 0; diagSlowMaxMs = 0; diagLockWaitMaxMs = 0;
     if (heap < 30000 || block < 20000)
-        LOGW("sys", "memory low: %lu KB free, largest block %lu KB (HTTPS / TLS needs ~45 KB)", (unsigned long)(heap / 1024), (unsigned long)(block / 1024));
+        logPrintf(heap < 20000 || block < 12000 ? LOG_ERROR : LOG_WARN, "sys", "memory low: %lu KB free, largest block %lu KB (HTTPS / TLS needs ~45 KB)", (unsigned long)(heap / 1024), (unsigned long)(block / 1024));
     if (dTx && dFl * 100 > dTx)
-        LOGW("bus", "%lu of %lu stove transactions failed in the last %lu min: check the serial connection to the stove", (unsigned long)dFl, (unsigned long)dTx, (unsigned long)minutes);
+        LOGE("bus", "%lu of %lu stove transactions failed in the last %lu min: check the serial connection to the stove", (unsigned long)dFl, (unsigned long)dTx, (unsigned long)minutes);
     else if (dTx && dRt * 20 > dTx)
         LOGW("bus", "%lu retries for %lu transactions in the last %lu min (> 5%%): the serial line is noisy", (unsigned long)dRt, (unsigned long)dTx, (unsigned long)minutes);
     if (rssi && rssi < -80) LOGW("wifi", "weak WiFi signal: %d dBm", rssi);
+}
+
+// POST /api/diag/reset?serial=true&crashes=true
+//   serial : stove bus counters (read / write errors, retries, skipped, transactions)
+//   crashes: the crash counter kept in NVS (starts after a crash, watchdog or brown-out)
+void handleRouteDiagReset()
+{
+    if (wm.server->method() != HTTP_POST) { wm.server->send(405); return; }
+    bool serial = pc::parseOnOff(wm.server->arg("serial").c_str()) == 1;
+    bool crashes = pc::parseOnOff(wm.server->arg("crashes").c_str()) == 1;
+    if (!serial && !crashes) { wm.server->send(400, "application/json", "{\"result\":\"failed - give serial=true and / or crashes=true\"}"); return; }
+    String who = wm.server->client().remoteIP().toString();
+    if (serial) {
+        stove.readErrors = 0; stove.writeErrors = 0; stove.retries = 0; stove.skipped = 0; stove.transactions = 0;
+        LOGI("sys", "serial counters reset by web/API %s", who.c_str());
+    }
+    if (crashes) {
+        Preferences p; p.begin("diag", false); p.putUInt("crashes", 0); p.end();
+        diagCrashes = 0;
+        LOGI("sys", "crash counter reset by web/API %s", who.c_str());
+    }
+    StaticJsonDocument<192> json;
+    json["result"] = "success";
+    json["crashCount"] = diagCrashes;
+    JsonObject se = json.createNestedObject("serial");
+    se["readErrors"] = stove.readErrors; se["writeErrors"] = stove.writeErrors; se["retries"] = stove.retries;
+    String out; serializeJson(json, out);
+    wm.server->send(200, "application/json", out);
 }

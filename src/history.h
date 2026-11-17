@@ -158,7 +158,7 @@ static void historyLoad()
         size_t fsize = f.size();
         histFileVersion[i] = histHeaderVersion(f);
         if (!histFileVersion[i]) {
-            LOGW("history", "%s: %u bytes, header not valid - removed", HIST_FILES[i], (unsigned)fsize);
+            LOGE("history", "%s: %u bytes, header not valid - removed (its history is lost)", HIST_FILES[i], (unsigned)fsize);
             f.close(); SPIFFS.remove(HIST_FILES[i]); continue;
         }
         size_t rs = histRecordSize(histFileVersion[i]);
@@ -316,7 +316,7 @@ static void historyAppend(const HistSample& s)
     if (!f) return;
     if (fresh) { f.write(HIST_MAGIC, sizeof(HIST_MAGIC)); uint8_t sz = sizeof(HistSample); f.write(&sz, 1); histFileVersion[histActiveFile] = 6; }
     if (f.write((const uint8_t*)&s, sizeof(s)) == sizeof(s)) histActiveCount++;
-    else LOGW("history", "append to %s failed (SPIFFS %u of %u bytes used)", HIST_FILES[histActiveFile], (unsigned)SPIFFS.usedBytes(), (unsigned)SPIFFS.totalBytes());
+    else LOGE("history", "append to %s failed (SPIFFS %u of %u bytes used)", HIST_FILES[histActiveFile], (unsigned)SPIFFS.usedBytes(), (unsigned)SPIFFS.totalBytes());
     f.close();
 }
 

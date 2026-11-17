@@ -446,7 +446,7 @@ class StoveWriteCB : public NimBLECharacteristicCallbacks {
         LOGI("ble", "write received: characteristic %s, value %u",
                       pChar->getUUID().toString().c_str(), v);
         if (!bleWriteQueuePush(kind, v)) {
-            LOGW("ble", "write queue full: command dropped");
+            LOGE("ble", "write queue full: command from the app dropped");
         }
     }
 };

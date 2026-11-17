@@ -74,13 +74,51 @@ int Stove::transact(const byte* tx, size_t txLen, byte* rx, size_t rxLen)
 // READ
 // ─────────────────────────────────────────────────────────────────
 
+// Link state: a transaction that failed after all attempts counts; LINK_DOWN_AFTER
+// in a row and the link is down. Any answer brings it up again.
+void Stove::linkResult(bool ok)
+{
+    if (ok) { failedInRow = 0; linkDown = false; return; }
+    if (failedInRow < 255) failedInRow++;
+    if (failedInRow >= LINK_DOWN_AFTER) linkDown = true;
+}
+
+// Why did an attempt fail? The bus is one wire: the controller always hears its
+// own bytes back (echo), also when the stove does not answer. No (correct) echo
+// means the bus itself is not connected (cable / interface), not a stove timeout.
+static void failReason(char* out, size_t sz, const byte* tx, size_t txLen, const byte* rx, int received, size_t full)
+{
+    int n = received < 0 ? 0 : received;
+    size_t echoN = (size_t)n < txLen ? (size_t)n : txLen;
+    bool echoOk = (size_t)n >= txLen && memcmp(rx, tx, txLen) == 0;
+    if (n == 0) { snprintf(out, sz, "nothing received, no echo of TX: bus not connected (cable / interface?)"); return; }
+    if (!echoOk && memcmp(rx, tx, echoN) != 0) {
+        char got[24] = ""; for (int i = 0; i < n && i < 6; i++) snprintf(got + strlen(got), sizeof(got) - strlen(got), "%s%02X", i ? " " : "", rx[i]);
+        snprintf(out, sz, "no echo of TX (received %s): bus not connected or line stuck (cable / interface?)", got);
+        return;
+    }
+    if ((size_t)n < txLen) { snprintf(out, sz, "echo incomplete (%d of %u bytes): bus not connected (cable / interface?)", n, (unsigned)txLen); return; }
+    if ((size_t)n < full) { snprintf(out, sz, "echo OK, the stove did not answer (%d of %u bytes)", n, (unsigned)full); return; }
+    snprintf(out, sz, "echo OK, answer with a wrong checksum (noise on the line?)");
+}
+
 int Stove::read(byte type, byte address)
 {
+    if (linkDown) { skipped++; return -1; }
+    return readTx(type, address);
+}
+
+int Stove::probe(byte type, byte address)
+{
+    return readTx(type, address);
+}
+
+int Stove::readTx(byte type, byte address)
+{
     const byte message[2] = {type, address};
-    char buf[128];
+    char buf[160];
+    char lastWhy[96] = "";
     transactions++;
-    byte lastRx[4] = {0};
-    uint8_t lastN = 0;
 
     for (uint8_t attempt = 1; attempt <= MAX_ATTEMPTS; attempt++)
     {
@@ -94,11 +132,13 @@ int Stove::read(byte type, byte address)
 
         byte rx[4] = {0};
         int received = transact(message, sizeof(message), rx, sizeof(rx));
-        memcpy(lastRx, rx, sizeof(rx)); lastN = received > 0 ? (uint8_t)received : 0;
         if (received != (int)sizeof(rx)) {
-            snprintf(buf, sizeof(buf), "READ  ERR: addr=0x%02X timeout - received %d/4 bytes (attempt %u)",
-                     address, received, attempt);
+            char why[96];
+            failReason(why, sizeof(why), message, sizeof(message), rx, received, sizeof(rx));
+            snprintf(buf, sizeof(buf), "READ  ERR: %s 0x%02X attempt %u/%u: %s", type == 0x20 ? "EEPROM" : "RAM", address, attempt, MAX_ATTEMPTS, why);
             appendDebugLog(buf);
+            strncpy(lastWhy, why, sizeof(lastWhy) - 1);
+            if (monitor) monitor(false, type, address, 0, false, attempt, MAX_ATTEMPTS, message, sizeof(message), rx, received > 0 ? (uint8_t)received : 0);
             continue;
         }
         // Echo is informational only; the checksum below is the real validation.
@@ -122,21 +162,27 @@ int Stove::read(byte type, byte address)
                 snprintf(buf, sizeof(buf), "READ  OK: val=0x%02X (%d)", val, val);
                 appendDebugLog(buf);
             }
-            if (monitor) monitor(false, type, address, val, true, attempt, message, sizeof(message), rx, sizeof(rx));
+            if (monitor) monitor(false, type, address, val, true, attempt, MAX_ATTEMPTS, message, sizeof(message), rx, sizeof(rx));
+            linkResult(true);
             delay(10);
             return val;
         }
 
-        snprintf(buf, sizeof(buf), "READ  ERR: checksum mismatch - expected addr=0x%02X got 0x%02X (attempt %u)",
-                 address, address_derived, attempt);
-        appendDebugLog(buf);
+        {
+            char why[96];
+            failReason(why, sizeof(why), message, sizeof(message), rx, received, sizeof(rx));
+            snprintf(buf, sizeof(buf), "READ  ERR: %s 0x%02X attempt %u/%u: %s", type == 0x20 ? "EEPROM" : "RAM", address, attempt, MAX_ATTEMPTS, why);
+            appendDebugLog(buf);
+            strncpy(lastWhy, why, sizeof(lastWhy) - 1);
+        }
+        if (monitor) monitor(false, type, address, val, false, attempt, MAX_ATTEMPTS, message, sizeof(message), rx, sizeof(rx));
     }
 
     readErrors++;
-    snprintf(buf, sizeof(buf), "READ FAILED: %s 0x%02X, no valid answer after %u attempts",
-             type == 0x20 ? "EEPROM" : "RAM", address, MAX_ATTEMPTS);
+    linkResult(false);
+    snprintf(buf, sizeof(buf), "READ FAILED: %s 0x%02X after %u attempts - %s",
+             type == 0x20 ? "EEPROM" : "RAM", address, MAX_ATTEMPTS, lastWhy);
     appendDebugLog(buf);
-    if (monitor) monitor(false, type, address, 0, false, MAX_ATTEMPTS, message, sizeof(message), lastRx, lastN);
     return -1;
 }
 
@@ -147,13 +193,13 @@ int Stove::read(byte type, byte address)
 
 bool Stove::write(byte type, byte address, byte value)
 {
+    if (linkDown) { skipped++; return false; }
     const byte writeByte     = 0x80;
     uint8_t checksum_calc    = (writeByte + type + address + value) & 0xFF;
     const byte message[4]    = {(byte)(writeByte + type), address, value, checksum_calc};
-    char buf[128];
+    char buf[160];
+    char lastWhy[96] = "";
     transactions++;
-    byte lastRx[6] = {0};
-    uint8_t lastN = 0;
 
     for (uint8_t attempt = 1; attempt <= MAX_ATTEMPTS; attempt++)
     {
@@ -168,11 +214,13 @@ bool Stove::write(byte type, byte address, byte value)
 
         byte rx[6] = {0};
         int received = transact(message, sizeof(message), rx, sizeof(rx));
-        memcpy(lastRx, rx, sizeof(rx)); lastN = received > 0 ? (uint8_t)received : 0;
         if (received != (int)sizeof(rx)) {
-            snprintf(buf, sizeof(buf), "WRITE ERR: addr=0x%02X timeout - received %d/6 bytes (attempt %u)",
-                     address, received, attempt);
+            char why[96];
+            failReason(why, sizeof(why), message, sizeof(message), rx, received, sizeof(rx));
+            snprintf(buf, sizeof(buf), "WRITE ERR: %s 0x%02X = %u attempt %u/%u: %s", type == 0x20 ? "EEPROM" : "RAM", address, value, attempt, MAX_ATTEMPTS, why);
             appendDebugLog(buf);
+            strncpy(lastWhy, why, sizeof(lastWhy) - 1);
+            if (monitor) monitor(true, type, address, value, false, attempt, MAX_ATTEMPTS, message, sizeof(message), rx, received > 0 ? (uint8_t)received : 0);
             continue;
         }
         // Echo is informational only; the address/value in the reply is the real validation.
@@ -191,21 +239,24 @@ bool Stove::write(byte type, byte address, byte value)
 
         if (address_resp == address && value_resp == value) {
             if (_debugEnabled) appendDebugLog("WRITE OK: [SUCCESS]");
-            if (monitor) monitor(true, type, address, value, true, attempt, message, sizeof(message), rx, sizeof(rx));
+            if (monitor) monitor(true, type, address, value, true, attempt, MAX_ATTEMPTS, message, sizeof(message), rx, sizeof(rx));
             if (writeHook) writeHook(type, address, value, true);
+            linkResult(true);
             return true;
         }
 
-        snprintf(buf, sizeof(buf), "WRITE ERR: mismatch - addr expected=0x%02X got=0x%02X  val expected=0x%02X got=0x%02X (attempt %u)",
-                 address, address_resp, value, value_resp, attempt);
+        snprintf(buf, sizeof(buf), "WRITE ERR: %s 0x%02X = %u attempt %u/%u: the stove confirmed address 0x%02X value %u",
+                 type == 0x20 ? "EEPROM" : "RAM", address, value, attempt, MAX_ATTEMPTS, address_resp, value_resp);
         appendDebugLog(buf);
+        snprintf(lastWhy, sizeof(lastWhy), "the stove confirmed another address / value");
+        if (monitor) monitor(true, type, address, value, false, attempt, MAX_ATTEMPTS, message, sizeof(message), rx, sizeof(rx));
     }
 
     writeErrors++;
-    snprintf(buf, sizeof(buf), "WRITE FAILED: %s 0x%02X = %u, not confirmed after %u attempts",
-             type == 0x20 ? "EEPROM" : "RAM", address, value, MAX_ATTEMPTS);
+    linkResult(false);
+    snprintf(buf, sizeof(buf), "WRITE FAILED: %s 0x%02X = %u not confirmed after %u attempts - %s",
+             type == 0x20 ? "EEPROM" : "RAM", address, value, MAX_ATTEMPTS, lastWhy);
     appendDebugLog(buf);
-    if (monitor) monitor(true, type, address, value, false, MAX_ATTEMPTS, message, sizeof(message), lastRx, lastN);
     if (writeHook) writeHook(type, address, value, false);
     return false;
 }

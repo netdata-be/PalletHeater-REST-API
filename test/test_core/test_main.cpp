@@ -309,7 +309,7 @@ static void test_stove_state()
     TEST_ASSERT_EQUAL_STRING("Off", pc::stoveStateName(0));
     TEST_ASSERT_EQUAL_STRING("Working", pc::stoveStateName(4));
     TEST_ASSERT_EQUAL_STRING("Brazier cleaning", pc::stoveStateName(5));
-    TEST_ASSERT_EQUAL_STRING("Unknown [RS232 Serial Error]", pc::stoveStateName(-1));
+    TEST_ASSERT_EQUAL_STRING("No answer (serial link down)", pc::stoveStateName(-1));
     TEST_ASSERT_EQUAL_STRING("Unknown", pc::stoveStateName(42));
     // on: starting .. brazier cleaning, standby, alarm (shutdown still needed)
     const bool on[] = { false, true, true, true, true, true, false, true, true, false, false };

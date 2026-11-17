@@ -46,8 +46,7 @@ static bool readKeep(T& dst, byte type, byte addr, float scale = 1.0f)
 }
 
 // millis() of the last completed sensor refresh, exposed in /api/state
-unsigned long lastFastStatesAt = 0;
-unsigned long lastSlowStatesAt = 0;
+// lastFastStatesAt / lastSlowStatesAt: constants.h (also used by metrics.h, included earlier)
 
 void getAmbTemp() // Get room temperature
 {
@@ -120,6 +119,11 @@ int arePalletsLow()
     readKeep(cachedPelletSensor, ram, palletSensorAddr);
     readKeep(cachedPelletCounter, ram, palletLevelAddr);
     readKeep(cachedPelletReserveOn, eeprom, pelletReserveEnabledAddr);
+    // Pellet reserve, phase 2: once RAM 0x89 reached 0, RAM 0x91 counts down in steps of
+    // 30 s until the stove switches off (seen 17/11/2026, "PELLET RESERVE xx'" on the
+    // remote). Only meaningful in that phase, so only read then.
+    if (cachedPelletSensor == 5 && cachedPelletCounter == 0) readKeep(cachedPelletShutdown, ram, 0x91);
+    else cachedPelletShutdown = -1;
     return pc::pelletsLow(cachedPelletSensor, cachedPelletCounter);
 }
 
@@ -294,12 +298,40 @@ static void logStoveChanges(bool slow)
 // Fast-changing values — refreshed every 2 s
 void getFastStates()
 {
+    // Serial link to the stove down (stove.linkDown, set by the Stove library after
+    // repeated failures): every other bus command fails at once; here the state
+    // register is probed every 5 s until the stove answers again.
+    static uint32_t lastProbe = 0, downSince = 0;
+    static bool wasDown = false;
+    if (stove.linkDown) {
+        if (!wasDown) {
+            wasDown = true; downSince = millis();
+            LOGE("stove", "no answer from the stove (serial connection?) - all stove commands fail at once, probing every 5 s");
+        }
+        stoveState = UNKNOWN;
+        snprintf(StoveStateStr, sizeof(StoveStateStr), "%s", pc::stoveStateName(UNKNOWN));
+        StoveIsOn = false;
+        if (millis() - lastProbe < 5000) return;
+        lastProbe = millis();
+        stoveLockTake();
+        int v = stove.probe(ram, stoveStateAddr);
+        if (stoveMutex) xSemaphoreGiveRecursive(stoveMutex);
+        if (v < 0) return;
+    }
+    if (wasDown) { wasDown = false; LOGI("stove", "stove answers again after %lu s", (unsigned long)((millis() - downSince) / 1000)); }
     uint32_t tWait = millis();
-    if (stoveMutex) xSemaphoreTakeRecursive(stoveMutex, portMAX_DELAY);
+    stoveLockTake();
     uint32_t t0 = millis(), waited = t0 - tWait;
     if (waited > 3000) LOGW("stove", "sensor task waited %lu ms for the stove bus (held by a web / MQTT / Bluetooth command)", (unsigned long)waited);
 
     getStoveState();
+    // No answer from the stove (serial connection lost / stove without power): read
+    // only the state register until it answers again, so the bus lock is free for
+    // the web server instead of being held for every register x 3 attempts.
+    if (stoveState == UNKNOWN) {   // no answer (the link goes down after repeated failures, see above)
+        if (stoveMutex) xSemaphoreGiveRecursive(stoveMutex);
+        return;
+    }
     getFumeTemp();
     getFlamePower();
     getRoomFanSpeed();
@@ -327,8 +359,9 @@ void getFastStates()
 void getSlowStates()
 {
     uint32_t tWait = millis();
-    if (stoveMutex) xSemaphoreTakeRecursive(stoveMutex, portMAX_DELAY);
+    stoveLockTake();
     uint32_t t0 = millis(), waited = t0 - tWait;
+    if (stove.linkDown || stoveState == UNKNOWN) { if (stoveMutex) xSemaphoreGiveRecursive(stoveMutex); return; }   // stove not answering, see getFastStates
 
     getAmbTemp();
     getAmbTempStove();

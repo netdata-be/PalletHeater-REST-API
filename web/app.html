@@ -50,6 +50,7 @@ header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px so
 .conn{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
 .dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
 .dot.ok{background:var(--ok)}.dot.err{background:var(--err)}.dot.warn{background:var(--warn)}
+@media (max-width:640px){#connStoveTxt{display:none}}
 .lang button{padding:3px 9px;min-width:0;font-size:12px}
 main{max-width:1100px;margin:0 auto;padding:16px;display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow);min-width:0}
@@ -318,6 +319,23 @@ body:not(.debug) .d{display:none!important}
 .loglvl label{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px}
 .loglvl label span{color:var(--muted)}
 .liveout .warn{color:var(--warn)}
+/* console dock */
+.devtools{position:fixed;left:0;right:0;bottom:0;z-index:25;height:var(--dth,340px);max-height:calc(100vh - 60px);background:var(--card);border-top:1px solid var(--line);box-shadow:0 -6px 24px rgba(0,0,0,.18);display:flex;flex-direction:column}
+.devtools[hidden]{display:none!important}
+body.dtopen{padding-bottom:var(--dth,340px)}
+.dtgrip{height:7px;flex:none;cursor:ns-resize;touch-action:none}
+.dtgrip:hover,.dtgrip.drag{background:var(--accent-soft)}
+.dthead{display:flex;align-items:center;gap:12px;padding:2px 16px 6px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.dttitle{display:flex;align-items:center;gap:4px;font-size:12px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.dtstat{font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dtclose{border:0;background:transparent;font-size:20px;line-height:1;padding:2px 8px}
+.dtbody{flex:1;min-height:0;display:flex;flex-direction:column;gap:6px;padding:8px 16px}
+.devtools .livewrap{flex:1;min-height:0;display:flex;flex-direction:column;margin:0}
+.devtools .liveout{flex:1;height:auto;min-height:40px;margin:0}
+.devtools .livelegend{margin:0}
+.xbtn.alert{border-color:var(--err);color:var(--err)}
+button.mini{padding:1px 8px;font-size:11px;font-weight:550;border-radius:7px;margin-left:8px;vertical-align:1px}
+.liveout .warn{color:var(--warn)}
 .livewrap{margin:10px 0 6px}
 .livewrap .liveout{margin:0}
 .livehdr{font:600 12px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--muted);background:var(--seg);border-radius:10px 10px 0 0;padding:8px 12px 4px;border-bottom:1px solid var(--line);white-space:pre;overflow:hidden}
@@ -327,6 +345,7 @@ body:not(.debug) .d{display:none!important}
 .livelegend i{display:inline-block;width:10px;height:10px;border-radius:3px;background:currentColor}
 .liveout .first{color:var(--muted)}
 .liveout .raw{color:var(--muted)}
+.liveout .retry{color:var(--warn)}
 .liveout .err{color:var(--err)} .liveout .w{color:var(--accent);font-weight:600} .liveout .ch{color:var(--ok)} .liveout .lost{color:var(--muted);font-style:italic}
 /* backup / restore dialog */
 #bkModal{position:fixed;inset:0;z-index:30;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);padding:16px}
@@ -343,9 +362,11 @@ body:not(.debug) .d{display:none!important}
   <h1>OpenPelletBridge <span class="ver" id="appVer"></span></h1>
   <button id="updBadge" class="xbtn upd" type="button" hidden></button>
   <button id="themeBtn" class="xbtn" type="button"></button>
+  <button id="consoleBtn" class="xbtn" type="button" hidden data-i="console"></button>
   <button id="expertBtn" class="xbtn" type="button" aria-pressed="false" data-i="expert"></button>
   <button id="debugBtn" class="xbtn" type="button" aria-pressed="false" data-i="debug"></button>
-  <div class="conn"><span class="dot" id="dot"></span><span id="conn">…</span></div>
+  <div class="conn" id="connStove"><span class="dot" id="dotStove"></span><span id="connStoveTxt">…</span></div>
+  <div class="conn" id="connCtl"><span class="dot" id="dot"></span><span id="conn">…</span></div>
 </div></header>
 
 <main>
@@ -563,10 +584,9 @@ body:not(.debug) .d{display:none!important}
 
   <!-- MQTT -->
   <section class="card" id="mqttCard">
-    <h2><span><span>MQTT</span><span data-help="mqtt"></span></span><button id="mqttEdit" data-i="mqttEdit"></button></h2>
+    <h2><span><span>MQTT</span><span data-help="mqtt"></span></span><span class="keybtns"><label class="switch"><input type="checkbox" id="mqttToggle"><span></span></label><button id="mqttEdit" data-i="mqttEdit"></button></span></h2>
     <dl id="mqttList"></dl>
     <form id="mqttForm" class="mqform" hidden autocomplete="off">
-      <label><span data-i="mqttEnabled"></span><input type="checkbox" id="mqEnabled"></label>
       <label><span>Broker</span><input id="mqHost" placeholder="192.168.1.10" spellcheck="false"></label>
       <label><span>Port</span><input id="mqPort" type="number" min="1" max="65535" placeholder="1883"></label>
       <label><span data-i="mqttUser"></span><input id="mqUser" spellcheck="false"></label>
@@ -588,10 +608,26 @@ body:not(.debug) .d{display:none!important}
     <p class="muted" style="font-size:12px;margin:8px 0 0" data-i="parNote"></p>
   </section>
 
-  <!-- Live debugging (debug only): firmware log and stove bus monitor -->
-  <section class="card wide d" id="liveCard">
-    <h2><span><span data-i="liveTitle"></span><span data-help="live"></span></span>
-      <span class="seg" id="liveSeg"><button data-v="log" data-i="liveLog"></button><button data-v="bus" data-i="liveBus"></button></span></h2>
+  <!-- Register hypotheses (debug only) -->
+  <section class="card wide d" id="hypCard">
+    <h2><span><span data-i="hypTitle"></span><span data-help="hyp"></span></span><span class="muted" id="hypAge" style="text-transform:none;letter-spacing:0;font-weight:400"></span></h2>
+    <div class="hypwrap"><table class="hyp" id="hypTable"></table></div>
+    <p class="muted" style="font-size:12px;margin:8px 0 0" data-i="hypNote"></p>
+  </section>
+</main>
+
+<!-- Console: docked panel at the bottom (like the browser's developer tools) with the
+     firmware log, the stove bus monitor and the requests of this page. Outside <main>,
+     so it stays usable when the stove or the controller does not answer. -->
+<div id="devtools" class="devtools" hidden>
+  <div class="dtgrip" id="dtGrip" role="separator" aria-orientation="horizontal"></div>
+  <div class="dthead">
+    <span class="dttitle"><span data-i="liveTitle"></span><span data-help="live"></span></span>
+    <span class="seg" id="liveSeg"><button data-v="log" data-i="liveLog"></button><button data-v="bus" data-i="liveBus"></button><button data-v="req" data-i="liveReq"></button></span>
+    <span class="dtstat muted" id="liveStat"></span>
+    <button id="dtClose" class="dtclose" type="button">×</button>
+  </div>
+  <div class="dtbody">
     <div class="livebar">
       <button id="livePause" type="button"></button><button id="liveClear" type="button" data-i="liveClear"></button><button id="liveDl" type="button" data-i="liveDl"></button>
       <input type="text" id="liveFilter" spellcheck="false" autocomplete="off">
@@ -601,19 +637,11 @@ body:not(.debug) .d{display:none!important}
       <label id="busRawL" hidden><input type="checkbox" id="busRaw"><span data-i="busRaw"></span></label>
       <label id="busBinL" hidden><input type="checkbox" id="busBin"><span data-i="busBin"></span></label>
     </div>
-    <details id="logLvlBox" class="tbl" style="margin-top:8px"><summary data-i="logLevels"></summary><div id="logLvl" class="loglvl"></div></details>
+    <details id="logLvlBox" class="tbl"><summary data-i="logLevels"></summary><div id="logLvl" class="loglvl"></div></details>
     <div class="livewrap"><div id="liveHdr" class="livehdr" hidden></div><pre id="liveOut" class="liveout" tabindex="0"></pre></div>
     <div id="liveLegend" class="livelegend"></div>
-    <p class="muted" style="font-size:12px;margin:0"><span id="liveStat"></span> · <span data-i="liveNote"></span></p>
-  </section>
-
-  <!-- Register hypotheses (debug only) -->
-  <section class="card wide d" id="hypCard">
-    <h2><span><span data-i="hypTitle"></span><span data-help="hyp"></span></span><span class="muted" id="hypAge" style="text-transform:none;letter-spacing:0;font-weight:400"></span></h2>
-    <div class="hypwrap"><table class="hyp" id="hypTable"></table></div>
-    <p class="muted" style="font-size:12px;margin:8px 0 0" data-i="hypNote"></p>
-  </section>
-</main>
+  </div>
+</div>
 
 <div id="bkModal" role="dialog" aria-modal="true" aria-labelledby="bkTitle"><div class="mc">
   <h3 id="bkTitle" data-i="bkTitle"></h3>
@@ -684,13 +712,24 @@ const I18N = {
     liveTitle:"Live debugging", liveLog:"Firmware log", liveBus:"Stove bus", livePause:"Pause", liveResume:"Resume", liveClear:"Clear", liveDl:"Download",
     liveFilterLog:"Filter on text", liveFilterBus:"Addresses (0x21, 0x6E) or text", busChanges:"Changes only", busWrites:"Writes only", busErrors:"Errors only",
     liveLost:"… older output was overwritten …", liveLines:"{0} lines", liveRate:"{0} transactions · {1}/s", livePaused:"paused", liveNA:"Not available (older firmware)",
+    console:"Console", consoleTitle:"Console: firmware log, stove bus and requests (Ctrl+`)", liveReq:"Requests", reqCount:"{0} requests",
+    lgReqOk:"answered", lgReqSlow:"slow (> 5 s)", lgReqErr:"error or no answer",
+    aNoAnswerSub:"Check the serial cable to the stove. Open the Console (top right) to follow the bus and the log.",
+    busFailedLast:"FAILED: attempt {0}/{1} – {2}", busAttemptFail:"attempt {0}/{1} failed – {2}, trying again", busOkAfter:"(OK at attempt {0}/{1})",
+    rsTimeout:"timeout: {0} of {1} bytes", rsEcho:"echo differs from TX", rsChecksum:"echo OK, wrong checksum (noise on the line?)", rawEchoBad:"echo differs from TX (line stuck low? cable?)",
+    lgRetry:"attempt failed, tried again",
+    rsNothing:"nothing received, no echo: bus not connected (cable / interface?)", rsNoEcho:"no echo of TX (received {0}): bus not connected or line stuck (cable / interface?)",
+    rsEchoShort:"echo incomplete ({0} of {1} bytes): bus not connected?", rsNoAnswer:"echo OK, the stove did not answer ({0} of {1} bytes)", rsWrongConfirm:"the stove confirmed another address / value",
+    mqttNeedHost:"Set the broker first", mqttOnToast:"MQTT on", mqttOffToast:"MQTT off",
+    reset:"Reset", resetConfirm:"Reset the {0}?", resetDone:"{0} reset", crashCounter:"crash counter", serialCounters:"serial counters", serialSkipped:"{0} skipped (link down)",
+    evLinkDown:"Serial lost", evLinkUp:"Serial back", evtLink:"Serial link",
     busRead:"read", busWrite:"write", busFailed:"FAILED after {0} attempts", busWas:"was {0}", busFirst:"first reading", busUnknown:"(no description known)",
     busHTime:"Time", busHAction:"Action", busHReg:"Register", busHValue:"Value", busHMeaning:"Meaning",
-    lgFirst:"first reading of a register", lgSame:"same value as before", lgChanged:"value changed (← previous value)", lgWrite:"write to the stove", lgFailed:"failed (no answer / checksum)",
+    lgFirst:"first reading of a register", lgSame:"same value as before", lgChanged:"value changed (← previous value)", lgWrite:"write to the stove", lgFailed:"failed after all attempts",
     lgInfo:"I = info, D = debug", lgWarn:"W = warning", lgError:"E = error", lgBefore:"lines from before the last restart",
     busRaw:"Raw bytes", busBin:"Binary", rawRead:"read {0}, address {1}", rawWrite:"write {0}, address {1}, value {2}, checksum {3}", rawEcho:"echo of TX",
     rawAnswer:"checksum {0} ({1}), value {2}", rawOk:"OK", rawBad:"WRONG", rawShort:"only {0} of {1} bytes received (timeout)",
-    lgRaw:"TX = bytes sent by the controller; RX = bytes received: the echo of TX, then the stove's answer",
+    lgRaw:"TX = bytes sent by the controller; RX = bytes received: first always the echo of TX (one-wire bus; no echo = bus not connected), then the stove's answer",
     busErr:"error", busTries:"{0} attempts",
     liveNote:"Log: what the firmware writes to its serial port (Serial, UART0) (last 8 KB, also from before you opened this). Stove bus: every read and write on the bus to the stove, recorded only while this view is open.",
     h_live:"Firmware log: the messages of the controller firmware (WiFi, MQTT, updates, errors), the same as on the serial port, with the time. Output of some built-in libraries is not included. Stove bus: every read and write between the controller and the stove, one line each: time, action, register (RAM or EEPROM and address), value (decimal and hex) and what the value means according to the known register table. A changed value shows the previous one (← was …). With 'Changes only' (on by default) you see the first reading of each register and then only what changes, writes and failures; the colours are explained under the output. Filter on addresses to follow registers, e.g. while pressing keys on the remote. The bus monitor only records while this view is open and stops by itself 60 s after you leave. After a restart the log starts with the last lines from before it (kept in RTC memory, also after a crash, not after a power cut). Log levels per module set how much each part of the firmware writes (kept on the controller).",
@@ -728,20 +767,22 @@ const I18N = {
     device:"Device", apiDocs:"API docs", devicePage:"Device page", restart:"Restart", confirmRestart:"Restart the OpenPelletBridge controller?", restarting:"Restarting… the page reconnects automatically",
     turnOn:"Turn on", turnOff:"Turn off", confirmOff:"Turn the stove off?", powerOnSent:"Power on sent", powerOffSent:"Power off sent",
     failed:"{0} failed: {1}", updated:"Updated {0}", offline:"Offline", waiting:"Waiting for stove data…", stale:"Stove data {0} s old",
+    stoveOk:"Stove OK", stoveNoAnswer:"Stove does not answer", stoveUnknown:"Stove ?", connCtlTitle:"Controller: connection of this page with the OpenPelletBridge controller",
+    connStoveTitle:"Stove: serial connection of the controller with the stove",
     roomSrc:"Room ({0})", srcRemote:"remote", srcStove:"stove", srcLabel:"Temperature source", srcRemoteLong:"Remote control sensor", srcStoveLong:"Stove sensor", unknown:"Unknown",
     roomTemp:"Room temperature", stoveSensor:"Stove sensor", remoteSensor:"Remote control sensor", fumeFan:"Fume fan", auger:"Auger speed",
     pelletLevel:"Pellet level", low:"Low", ok:"OK", remoteSeen:"Remote last seen", secAgo:"{0} s ago", waterPres:"Water pressure", waterTemp:"Water temperature",
     fw:"Stove firmware", starts:"Number of starts", hours:"Working hours", service:"Hours since service", uptime:"Controller uptime", serialErr:"Serial errors (read / write)", retries:"Serial retries",
     menu:"Menu", selParam:"Selected parameter", remoteValue:"Value on the remote", language:"Language", mainScreen:"Main screen", none:"none",
     aAlarm:"Alarm: {0}", aAlarmSub:"Check the stove display and the error memory.", aNoAnswer:"The stove does not answer on the serial bus",
-    aError:"Active error {0}", aLow:"Pellet level is low", aLowSub:"Refill the pellet hopper.", aStale:"Stove data is {0} s old", aStaleSub:"The controller cannot read the stove at the moment.",
+    aError:"Active error {0}", aLow:"Pellet level is low", aLowSub:"Refill the pellet hopper.", aLowMin:"Refill the pellet hopper: about {0} min until the pellet reserve alarm.", aLowOff:"Pellets used up: the stove switches off in about {0} min (PELLET RESERVE on the remote). Refill the hopper.", pelOffIn:"off in {0} min", lowOff:"empty · off in {0} min", pelMinLeft:"{0} min to the alarm", lowSoon:"low · {0} min", aStale:"Stove data is {0} s old", aStaleSub:"The controller cannot read the stove at the moment.",
     aOffline:"The controller is not reachable", aOfflineSub:"Check WiFi or wait for a restart to finish.",
     flameN:"Flame power {0}", fanOff:"Room fan off", fanN:"Room fan {0}", spN:"Set point {0}", esOn:"Energy saving on", esOff:"Energy saving off", esUpd:"Energy saving updated",
     cqN:"Combustion quality {0}", pqN:"Pellet quality {0}", beepOn:"Beep enabled", beepOff:"Beep disabled", synced:"Stove clock synced", off:"Off",
     tTime:"Time", stateLines:"Stove state", histNothing:"Select at least one series above.",
     histNote:"One point every 2 minutes, last 24 hours, stored on the controller (kept across restarts). Temperatures in 0.5 °C steps. State lines are drawn at the exact moment of each change.",
     evtTitle:"State changes, errors and pellet reserve", pelSensor:"Reserve sensor (0xA4)", pelCounter:"Reserve counter (0x89)",
-    pelReserve:"Pellet reserve", pelReserveVal:"On · sensor {0} · counter {1}", h_pelReserve:"PELLET RESERVE (installer menu, EEPROM 0xC6). How the stove decides the reserve is being investigated: the alarm is assumed when the sensor (RAM 0xA4) is 5 and the counter (RAM 0x89) is 1 or lower. Every change of both is recorded in the state change list.", evtError:"Error", evtErrOn:"{0} occurred", evtErrOff:"Error cleared", errSeen:"occurred {0}", errSeenUnknown:"time unknown (before the log started)", evtWhen:"Time", evtFrom:"From", evtTo:"To", evtDur:"Duration", evtNone:"No state changes recorded yet.", evtNow:"now",
+    pelReserve:"Pellet reserve", pelReserveVal:"On · sensor {0} · counter {1}", h_pelReserve:"PELLET RESERVE (installer menu, EEPROM 0xC6). How the stove decides the reserve is being investigated: when the level sensor (RAM 0xA4) sees low pellets it becomes 5 and the counter (RAM 0x89) counts down from 20 to 0, about one step per minute (seen 17/11/2026: 20 steps in 19 min); at 1 or lower the alarm is assumed. The warning shows the minutes left while it counts down. Every change of both is recorded in the state change list.", evtError:"Error", evtErrOn:"{0} occurred", evtErrOff:"Error cleared", errSeen:"occurred {0}", errSeenUnknown:"time unknown (before the log started)", evtWhen:"Time", evtFrom:"From", evtTo:"To", evtDur:"Duration", evtNone:"No state changes recorded yet.", evtNow:"now",
     syncBrowser:"Set to browser time", browserSet:"Stove clock set to {0}", esStartOff:"OFF (no restart)", esNoRestart:"No automatic restart",
     wirelessLabel:"Wireless sensor (INSTELL WIRELESS)", on:"On", srcDerived:"Room temperature comes from",
     manualRef:"Source: stove manuals (FWAR01, P220 M)",
@@ -833,13 +874,24 @@ const I18N = {
     liveTitle:"Live debugging", liveLog:"Firmware-log", liveBus:"Kachelbus", livePause:"Pauze", liveResume:"Hervat", liveClear:"Wissen", liveDl:"Download",
     liveFilterLog:"Filter op tekst", liveFilterBus:"Adressen (0x21, 0x6E) of tekst", busChanges:"Enkel wijzigingen", busWrites:"Enkel schrijven", busErrors:"Enkel fouten",
     liveLost:"… oudere uitvoer werd overschreven …", liveLines:"{0} regels", liveRate:"{0} transacties · {1}/s", livePaused:"gepauzeerd", liveNA:"Niet beschikbaar (oudere firmware)",
+    console:"Console", consoleTitle:"Console: firmware-log, kachelbus en verzoeken (Ctrl+`)", liveReq:"Verzoeken", reqCount:"{0} verzoeken",
+    lgReqOk:"beantwoord", lgReqSlow:"traag (> 5 s)", lgReqErr:"fout of geen antwoord",
+    aNoAnswerSub:"Controleer de seriële kabel naar de kachel. Open de Console (rechtsboven) om de bus en de log te volgen.",
+    busFailedLast:"MISLUKT: poging {0}/{1} – {2}", busAttemptFail:"poging {0}/{1} mislukt – {2}, opnieuw", busOkAfter:"(gelukt bij poging {0}/{1})",
+    rsTimeout:"timeout: {0} van {1} bytes", rsEcho:"echo wijkt af van TX", rsChecksum:"echo OK, foute checksum (storing op de lijn?)", rawEchoBad:"echo wijkt af van TX (lijn hangt laag? kabel?)",
+    lgRetry:"poging mislukt, opnieuw geprobeerd",
+    rsNothing:"niets ontvangen, geen echo: bus niet verbonden (kabel / interface?)", rsNoEcho:"geen echo van TX (ontvangen {0}): bus niet verbonden of lijn hangt vast (kabel / interface?)",
+    rsEchoShort:"echo onvolledig ({0} van {1} bytes): bus niet verbonden?", rsNoAnswer:"echo OK, de kachel antwoordde niet ({0} van {1} bytes)", rsWrongConfirm:"de kachel bevestigde een ander adres / andere waarde",
+    mqttNeedHost:"Stel eerst de broker in", mqttOnToast:"MQTT aan", mqttOffToast:"MQTT uit",
+    reset:"Reset", resetConfirm:"De {0} op nul zetten?", resetDone:"{0} op nul gezet", crashCounter:"crashteller", serialCounters:"seriële tellers", serialSkipped:"{0} overgeslagen (link weg)",
+    evLinkDown:"Serieel weg", evLinkUp:"Serieel terug", evtLink:"Seriële link",
     busRead:"lezen", busWrite:"schrijven", busFailed:"MISLUKT na {0} pogingen", busWas:"was {0}", busFirst:"eerste lezing", busUnknown:"(geen beschrijving gekend)",
     busHTime:"Tijd", busHAction:"Actie", busHReg:"Register", busHValue:"Waarde", busHMeaning:"Betekenis",
-    lgFirst:"eerste lezing van een register", lgSame:"zelfde waarde als ervoor", lgChanged:"waarde gewijzigd (← vorige waarde)", lgWrite:"schrijfopdracht naar de kachel", lgFailed:"mislukt (geen antwoord / checksum)",
+    lgFirst:"eerste lezing van een register", lgSame:"zelfde waarde als ervoor", lgChanged:"waarde gewijzigd (← vorige waarde)", lgWrite:"schrijfopdracht naar de kachel", lgFailed:"mislukt na alle pogingen",
     lgInfo:"I = info, D = debug", lgWarn:"W = waarschuwing", lgError:"E = fout", lgBefore:"regels van vóór de laatste herstart",
     busRaw:"Ruwe bytes", busBin:"Binair", rawRead:"lees {0}, adres {1}", rawWrite:"schrijf {0}, adres {1}, waarde {2}, checksum {3}", rawEcho:"echo van TX",
     rawAnswer:"checksum {0} ({1}), waarde {2}", rawOk:"OK", rawBad:"FOUT", rawShort:"maar {0} van {1} bytes ontvangen (timeout)",
-    lgRaw:"TX = bytes verzonden door de controller; RX = ontvangen bytes: de echo van TX, daarna het antwoord van de kachel",
+    lgRaw:"TX = bytes verzonden door de controller; RX = ontvangen bytes: eerst altijd de echo van TX (bus met één draad; geen echo = bus niet verbonden), daarna het antwoord van de kachel",
     busErr:"fout", busTries:"{0} pogingen",
     liveNote:"Log: wat de firmware naar de seriële poort (Serial, UART0) schrijft (laatste 8 KB, ook van vóór je dit opende). Kachelbus: elke lees- en schrijfopdracht op de bus naar de kachel, enkel opgenomen zolang dit scherm open is.",
     h_live:"Firmware-log: de meldingen van de controller-firmware (WiFi, MQTT, updates, fouten), dezelfde als op de seriële poort, met het tijdstip. Uitvoer van sommige ingebouwde bibliotheken zit er niet in. Kachelbus: elke lees- en schrijfopdracht tussen de controller en de kachel, één regel per opdracht: tijd, actie, register (RAM of EEPROM en adres), waarde (decimaal en hex) en wat de waarde betekent volgens de gekende registertabel (in het Engels). Bij een gewijzigde waarde staat de vorige erbij (← was …). Met 'Enkel wijzigingen' (standaard aan) zie je de eerste lezing van elk register en daarna enkel wat verandert, schrijfopdrachten en fouten; de kleuren staan onder de uitvoer uitgelegd. Filter op adressen om registers te volgen, bv. terwijl je toetsen indrukt op de afstandsbediening. De busmonitor neemt enkel op zolang dit scherm open is en stopt vanzelf 60 s nadat je het verlaat. Na een herstart begint de log met de laatste regels van ervoor (bewaard in RTC-geheugen, ook na een crash, niet na een stroomonderbreking). De logniveaus per module bepalen hoeveel elk deel van de firmware schrijft (bewaard op de controller).",
@@ -877,20 +929,22 @@ const I18N = {
     device:"Toestel", apiDocs:"API-documentatie", devicePage:"Toestelpagina", restart:"Herstarten", confirmRestart:"De OpenPelletBridge-controller herstarten?", restarting:"Herstarten… de pagina maakt vanzelf opnieuw verbinding",
     turnOn:"Aanzetten", turnOff:"Uitzetten", confirmOff:"De kachel uitzetten?", powerOnSent:"Aanzetten verstuurd", powerOffSent:"Uitzetten verstuurd",
     failed:"{0} mislukt: {1}", updated:"Bijgewerkt {0}", offline:"Offline", waiting:"Wachten op gegevens van de kachel…", stale:"Gegevens {0} s oud",
+    stoveOk:"Kachel OK", stoveNoAnswer:"Kachel antwoordt niet", stoveUnknown:"Kachel ?", connCtlTitle:"Controller: verbinding van deze pagina met de OpenPelletBridge-controller",
+    connStoveTitle:"Kachel: seriële verbinding van de controller met de kachel",
     roomSrc:"Kamer ({0})", srcRemote:"afstandsbed.", srcStove:"kachel", srcLabel:"Temperatuurbron", srcRemoteLong:"Sensor afstandsbediening", srcStoveLong:"Sensor kachel", unknown:"Onbekend",
     roomTemp:"Kamertemperatuur", stoveSensor:"Sensor kachel", remoteSensor:"Sensor afstandsbediening", fumeFan:"Rookgasventilator", auger:"Schroef",
     pelletLevel:"Pelletniveau", low:"Laag", ok:"OK", remoteSeen:"Afstandsbed. laatst gezien", secAgo:"{0} s geleden", waterPres:"Waterdruk", waterTemp:"Watertemperatuur",
     fw:"Firmware kachel", starts:"Aantal starts", hours:"Werkuren", service:"Uren sinds onderhoud", uptime:"Uptime controller", serialErr:"Seriële fouten (lezen / schrijven)", retries:"Seriële herhalingen",
     menu:"Menu", selParam:"Geselecteerde parameter", remoteValue:"Waarde op de afstandsbediening", language:"Taal", mainScreen:"Hoofdscherm", none:"geen",
     aAlarm:"Alarm: {0}", aAlarmSub:"Kijk op het display van de kachel en in het foutgeheugen.", aNoAnswer:"De kachel antwoordt niet op de seriële bus",
-    aError:"Actieve fout {0}", aLow:"Pelletniveau is laag", aLowSub:"Vul de pellettank bij.", aStale:"Gegevens van de kachel zijn {0} s oud", aStaleSub:"De controller kan de kachel momenteel niet uitlezen.",
+    aError:"Actieve fout {0}", aLow:"Pelletniveau is laag", aLowSub:"Vul de pellettank bij.", aLowMin:"Vul de pellettank bij: nog ongeveer {0} min tot het pelletreserve-alarm.", aLowOff:"Pellets op: de kachel schakelt uit over ongeveer {0} min (PELLET RESERVE op de afstandsbediening). Vul de pellettank bij.", pelOffIn:"uit over {0} min", lowOff:"leeg · uit over {0} min", pelMinLeft:"nog {0} min tot het alarm", lowSoon:"laag · {0} min", aStale:"Gegevens van de kachel zijn {0} s oud", aStaleSub:"De controller kan de kachel momenteel niet uitlezen.",
     aOffline:"De controller is niet bereikbaar", aOfflineSub:"Controleer de WiFi of wacht tot een herstart klaar is.",
     flameN:"Vlamvermogen {0}", fanOff:"Ventilator uit", fanN:"Ventilator {0}", spN:"Gewenste temp. {0}", esOn:"Energy saving aan", esOff:"Energy saving uit", esUpd:"Energy saving aangepast",
     cqN:"Verbrandingskwaliteit {0}", pqN:"Pelletkwaliteit {0}", beepOn:"Zoemer aan", beepOff:"Zoemer uit", synced:"Kachelklok gelijkgezet", off:"Uit",
     tTime:"Tijd", stateLines:"Toestand kachel", histNothing:"Kies hierboven minstens één reeks.",
     histNote:"Eén punt per 2 minuten, laatste 24 uur, opgeslagen op de controller (blijft bewaard na een herstart). Temperaturen in stappen van 0,5 °C. Lijnen voor de toestand staan op het exacte moment van elke wissel.",
     evtTitle:"Toestandswissels, fouten en pelletreserve", pelSensor:"Reservesensor (0xA4)", pelCounter:"Reserveteller (0x89)",
-    pelReserve:"Pelletreserve", pelReserveVal:"Aan · sensor {0} · teller {1}", h_pelReserve:"PELLET RESERVE (installateursmenu, EEPROM 0xC6). Hoe de kachel de reserve bepaalt, wordt nog onderzocht: het alarm wordt verondersteld als de sensor (RAM 0xA4) 5 is en de teller (RAM 0x89) 1 of lager. Elke wijziging van beide wordt bijgehouden in de lijst met toestandswissels.", evtError:"Fout", evtErrOn:"{0} opgetreden", evtErrOff:"Fout opgelost", errSeen:"opgetreden op {0}", errSeenUnknown:"tijdstip onbekend (vóór de start van het logboek)", evtWhen:"Tijdstip", evtFrom:"Van", evtTo:"Naar", evtDur:"Duur", evtNone:"Nog geen toestandswissels geregistreerd.", evtNow:"nu",
+    pelReserve:"Pelletreserve", pelReserveVal:"Aan · sensor {0} · teller {1}", h_pelReserve:"PELLET RESERVE (installateursmenu, EEPROM 0xC6). Hoe de kachel de reserve bepaalt, wordt nog onderzocht: als de niveausensor (RAM 0xA4) weinig pellets ziet, wordt hij 5 en telt de teller (RAM 0x89) af van 20 naar 0, ongeveer één stap per minuut (gezien 17/11/2026: 20 stappen in 19 min); bij 1 of lager wordt het alarm verondersteld. De waarschuwing toont de resterende minuten tijdens het aftellen. Elke wijziging van beide wordt bijgehouden in de lijst met toestandswissels.", evtError:"Fout", evtErrOn:"{0} opgetreden", evtErrOff:"Fout opgelost", errSeen:"opgetreden op {0}", errSeenUnknown:"tijdstip onbekend (vóór de start van het logboek)", evtWhen:"Tijdstip", evtFrom:"Van", evtTo:"Naar", evtDur:"Duur", evtNone:"Nog geen toestandswissels geregistreerd.", evtNow:"nu",
     syncBrowser:"Gelijkzetten met browsertijd", browserSet:"Kachelklok gezet op {0}", esStartOff:"OFF (geen herstart)", esNoRestart:"Geen automatische herstart",
     wirelessLabel:"Wireless sensor (INSTELL WIRELESS)", on:"Aan", srcDerived:"Kamertemperatuur komt van",
     manualRef:"Bron: handleidingen van de kachel (FWAR01, P220 M)",
@@ -994,15 +1048,27 @@ $("keySave").onclick = () => {
 };
 $("keyInput").addEventListener("keydown", e => { if (e.key === "Enter") $("keySave").click(); });
 
+// Requests of this page, for the console's Requests tab (the console's own polling left out)
+let reqRows = [];
+function reqText(r) {
+  return fmtMs(r.wall).padEnd(13) + r.method.padEnd(7) + r.path.padEnd(40) + " " + (r.err ? "ERR " : String(r.status).padEnd(4)) + String(r.ms).padStart(6) + " ms" + (r.err ? "  " + r.err : "");
+}
 async function api(method, path, params, body) {
   const url = new URL(path, location.origin);
   if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 15000);
+  const rec = !["/api/log", "/api/busmon"].includes(url.pathname) ? { wall: Date.now(), method, path: url.pathname + url.search, status: 0, ms: 0, err: "" } : null;
+  const t0 = performance.now();
+  if (rec) { reqRows.push(rec); if (reqRows.length > 500) reqRows.shift(); }
   try {
     const opts = { method, signal: ctrl.signal, headers: {} };
     if (body !== undefined) { opts.body = JSON.stringify(body); opts.headers["Content-Type"] = "application/json"; }
     const key = storedKey(); if (key) opts.headers["X-API-Key"] = key;
-    const res = await fetch(url, opts); const text = await res.text();
+    let res;
+    try { res = await fetch(url, opts); }
+    catch (e) { if (rec) { rec.err = e.name === "AbortError" ? "timeout 15 s" : "no answer"; rec.ms = Math.round(performance.now() - t0); } throw e; }
+    const text = await res.text();
+    if (rec) { rec.status = res.status; rec.ms = Math.round(performance.now() - t0); }
     if (res.status === 401) { showKeyDialog(); throw new Error(t("keyNeeded")); }
     let data = null; try { data = text ? JSON.parse(text) : null; } catch (_) { data = { result: text }; }
     if (!res.ok) throw new Error((data && (data.error || data.result)) || ("HTTP " + res.status));
@@ -1023,7 +1089,7 @@ function fmtTemp(v, digits) {
   return Number(v).toFixed(digits === undefined ? (Number.isInteger(v) ? 0 : 1) : digits) + "°";
 }
 function fmtDelta(s) {
-  if (s === undefined) return "–";
+  if (s === undefined || s === null) return "–";
   const a = Math.abs(s);
   return (s < 0 ? "−" : "") + (a < 60 ? a + " s" : a < 3600 ? Math.round(a / 60) + " min" : (a / 3600).toFixed(1) + " h");
 }
@@ -1033,7 +1099,19 @@ const pad = n => String(n).padStart(2, "0");
 function fmtDate(d) { return pad(d.getDate()) + "/" + pad(d.getMonth() + 1) + "/" + d.getFullYear(); }
 function fmtHM(d) { return pad(d.getHours()) + ":" + pad(d.getMinutes()); }
 function fmtStoveTime(str) { const d = parseStove(str); return d ? fmtDate(d) + " " + fmtHM(d) + ":" + pad(d.getSeconds()) : (str || "–"); }
-function setConn(ok, text, warn) { $("dot").className = "dot " + (!ok ? "err" : warn ? "warn" : "ok"); $("conn").textContent = text; }
+// Two status dots in the header: the controller (this page <-> the ESP32) and the
+// stove (the serial link ESP32 <-> stove). level: ok / warn / err / "" (unknown)
+function setConn(ok, text, warn) { $("dot").className = "dot " + (!ok ? "err" : warn ? "warn" : "ok"); $("conn").textContent = text; $("connCtl").title = t("connCtlTitle"); }
+function setStoveConn(level, text) { $("dotStove").className = "dot " + level; $("connStoveTxt").textContent = text; $("connStove").title = t("connStoveTitle"); }
+function renderStoveConn(d) {
+  if (offline || !d) { setStoveConn("", t("stoveUnknown")); return; }
+  const code = d.stoveState ? d.stoveState.stoveState : null, age = d.dataAge ? d.dataAge.fastSeconds : null;
+  const linkDown = (d.serial && d.serial.linkUp === false) || code === -1;
+  if (linkDown) setStoveConn("err", t("stoveNoAnswer"));
+  else if (age === null || age === undefined) setStoveConn("", t("waiting"));
+  else if (age > 30) setStoveConn("warn", t("stale", age));
+  else setStoveConn("ok", t("stoveOk"));
+}
 function fillDl(el, rows) {
   el.innerHTML = "";
   for (const [k, v, x] of rows) {   // x: true / "x" = expert only, "d" = debug only
@@ -1042,6 +1120,15 @@ function fillDl(el, rows) {
     if (x) { const c = x === "d" ? "d" : "x"; dt.className = c; dd.className = c; }
     el.append(dt, dd);
   }
+}
+// value with a small reset button behind it (counters)
+function withReset(value, onclick) {
+  const sp = el("span", "", String(value)), b = el("button", "mini", t("reset"));
+  b.type = "button"; b.onclick = onclick; sp.appendChild(b); return sp;
+}
+async function resetCounters(params, label) {
+  if (!confirm(t("resetConfirm", label))) return;
+  try { await write(t("resetDone", label), "POST", "/api/diag/reset", params); } catch (_) {}
 }
 function pill(text, cls) { const s = document.createElement("span"); s.className = "pill " + (cls || ""); s.textContent = text; return s; }
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
@@ -1352,16 +1439,47 @@ $("ghAuto").onchange = async e => {
 // visible. The bus monitor only records on the controller while it is polled.
 const LIVE_KEEP = 3000, LIVE_SHOW = 600;
 let liveMode = "log", livePaused = false, liveT = null, liveNA = false;
+let dtOpen = (() => { try { return localStorage.getItem("dtOpen") === "1"; } catch (_) { return false; } })();
 let logCur = 0, logPart = "", logLines = [];
 let busCur = 0, busRows = [], busLast = {}, busOn = false;
 const hex2 = n => "0x" + n.toString(16).toUpperCase().padStart(2, "0");
-function liveActive() { return debug && !document.hidden && !offline; }
+function liveActive() { return dtOpen && !document.hidden && !offline; }
+// ---- console dock: open / close, height, button ----
+function setDevtools(open) {
+  dtOpen = open; try { if (open) localStorage.setItem("dtOpen", "1"); else localStorage.removeItem("dtOpen"); } catch (_) {}
+  $("devtools").hidden = !open; document.body.classList.toggle("dtopen", open);
+  if (open) { renderLive(); liveSchedule(0); } else if (busOn) busSet(false);
+  renderConsoleBtn();
+}
+function renderConsoleBtn() {
+  if (!liveReady) return;   // called from renderAlerts before the console block has run
+  const noStove = !!state && state.stoveState && state.stoveState.stoveState === -1;
+  const b = $("consoleBtn");
+  b.hidden = !(debug || noStove || dtOpen);
+  b.classList.toggle("alert", noStove && !dtOpen);
+  b.setAttribute("aria-pressed", dtOpen); b.title = t("consoleTitle");
+}
+(() => {
+  let h = 340; try { h = Number(localStorage.getItem("dtH")) || 340; } catch (_) {}
+  document.documentElement.style.setProperty("--dth", h + "px");
+})();
+$("consoleBtn").onclick = () => setDevtools(!dtOpen);
+$("dtClose").onclick = () => setDevtools(false);
+document.addEventListener("keydown", e => { if (e.ctrlKey && e.code === "Backquote") { e.preventDefault(); setDevtools(!dtOpen); } });
+$("dtGrip").addEventListener("pointerdown", e => {
+  const g = $("dtGrip"); g.setPointerCapture(e.pointerId); g.classList.add("drag");
+  const move = ev => { const h = Math.max(140, Math.min(window.innerHeight - 80, window.innerHeight - ev.clientY)); document.documentElement.style.setProperty("--dth", h + "px"); };
+  const up = ev => { g.removeEventListener("pointermove", move); g.removeEventListener("pointerup", up); g.classList.remove("drag");
+    try { localStorage.setItem("dtH", String(parseInt(getComputedStyle(document.documentElement).getPropertyValue("--dth")))); } catch (_) {} };
+  g.addEventListener("pointermove", move); g.addEventListener("pointerup", up);
+});
 function liveSchedule(ms) { clearTimeout(liveT); liveT = setTimeout(liveTick, ms); }
 async function busSet(on) { try { await api("POST", "/api/busmon", { enabled: on, since: busCur }); busOn = on; } catch (_) {} }
 async function liveTick() {
   if (!liveActive()) { if (busOn) busSet(false); liveSchedule(3000); return; }
   if (livePaused) { liveSchedule(1000); return; }
   let again = 1000;
+  if (liveMode === "req") { renderLive(); liveSchedule(1000); return; }
   try {
     if (liveMode === "log") {
       const d = (await api("GET", "/api/log", { since: logCur })).data;
@@ -1376,9 +1494,14 @@ async function liveTick() {
       busOn = true;
       const off = Date.now() - d.now;   // controller millis -> local time
       if (d.lost) busRows.push({ lost: true });
-      for (const [ms, w, ee, a, v, ok, att, txt, tx, rx] of d.events) {
+      for (const e of d.events) {
+        // one event per attempt: [ms, write, eeprom, address, value, ok, attempt, of, text, tx, rx]
+        // (older firmware: one per transaction, without "of")
+        const perTry = e.length >= 11, [ms, w, ee, a, v, ok, att] = e;
+        const of = perTry ? e[7] : 3, txt = e[perTry ? 8 : 7], tx = e[perTry ? 9 : 8], rx = e[perTry ? 10 : 9];
         const key = (ee ? "E" : "R") + a, prev = busLast[key];
-        busRows.push({ wall: ms + off, w: !!w, ee: !!ee, a, v, ok: !!ok, att, txt: txt || "", tx: tx || "", rx: rx || "",
+        busRows.push({ wall: ms + off, w: !!w, ee: !!ee, a, v, ok: !!ok, att, of, last: !!ok || att >= of || !perTry,
+                       txt: txt || "", tx: tx || "", rx: rx || "",
                        ch: !!ok && prev !== undefined && prev !== v, first: !!ok && !w && prev === undefined, prev });
         if (ok) busLast[key] = v;
       }
@@ -1401,12 +1524,16 @@ function busText(r) {
   if (r.lost) return t("liveLost");
   const action = r.w ? t("busWrite") : t("busRead");
   const reg = (r.ee ? "EEPROM " : "RAM ") + hex2(r.a);
-  if (!r.ok) return fmtMs(r.wall).padEnd(BUS_COLS[0]) + action.padEnd(BUS_COLS[1]) + reg.padEnd(BUS_COLS[2]) + "–".padEnd(BUS_COLS[3]) + t("busFailed", r.att) + (r.w ? " (" + r.v + ")" : "");
+  if (!r.ok) {
+    const why = busFailReason(r);
+    return fmtMs(r.wall).padEnd(BUS_COLS[0]) + action.padEnd(BUS_COLS[1]) + reg.padEnd(BUS_COLS[2]) + (r.w ? String(r.v) : "–").padEnd(BUS_COLS[3])
+      + t(r.last ? "busFailedLast" : "busAttemptFail", r.att, r.of, why);
+  }
   const val = (String(r.v) + " (" + hex2(r.v) + ")").padEnd(BUS_COLS[3]);
   let mean = r.txt || t("busUnknown");
   if (r.ch) mean += "   ← " + t("busWas", r.prev);
   else if (r.first) mean += "   (" + t("busFirst") + ")";
-  if (r.att > 1) mean += "   " + t("busTries", r.att);
+  if (r.att > 1) mean += "   " + t("busOkAfter", r.att, r.of);
   return fmtMs(r.wall).padEnd(BUS_COLS[0]) + action.padEnd(BUS_COLS[1]) + reg.padEnd(BUS_COLS[2]) + val + mean;
 }
 // Raw bytes of a transaction, with what each part means. The bus is one wire:
@@ -1424,11 +1551,11 @@ function busRawLines(r) {
   const lines = [ind + "TX → " + fmt(tx).padEnd(width) + "  " + txNote];
   const echo = rx.slice(0, echoN), ans = rx.slice(echoN);
   let rxTxt = fmt(echo) + (ans.length ? " | " + fmt(ans) : ""), note;
-  if (rx.length < full) note = t("rawShort", rx.length, full);
+  if (rx.length < full) note = busFailReason(r);
   else {
     const type = r.ee ? 0x20 : 0x00, chk = ans[0], val = ans[1];
     const want = r.w ? (0x80 + type + r.a + val) & 0xFF : (type + r.a + val) & 0xFF;
-    note = t("rawEcho") + " | " + t("rawAnswer", hex2(chk), t(chk === want ? "rawOk" : "rawBad"), val + " (" + hex2(val) + ")");
+    note = (busEchoBad(r) ? t("rsNoEcho", fmt(echo)) : t("rawEcho")) + " | " + t("rawAnswer", hex2(chk), t(chk === want ? "rawOk" : "rawBad"), val + " (" + hex2(val) + ")");
   }
   lines.push(ind + "RX ← " + rxTxt.padEnd(width) + "  " + note);
   return lines;
@@ -1436,7 +1563,8 @@ function busRawLines(r) {
 function renderLiveLegend() {
   const host = $("liveLegend"); host.innerHTML = "";
   const items = liveMode === "bus"
-    ? [["first", "lgFirst"], ["", "lgSame"], ["ch", "lgChanged"], ["w", "lgWrite"], ["err", "lgFailed"], ...($("busRaw").checked ? [["raw", "lgRaw"]] : [])]
+    ? [["first", "lgFirst"], ["", "lgSame"], ["ch", "lgChanged"], ["w", "lgWrite"], ["retry", "lgRetry"], ["err", "lgFailed"], ...($("busRaw").checked ? [["raw", "lgRaw"]] : [])]
+    : liveMode === "req" ? [["", "lgReqOk"], ["warn", "lgReqSlow"], ["err", "lgReqErr"]]
     : [["", "lgInfo"], ["warn", "lgWarn"], ["err", "lgError"], ["lost", "lgBefore"]];
   for (const [cls, key] of items) {
     const sp = el("span"), sw = el("i"), probe = el("span", cls);
@@ -1444,6 +1572,25 @@ function renderLiveLegend() {
     sw.style.background = getComputedStyle(probe).color; probe.remove();
     sp.append(sw, document.createTextNode(t(key))); host.appendChild(sp);
   }
+}
+// Why an attempt failed, from its raw bytes: too few bytes = timeout; the first
+// bytes are the echo of TX (one-wire bus), a different echo points at the line
+// (stuck low / cable); all bytes but no match = wrong checksum
+function busEchoBad(r) {
+  const tx = r.tx.match(/../g) || [], rx = r.rx.match(/../g) || [];
+  for (let i = 0; i < Math.min(tx.length, rx.length); i++) if (tx[i] !== rx[i]) return true;
+  return false;
+}
+// No (correct) echo = the bus is not connected (cable / interface), the stove
+// is then not even reached; echo OK but no answer = the stove does not answer.
+function busFailReason(r) {
+  if (!r.tx && !r.rx) return t("busErr");
+  const got = r.rx.length / 2, txN = r.tx.length / 2, full = txN + 2;
+  if (got === 0) return t("rsNothing");
+  if (busEchoBad(r)) return t("rsNoEcho", (r.rx.match(/../g) || []).join(" "));
+  if (got < txN) return t("rsEchoShort", got, txN);
+  if (got < full) return t("rsNoAnswer", got, full);
+  return r.w ? t("rsWrongConfirm") : t("rsChecksum");
 }
 // "0x21, 0x6e 33" -> addresses; anything else is a text filter
 function parseBusFilter(q) {
@@ -1456,17 +1603,19 @@ function renderLive() {
   for (const id of ["busChangesL", "busWritesL", "busErrorsL", "busRawL"]) $(id).hidden = liveMode !== "bus";
   $("busBinL").hidden = liveMode !== "bus" || !$("busRaw").checked;
   $("logLvlBox").hidden = liveMode !== "log";
+  $("liveFilter").hidden = false;
   $("livePause").textContent = t(livePaused ? "liveResume" : "livePause"); $("livePause").setAttribute("aria-pressed", livePaused);
-  $("liveFilter").placeholder = t(liveMode === "log" ? "liveFilterLog" : "liveFilterBus"); $("liveFilter").setAttribute("aria-label", $("liveFilter").placeholder);
-  if (!debug) return;
+  $("liveFilter").placeholder = t(liveMode === "bus" ? "liveFilterBus" : "liveFilterLog"); $("liveFilter").setAttribute("aria-label", $("liveFilter").placeholder);
+  if (!dtOpen) return;
   const out = $("liveOut"), atBottom = out.scrollHeight - out.scrollTop - out.clientHeight < 30;
   const q = $("liveFilter").value.trim().toLowerCase();
   let rows;
-  if (liveMode === "log") rows = logLines.filter(l => !q || l.s.toLowerCase().includes(q)).map(l => [l.s, l.c]);
+  if (liveMode === "req") rows = reqRows.map(r => [reqText(r), r.err || r.status >= 400 ? "err" : r.ms > 5000 ? "warn" : ""]).filter(([x]) => !q || x.toLowerCase().includes(q));
+  else if (liveMode === "log") rows = logLines.filter(l => !q || l.s.toLowerCase().includes(q)).map(l => [l.s, l.c]);
   else {
     const { addrs, text } = parseBusFilter(q), onlyCh = $("busChanges").checked, onlyW = $("busWrites").checked, onlyE = $("busErrors").checked;
     rows = busRows.filter(r => r.lost || ((!addrs.length || addrs.includes(r.a)) && (!onlyCh || r.ch || r.w || r.first || !r.ok) && (!onlyW || r.w) && (!onlyE || !r.ok)))
-      .map(r => [busText(r), r.lost ? "lost" : !r.ok ? "err" : r.w ? "w" : r.ch ? "ch" : r.first ? "first" : "", r])
+      .map(r => [busText(r), r.lost ? "lost" : !r.ok ? (r.last ? "err" : "retry") : r.w ? "w" : r.ch ? "ch" : r.first ? "first" : "", r])
       .filter(([txt]) => !text || txt.toLowerCase().includes(text));
     if ($("busRaw").checked) rows = rows.flatMap(row => [row, ...busRawLines(row[2]).map(l => [l, "raw"])]);
   }
@@ -1477,7 +1626,7 @@ function renderLive() {
   out.replaceChildren(frag);
   if (atBottom && !livePaused) out.scrollTop = out.scrollHeight;
   const now = Date.now(), rate = Math.round(busRows.filter(r => r.wall > now - 10000).length / 10);
-  $("liveStat").textContent = liveNA ? t("liveNA") : (liveMode === "log" ? t("liveLines", logLines.length) : t("liveRate", busRows.length, rate)) + (livePaused ? " · " + t("livePaused") : "");
+  $("liveStat").textContent = liveNA && liveMode !== "req" ? t("liveNA") : (liveMode === "log" ? t("liveLines", logLines.length) : liveMode === "req" ? t("reqCount", reqRows.length) : t("liveRate", busRows.length, rate)) + (livePaused ? " · " + t("livePaused") : "");
 }
 for (const b of $("liveSeg").children) b.onclick = () => {
   liveMode = b.dataset.v;
@@ -1485,10 +1634,10 @@ for (const b of $("liveSeg").children) b.onclick = () => {
   renderLive(); liveSchedule(0);
 };
 $("livePause").onclick = () => { livePaused = !livePaused; renderLive(); if (!livePaused) liveSchedule(0); };
-$("liveClear").onclick = () => { if (liveMode === "log") logLines = []; else { busRows = []; busLast = {}; } renderLive(); };
+$("liveClear").onclick = () => { if (liveMode === "log") logLines = []; else if (liveMode === "req") reqRows = []; else { busRows = []; busLast = {}; } renderLive(); };
 $("liveDl").onclick = () => {
-  const lines = liveMode === "log" ? logLines.map(l => l.s) : busRows.flatMap(r => [busText(r), ...($("busRaw").checked ? busRawLines(r) : [])]);
-  downloadBlob(new Blob([lines.join("\n") + "\n"], { type: "text/plain" }), "openpelletbridge-" + (liveMode === "log" ? "log" : "bus") + "-" + fileStamp() + ".txt");
+  const lines = liveMode === "log" ? logLines.map(l => l.s) : liveMode === "req" ? reqRows.map(reqText) : busRows.flatMap(r => [busText(r), ...($("busRaw").checked ? busRawLines(r) : [])]);
+  downloadBlob(new Blob([lines.join("\n") + "\n"], { type: "text/plain" }), "openpelletbridge-" + liveMode + "-" + fileStamp() + ".txt");
 };
 $("liveFilter").oninput = renderLive;
 // log level per firmware module (GET/POST /api/loglevel)
@@ -1510,6 +1659,7 @@ $("logLvlBox").addEventListener("toggle", () => { if ($("logLvlBox").open) loadL
 for (const id of ["busChanges", "busWrites", "busErrors", "busRaw", "busBin"]) $(id).onchange = renderLive;
 document.addEventListener("visibilitychange", () => { if (!document.hidden && debug) liveSchedule(0); });
 liveReady = true; renderLive();   // labels and placeholder before the first poll
+if (dtOpen) setDevtools(true);
 liveSchedule(2000);
 
 // ---------- settings backup / restore ----------
@@ -1622,8 +1772,10 @@ $("restart").onclick = async () => { if (!confirm(t("confirmRestart"))) return; 
 let mqttCfg = null;
 function renderMqtt() {
   const c = mqttCfg;
-  if (!c) { fillDl($("mqttList"), [[t("status"), t("mqttNone")]]); $("mqttEdit").disabled = true; return; }
-  $("mqttEdit").disabled = false;
+  const tg = $("mqttToggle");
+  tg.setAttribute("aria-label", t("mqttEnabled"));
+  if (!c) { fillDl($("mqttList"), [[t("status"), t("mqttNone")]]); $("mqttEdit").disabled = true; tg.disabled = true; return; }
+  $("mqttEdit").disabled = false; tg.disabled = false; tg.checked = !!c.enabled;
   const st = !c.enabled ? pill(t("mqttOff"), "") : c.connected ? pill(t("mqttConn"), "ok") : pill(t("mqttNotConn"), "err");
   const rows = [[t("status"), st]];
   if (c.enabled || c.host) rows.push(["Broker", c.host ? c.host + ":" + c.port : "–"]);
@@ -1637,7 +1789,7 @@ function renderMqtt() {
 }
 function fillMqttForm() {
   const c = mqttCfg || {};
-  $("mqEnabled").checked = !!c.enabled; $("mqHost").value = c.host || ""; $("mqPort").value = c.port || 1883;
+  $("mqHost").value = c.host || ""; $("mqPort").value = c.port || 1883;
   $("mqUser").value = c.user || ""; $("mqPass").value = ""; $("mqPass").placeholder = c.passwordSet ? t("mqttPassKeep") : "";
   $("mqPrefix").value = c.prefix || "openpelletbridge"; $("mqDisc").checked = c.discovery !== false; $("mqDiscPrefix").value = c.discoveryPrefix || "homeassistant";
 }
@@ -1645,11 +1797,22 @@ async function loadMqtt() {
   try { mqttCfg = (await api("GET", "/api/mqtt")).data; } catch (_) { mqttCfg = null; }
   renderMqtt();
 }
+// on / off at once; switching on without a broker opens the settings first
+$("mqttToggle").onchange = async e => {
+  const on = e.target.checked;
+  if (on && !(mqttCfg && mqttCfg.host)) {
+    e.target.checked = false; toast(t("mqttNeedHost"), true);
+    $("mqttForm").hidden = false; fillMqttForm(); $("mqHost").focus(); return;
+  }
+  try { mqttCfg = await write(t(on ? "mqttOnToast" : "mqttOffToast"), "POST", "/api/mqtt", { enabled: on }); }
+  catch (_) { e.target.checked = !on; }
+  renderMqtt(); setTimeout(loadMqtt, 4000);   // the connection is made from the loop, shortly after
+};
 $("mqttEdit").onclick = () => { const f = $("mqttForm"); f.hidden = !f.hidden; if (!f.hidden) fillMqttForm(); };
 $("mqCancel").onclick = () => { $("mqttForm").hidden = true; };
 $("mqttForm").onsubmit = async e => {
   e.preventDefault();
-  const p = { enabled: $("mqEnabled").checked, host: $("mqHost").value.trim(), port: $("mqPort").value || 1883, user: $("mqUser").value.trim(),
+  const p = { enabled: !!(mqttCfg && mqttCfg.enabled), host: $("mqHost").value.trim(), port: $("mqPort").value || 1883, user: $("mqUser").value.trim(),
               prefix: $("mqPrefix").value.trim() || "openpelletbridge", discovery: $("mqDisc").checked, discoveryPrefix: $("mqDiscPrefix").value.trim() || "homeassistant" };
   if ($("mqPass").value) p.password = $("mqPass").value;
   try { mqttCfg = await write(t("mqttSaved"), "POST", "/api/mqtt", p); $("mqttForm").hidden = true; } catch (_) {}
@@ -1762,6 +1925,7 @@ $("wifiForm").onsubmit = e => { e.preventDefault(); saveWifi(true); };
 
 // ---------- alerts ----------
 function renderAlerts() {
+  renderConsoleBtn();
   const host = $("alerts"); host.innerHTML = "";
   const add = (level, title, sub) => {
     const a = el("div", "alert " + level);
@@ -1772,11 +1936,15 @@ function renderAlerts() {
   if (offline) { add("critical", t("aOffline"), t("aOfflineSub")); return; }
   if (!state) return;
   const code = state.stoveState ? state.stoveState.stoveState : null;
-  if (code === -1) add("critical", t("aNoAnswer"));
+  if (code === -1) add("critical", t("aNoAnswer"), t("aNoAnswerSub"));
   else if ([8, 9, 10].includes(code)) add("critical", t("aAlarm", STATE_NAME[lang][code]), t("aAlarmSub"));
-  if (state.currentError) add("critical", t("aError", state.currentError.error),
+  if (state.currentError && state.currentError.source !== "controller") add("critical", t("aError", state.currentError.error),   // LINK: already the "no answer" alert
     errDesc(state.currentError) + (I18N.en["eh_" + state.currentError.id] ? " — " + t("eh_" + state.currentError.id) : ""));
-  if (state.lowPalletAlarm) add("warning", t("aLow"), t("aLowSub"));
+  // pellets: the level sensor (RAM 0xA4 = 5) starts a countdown (RAM 0x89, ~1 per minute) to the reserve alarm
+  const pr = state.pelletReserve || {};
+  if (pr.shutdownMinutes != null) add("critical", t("aLow"), t("aLowOff", pr.shutdownMinutes));   // phase 2: the stove switches off
+  else if (state.lowPalletAlarm) add("warning", t("aLow"), t("aLowSub"));
+  else if (pr.sensor === 5 && pr.minutesLeft > 0) add("warning", t("aLow"), t("aLowMin", pr.minutesLeft));
   const age = state.dataAge ? state.dataAge.fastSeconds : null;
   if (age !== null && age !== undefined && age > 30) add("warning", t("aStale", age), t("aStaleSub"));
 }
@@ -1792,7 +1960,7 @@ function renderTime(tm) {
   tickClock.stove = parseStove(tm.stove); tickClock.ntp = parseStove(tm.ntp); tickClock.at = performance.now();
   $("timeStove").textContent = fmtStoveTime(tm.stove);
   $("timeNtp").textContent = fmtStoveTime(tm.ntp);
-  const d = $("timeDelta"); d.textContent = ""; d.appendChild(pill(fmtDelta(tm.delta), Math.abs(tm.delta) > 120 ? "warn" : ""));
+  const d = $("timeDelta"); d.textContent = ""; d.appendChild(pill(fmtDelta(tm.delta), tm.delta != null && Math.abs(tm.delta) > 120 ? "warn" : ""));
 }
 function render(s) {
   if (s.controller && s.controller.version) { const v = $("appVer"); v.textContent = s.controller.version; v.title = (s.controller.built || "") + (s.controller.stoveModel ? " · " + s.controller.stoveModel : ""); }
@@ -1821,8 +1989,8 @@ function render(s) {
   // Which sensor does the room temperature (RAM 0x01) come from? The MULTICOMFORT
   // setting is not readable, so derive it from the readings.
   const tp = s.temperatures || {};
-  const src = tp.room === undefined ? null
-    : (s.RemoteControlLastSeen >= 0 && tp.room === tp.remoteControl) ? "remote"
+  const src = tp.room == null ? null   // null: not read yet (null === null would match a sensor)
+    : (s.RemoteControlLastSeen != null && s.RemoteControlLastSeen >= 0 && tp.room === tp.remoteControl) ? "remote"
     : tp.room === tp.stove ? "stove" : tp.room === tp.remoteControl ? "remote" : null;
   $("tRoom").textContent = fmtTemp(tp.room);
   $("tRoomLbl").textContent = src === "remote" ? t("roomSrc", t("srcRemote")) : src === "stove" ? t("roomSrc", t("srcStove")) : t("room");
@@ -1855,8 +2023,8 @@ function render(s) {
   $("esStopHint").textContent  = es.enabled ? t("stopsAt", fmtTemp(es.stopTemperature)) : "\u00a0";
 
   const b = s.burn || {};
-  if (document.activeElement !== $("cq") && CQ.includes(b.combustionQuality)) $("cq").value = b.combustionQuality;
-  if (document.activeElement !== $("pq") && PQ.includes(b.pelletQuality)) $("pq").value = b.pelletQuality;
+  if (document.activeElement !== $("cq")) { if (CQ.includes(b.combustionQuality)) $("cq").value = b.combustionQuality; else $("cq").selectedIndex = -1; }   // -1: not read yet
+  if (document.activeElement !== $("pq")) { if (PQ.includes(b.pelletQuality)) $("pq").value = b.pelletQuality; else $("pq").selectedIndex = -1; }
   qualityHints();
   $("beep").checked = !!s.stoveBeepEnabled;
 
@@ -1869,7 +2037,7 @@ function render(s) {
     [t("stoveSensor"), fmtTemp(tp.stove)],
     [t("remoteSensor"), fmtTemp(tp.remoteControl)],
     [t("fumeTemp"), fmtTemp(tp.fume)],
-    [t("flameActual"), s.flame && s.flame.actual !== undefined ? s.flame.actual : "–"],
+    [t("flameActual"), s.flame && s.flame.actual != null ? s.flame.actual : "–"],
     [t("fanActual"), !s.roomFan || s.roomFan.running === null || s.roomFan.running === undefined ? "–"
       : s.roomFan.mode === "off" ? t("off")
       : s.roomFan.running ? t("fanRunsPower", s.roomFan.actual ?? s.RoomFanSpeed, s.roomFan.drive ?? "?") : s.roomFan.hotEnough === false && s.RoomFanSpeed ? t("fanWaitHeat") : t("off")],
@@ -1877,17 +2045,22 @@ function render(s) {
     [t("fumeFan"), (s.fumeFanRPM ?? "–") + " rpm", true],
     [t("auger"), (s.augerSpeed ?? "–") + " rpm", true],
     [withHelp(t("brazier"), "h_brazier"), brazierText(s.brazierCleaning), true],
-    [t("pelletLevel"), s.lowPalletAlarm ? pill(t("low"), "err") : pill(t("ok"), "ok")],
+    [t("pelletLevel"), s.lowPalletAlarm == null ? "–" : s.pelletReserve && s.pelletReserve.shutdownMinutes != null ? pill(t("lowOff", s.pelletReserve.shutdownMinutes), "err")
+      : s.lowPalletAlarm ? pill(t("low"), "err")
+      : s.pelletReserve && s.pelletReserve.sensor === 5 && s.pelletReserve.minutesLeft > 0 ? pill(t("lowSoon", s.pelletReserve.minutesLeft), "warn") : pill(t("ok"), "ok")],
     [withHelp(t("pelReserve"), "h_pelReserve"), !s.pelletReserve ? "–" : (s.pelletReserve.enabled === false ? t("off")
-      : t("pelReserveVal", s.pelletReserve.sensor ?? "–", s.pelletReserve.counter ?? "–")), "d"],
-    [t("remoteSeen"), s.RemoteControlLastSeen >= 0 ? t("secAgo", s.RemoteControlLastSeen) : t("unknown")],
+      : t("pelReserveVal", s.pelletReserve.sensor ?? "–", s.pelletReserve.counter ?? "–")
+        + (s.pelletReserve.shutdownMinutes != null ? " · " + t("pelOffIn", s.pelletReserve.shutdownMinutes)
+           : s.pelletReserve.sensor === 5 && s.pelletReserve.minutesLeft != null ? " · " + t("pelMinLeft", s.pelletReserve.minutesLeft) : "")), "d"],
+    [t("remoteSeen"), s.RemoteControlLastSeen != null && s.RemoteControlLastSeen >= 0 ? t("secAgo", s.RemoteControlLastSeen) : "–"],
   ];
   if (s.hydro) rows.push([t("waterPres"), s.hydro.Pressure], [t("waterTemp"), fmtTemp(s.hydro.Temp)]);
   fillDl($("statusList"), rows);
   if (s.time) renderTime(s.time);
 
   const list = $("errList"); list.innerHTML = "";
-  if (!s.previousErrors) list.appendChild(el("li", "muted", t("noErrors")));
+  if (s.previousErrors === null) list.appendChild(el("li", "muted", "–"));   // error memory not read yet
+  else if (!s.previousErrors) list.appendChild(el("li", "muted", t("noErrors")));
   else { const when = errorTimes(s.previousErrors); for (const [pos, e] of Object.entries(s.previousErrors)) {
     const li = el("li"), txt = el("span", "etext"), posTxt = pos.replace("MemoryPos_", "#");
     txt.append(el("b", "", e.error), document.createTextNode(errDesc(e) + " "), el("span", "muted", "(" + posTxt + ")"));
@@ -1910,12 +2083,14 @@ function render(s) {
     [t("builtFor"), s.controller && s.controller.stoveModel ? s.controller.stoveModel : "–"],
     [t("ctrlFw"), s.controller ? s.controller.version : "–", true],
     [t("ctrlBuilt"), s.controller && s.controller.built ? (d => fmtDate(d) + " " + fmtHM(d))(new Date(s.controller.built)) : "–", true], [t("starts"), s.numberOfStarts ?? "–"], [t("hours"), s.totalRuntime ?? "–"],
-    [withHelp(t("service"), "h_service"), s.hoursSinceLastService !== undefined
+    [withHelp(t("service"), "h_service"), s.hoursSinceLastService != null
       ? pill(t("serviceOf", s.hoursSinceLastService), s.hoursSinceLastService >= 2000 ? "warn" : "") : "–"],
     [t("uptime"), s.uptime ? s.uptime.human : "–", true],
     ...(s.controller && s.controller.resetReason ? [[t("lastStart"), s.controller.crashCount && /crash|watchdog|brown/.test(s.controller.resetReason) ? pill(s.controller.resetReason, "warn") : s.controller.resetReason, true],
-      [t("ctrlStarts"), t("ctrlStartsVal", s.controller.bootCount, s.controller.crashCount), true]] : []),
-    [t("serialErr"), s.serial ? s.serial.readErrors + " / " + s.serial.writeErrors : "–", "d"], [t("retries"), s.serial ? s.serial.retries : "–", "d"],
+      [t("ctrlStarts"), s.controller.crashCount ? withReset(t("ctrlStartsVal", s.controller.bootCount, s.controller.crashCount), () => resetCounters({ crashes: true }, t("crashCounter")))
+                                                : t("ctrlStartsVal", s.controller.bootCount, s.controller.crashCount), true]] : []),
+    [t("serialErr"), s.serial ? withReset(s.serial.readErrors + " / " + s.serial.writeErrors + (s.serial.skipped ? " · " + t("serialSkipped", s.serial.skipped) : ""),
+                                          () => resetCounters({ serial: true }, t("serialCounters"))) : "–", "d"], [t("retries"), s.serial ? s.serial.retries : "–", "d"],
   ]);
   renderAlerts(); renderNext(); renderRemote(); renderParams();   // marks the current flame level
 }
@@ -2250,7 +2425,7 @@ function renderLcd() {
       ] : [
         L("ROOKG", "SMOKE") + "=" + (tp.fume !== undefined ? String(Math.trunc(tp.fume)).padStart(3, "0") : "–") + "°",
         "RPM/ASP=" + (state.fumeFanRPM ?? "–"),
-        L("SCHROEF", "FEED") + "=" + (state.augerSpeed !== undefined ? Number(state.augerSpeed).toFixed(1).padStart(4, "0") : "–"),
+        L("SCHROEF", "FEED") + "=" + (state.augerSpeed != null ? Number(state.augerSpeed).toFixed(1).padStart(4, "0") : "–"),
         L("KACHEL", "STOVE") + "=" + (tp.stove !== undefined ? Math.trunc(tp.stove) : "–") + "°" + mark(tp.stove),
         L("AFSTAND.", "REMOTE") + "=" + (tp.remoteControl !== undefined ? Math.trunc(tp.remoteControl) : "–") + "°" + mark(tp.remoteControl),
       ];
@@ -2392,7 +2567,10 @@ function renderLcd() {
   const fan = el("div", "fan"); fan.appendChild(lcdIcon("fan", 16)); fan.appendChild(el("span", "", String(state.RoomFanSpeed ?? "–")));
   lcd.appendChild(fan);
   if (msgLetter()) lcd.appendChild(el("div", "eco", msgLetter()));
-  if (state.lowPalletAlarm) lcd.appendChild(el("div", "warnmsg", "PELLET RESERVE"));
+  // "PELLET RESERVE 18'" as on the remote (17/11/2026): minutes until the stove switches off
+  const prv = state.pelletReserve || {};
+  if (prv.shutdownMinutes != null) lcd.appendChild(el("div", "warnmsg", "PELLET RESERVE " + prv.shutdownMinutes + "'"));
+  else if (state.lowPalletAlarm) lcd.appendChild(el("div", "warnmsg", "PELLET RESERVE"));
 }
 
 // Name of the parameter being edited on the remote (RAM 0x18), in the web app language
@@ -2425,7 +2603,7 @@ function renderRemoteInfo() {
   ];
   if (remote && remote.parameterId && remote.editValue !== undefined) rows.push([t("remoteValue"), String(remote.editValue), "d"]);
   rows.push([t("language"), remote ? remote.language : "–"],
-    [t("remoteSeen"), state.RemoteControlLastSeen >= 0 ? t("secAgo", state.RemoteControlLastSeen) : t("unknown")],
+    [t("remoteSeen"), state.RemoteControlLastSeen != null && state.RemoteControlLastSeen >= 0 ? t("secAgo", state.RemoteControlLastSeen) : "–"],
     [t("wirelessLabel"), { on: t("on"), off: t("off") }[state.wirelessSensor] || t("unknown")]);
   fillDl($("remoteList"), rows);
 }
@@ -2549,17 +2727,21 @@ function renderHistory() {
     // Before the log starts (or without it) the changes are derived from the 2-min samples.
     // The first log entry with from = null only marks the start of the log, not a change.
     const stEv = stateEvents(), logStart = stEv.length ? stEv[0].t : Infinity;
-    const sampled = states.map((v, i) => ({ t: times[i], s: v })).filter((c, i) => i > 0 && c.s !== states[i - 1] && c.t < logStart);
+    const st4 = v => v === 5 ? 4 : v;   // brazier cleaning counts as working here
+    const sampled = states.map((v, i) => ({ t: times[i], s: st4(v) })).filter((c, i) => i > 0 && c.s !== st4(states[i - 1]) && c.t < logStart);
     const logged = stEv.filter(e => e.from !== null && e.t >= t0 && e.t <= t1).map(e => ({ t: e.t, s: e.to }));
     // errors from the log: red line labelled with the code
     const errs = (Array.isArray(events) ? events : []).filter(e => e.type === "error" && e.id && e.t >= t0 && e.t <= t1).map(e => ({ t: e.t, err: e.error }));
-    const changes = sampled.concat(logged, errs).sort((a, b) => a.t - b.t);
+    // serial link to the stove lost (red) / back (green)
+    const links = (Array.isArray(events) ? events : []).filter(e => e.type === "link" && e.t >= t0 && e.t <= t1).map(e => ({ t: e.t, link: !!e.up }));
+    const changes = sampled.concat(logged, errs, links).sort((a, b) => a.t - b.t);
     for (const c of changes) {
-      const x = X(c.t), alarm = c.err !== undefined || [8, 9, 10, -1].includes(c.s);
-      svg.appendChild(svgEl("line", { x1: x, x2: x, y1: m.t + 10, y2: plotBottom, stroke: alarm ? "var(--err)" : "var(--muted)", "stroke-width": 1, "stroke-dasharray": "2 3", opacity: alarm ? 0.9 : 0.55 }));
+      const x = X(c.t), isLink = c.link !== undefined, alarm = (isLink && !c.link) || c.err !== undefined || [8, 9, 10, -1].includes(c.s);
+      const col = isLink ? (c.link ? "var(--ok)" : "var(--err)") : alarm ? "var(--err)" : "var(--muted)";
+      svg.appendChild(svgEl("line", { x1: x, x2: x, y1: m.t + 10, y2: plotBottom, stroke: col, "stroke-width": isLink ? 1.5 : 1, "stroke-dasharray": isLink ? "6 3" : "2 3", opacity: isLink || alarm ? 0.9 : 0.55 }));
       // label only when it fits after the previous one (≈6.5 px per character at 11 px)
-      const label = String(c.err !== undefined ? c.err : STATE_NAME[lang][c.s] ?? c.s);
-      if (x > lastLabelX && x + 3 + label.length * 6.5 < W - 4) { svg.appendChild(svgEl("text", { x: x + 3, y: m.t + 9, style: alarm ? "fill:var(--err)" : "" }, label)); lastLabelX = x + 3 + label.length * 6.5 + 8; }
+      const label = String(c.link !== undefined ? t(c.link ? "evLinkUp" : "evLinkDown") : c.err !== undefined ? c.err : STATE_NAME[lang][c.s] ?? c.s);
+      if (x > lastLabelX && x + 3 + label.length * 6.5 < W - 4) { svg.appendChild(svgEl("text", { x: x + 3, y: m.t + 9, style: c.link ? "fill:var(--ok)" : alarm ? "fill:var(--err)" : "" }, label)); lastLabelX = x + 3 + label.length * 6.5 + 8; }
     }
   }
   const scales = {}, gapS = (hist.interval || 120) * 5;
@@ -2697,11 +2879,13 @@ function renderEvents() {
     for (let j = i + 1; j < events.length; j++) { const n = events[j]; if ((n.type || "state") === kind && (kind !== "pellet" || n.register === e.register)) { next = n; break; } }
     const dur = fmtDur(Math.max(0, (next ? next.t : now) - e.t)) + (next ? "" : " (" + t("evtNow") + ")");
     const pelName = e.register === "0xA4" ? t("pelSensor") : t("pelCounter");
-    const cells = isErr ? [t("evtError"), e.id ? t("evtErrOn", e.error) : t("evtErrOff"), e.id ? dur : ""]
+    const cells = kind === "link" ? [t("evtLink"), t(e.up ? "evLinkUp" : "evLinkDown"), e.up ? "" : dur]
+                : isErr ? [t("evtError"), e.id ? t("evtErrOn", e.error) : t("evtErrOff"), e.id ? dur : ""]
                 : kind === "pellet" ? [pelName + " " + (e.from ?? "–"), pelName + " " + e.to, dur]
                 : [name(e.from), name(e.to), dur];
     [fmtDate(d) + " " + fmtHM(d) + ":" + pad(d.getSeconds()), ...cells].forEach(x => tr.appendChild(el("td", "", x)));
-    if ((isErr && e.id) || [8, 9, 10].includes(e.to)) tr.style.color = "var(--err)";
+    if ((isErr && e.id) || (kind === "link" && !e.up) || (kind !== "link" && [8, 9, 10].includes(e.to))) tr.style.color = "var(--err)";
+    else if (kind === "link") tr.style.color = "var(--ok)";
     tbl.appendChild(tr);
   }
 }
@@ -2711,6 +2895,9 @@ async function loadHistory() {
   const [h, ev] = await Promise.allSettled([api("GET", "/api/history", { hours: Math.max(1, Math.ceil(histHours)) }), api("GET", "/api/events")]);
   hist = h.status === "fulfilled" ? h.value.data : { error: h.reason && h.reason.message };
   events = ev.status === "fulfilled" && ev.value.data && Array.isArray(ev.value.data.events) ? ev.value.data.events.slice().sort((a, b) => a.t - b.t) : null;   // null: firmware without the log
+  // brazier cleaning (state 5) is a short periodic step while working: not shown as an event
+  if (events) events = events.filter(e => !((!e.type || e.type === "state") && (e.to === 5 || (e.from === 5 && e.to === 4))))
+                             .map(e => (!e.type || e.type === "state") && e.from === 5 ? { ...e, from: 4 } : e);
   renderHistory(); renderEvents(); if (state) render(state);   // error memory shows times from the log
   histTimer = setTimeout(loadHistory, HISTORY_MS);
 }
@@ -2746,7 +2933,7 @@ $("expertBtn").onclick = () => {
 };
 $("debugBtn").onclick = () => {
   debug = !debug; try { localStorage.setItem("debug", debug ? "1" : "0"); } catch (_) {}
-  applyExpert(); renderHistory(); renderHyp(); renderParams(); if (debug) { loadHyp(); loadParams(); liveSchedule(0); } else if (busOn) busSet(false);
+  applyExpert(); renderHistory(); renderHyp(); renderParams(); if (debug) { loadHyp(); loadParams(); } renderConsoleBtn();
 };
 
 // ---------- reachability ----------
@@ -2873,10 +3060,10 @@ $("parReload").onclick = () => loadParams(true);
 // status says so. a: addresses read live (ram / eeprom), shown as "v1 / v2".
 const HYP = [
   { r: "RAM 0x89", a: [["ram", 0x89]], st: "h",
-    o: ["20 met volle bak; geen kopie van de gewenste temperatuur (bleef 20 bij 21). Tijdens branden om de 9,5 à 14 min kort 20 → 19 en na ~35 s terug (16/11 en 17/11); nooit als de kachel uit staat",
-        "20 with a full hopper; not a set point copy (stayed 20 at 21). While working briefly 20 → 19 every 9.5 – 14 min, back after ~35 s (16/11 and 17/11); never while off"],
-    h: ["Aftelling (min) tot het pelletreserve-alarm; de niveausensor ziet mogelijk kort geen pellets",
-        "Countdown (min) to the pellet reserve alarm; the level sensor possibly briefly sees no pellets"] },
+    o: ["20 met volle bak. 17/11 19:41:47 ging de niveausensor RAM 0xA4 van 0 → 5 en telde 0x89 af van 20 → 0 in 19 min (ongeveer 1 per minuut), 0 bereikt om 20:00:49; de kachel bleef branden. Eerdere korte dips 20 → 19 → 20: de sensor zag even weinig pellets",
+        "20 with a full hopper. 17/11 19:41:47 the level sensor RAM 0xA4 went 0 → 5 and 0x89 counted down 20 → 0 in 19 min (about 1 per minute), reached 0 at 20:00:49; the stove kept working. Earlier short dips 20 → 19 → 20: the sensor briefly saw low pellets"],
+    h: ["Bevestigd: minuten tot het pelletreserve-alarm, telt af zolang 0xA4 = 5. Wat de kachel bij 0 doet (bericht op de afstandsbediening, uitschakelen na een tijd) is nog niet gezien",
+        "Confirmed: minutes until the pellet reserve alarm, counts down while 0xA4 = 5. What the stove does at 0 (message on the remote, shutting down after a while) is not seen yet"] },
   { r: "RAM 0xA4", a: [["ram", 0xA4]], st: "h",
     o: ["Altijd 0, ook tijdens de dips van 0x89", "Always 0, also during the 0x89 dips"],
     h: ["Pelletsensor (5 = actief); mogelijk niet het juiste register", "Pellet sensor (5 = active); possibly not the right register"] },
@@ -3008,11 +3195,10 @@ async function poll() {
   try {
     const { data } = await api("GET", "/api/state");
     state = data; offline = false; render(data); applyReach();
-    const age = data.dataAge ? data.dataAge.fastSeconds : null;
-    if (age === null || age === undefined) setConn(true, t("waiting"), true);
-    else if (age > 30) setConn(true, t("stale", age), true);
-    else setConn(true, t("updated", new Date().toLocaleTimeString(lang === "nl" ? "nl-BE" : "en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })));
-  } catch (e) { offline = true; setConn(false, t("offline")); renderAlerts(); applyReach(); }
+    // the controller answered: its dot is green; the stove dot tells about the serial link
+    setConn(true, t("updated", new Date().toLocaleTimeString(lang === "nl" ? "nl-BE" : "en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })));
+    renderStoveConn(data);
+  } catch (e) { offline = true; setConn(false, t("offline")); renderStoveConn(null); renderAlerts(); applyReach(); }
   finally { polling = false; pollTimer = setTimeout(poll, POLL_MS); }
 }
 document.addEventListener("visibilitychange", () => { if (!document.hidden) { poll(); pollRemote(); loadHyp(); } });

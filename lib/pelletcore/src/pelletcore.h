@@ -331,7 +331,7 @@ inline bool updateAvailable(const char* current, const char* latest)
 inline const char* stoveStateName(int state)
 {
     switch (state) {
-    case -1: return "Unknown [RS232 Serial Error]";
+    case -1: return "No answer (serial link down)";
     case 0:  return "Off";
     case 1:  return "Starting";
     case 2:  return "Pellet loading";

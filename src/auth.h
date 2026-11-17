@@ -84,7 +84,7 @@ std::function<void()> authed(std::function<void()> fn)
         fn();
         uint32_t d = millis() - t0;
         const String& uri = wm.server->uri();
-        if (d > 2000) LOGW("http", "slow request: %s took %lu ms", uri.c_str(), (unsigned long)d);
+        if (d > 5000) LOGW("http", "slow request: %s took %lu ms", uri.c_str(), (unsigned long)d);
         else if (uri != "/api/log" && uri != "/api/busmon") LOGD("http", "%s done in %lu ms", uri.c_str(), (unsigned long)d);
     };
 }

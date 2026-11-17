@@ -128,8 +128,16 @@ static void mqttPublishStates(bool force)
     bool stoveOk = stoveState >= 0;
     mqttState("state",          StoveStateStr, force);
     mqttState("state_code",     String(stoveState), force);
-    mqttState("power",          onOff(StoveIsOn), force);
-    mqttState("mode",           StoveIsOn ? "heat" : "off", force);   // Home Assistant climate
+    if (stoveState != UNKNOWN) {   // on / off unknown while the stove does not answer: keep the last value
+        mqttState("power",      onOff(StoveIsOn), force);
+        mqttState("mode",       StoveIsOn ? "heat" : "off", force);   // Home Assistant climate
+    }
+    if (stoveState == UNKNOWN) {   // no answer from the stove: a controller-side error
+        mqttState("error_active", "ON", force);
+        mqttState("error",        "LINK No answer from the stove (serial link down)", force);
+    }
+    // values never read from the stove since the start are not published (no initial 0s)
+    if (!lastFastStatesAt || !lastSlowStatesAt) { mqttState("wifi_rssi", String(WiFi.RSSI()), force); return; }
     if (stoveOk) {
         mqttState("room_temp",   num1(ambTemp), force);
         mqttState("stove_temp",  num1(ambTempStove), force);
@@ -149,8 +157,8 @@ static void mqttPublishStates(bool force)
     mqttState("fume_fan_rpm",   String(cachedFumeFanRPM), force);
     mqttState("auger",          String(cachedAugerSpeed, 1), force);
     mqttState("brazier_minutes", stoveState == 4 && cachedBrazierCountdown >= 0 ? String(cachedBrazierCountdown) : String(""), force);
-    mqttState("error_active",   onOff(confirmedCurrentError != 0), force);
-    mqttState("error",          confirmedCurrentError ? getErrorCode(confirmedCurrentError) + " " + getErrorDesc(confirmedCurrentError) : String("none"), force);
+    if (stoveState != UNKNOWN) mqttState("error_active",   onOff(confirmedCurrentError != 0), force);
+    if (stoveState != UNKNOWN) mqttState("error",          confirmedCurrentError ? getErrorCode(confirmedCurrentError) + " " + getErrorDesc(confirmedCurrentError) : String("none"), force);
     mqttState("low_pellets",    onOff(cachedLowPallet != 0), force);
     mqttState("hours_service",  String(cachedHoursSinceLastService), force);
     mqttState("total_hours",    String(cachedTotalRuntime), force);
@@ -274,7 +282,7 @@ static void mqttCommand(const String& name, const char* payload)
         else { ok = name == "es_stop" ? setEnergySavingStop(v) : setEnergySavingStart(v); getEnergySaving(); }
     } else result = "unknown command";
     if (!ok && !result.length()) result = "RS232 error";
-    if (ok) LOGI("mqtt", "command %s = %s: ok", name.c_str(), payload); else LOGW("mqtt", "command %s = %s: %s", name.c_str(), payload, result.c_str());
+    if (ok) LOGI("mqtt", "command %s = %s: ok", name.c_str(), payload); else LOGE("mqtt", "command %s = %s failed: %s", name.c_str(), payload, result.c_str());
     mqttPub(mqttCfg.prefix + "/result", name + " " + payload + ": " + (ok ? String("ok") : result), false);
     mqttPublishStates(false);
 }
@@ -299,7 +307,8 @@ static void mqttConnect()
         : mqtt.connect(mqttClientId.c_str(), will.c_str(), 1, true, "offline");
     if (!ok) {
         String e = String("connect failed: ") + mqttStateText(mqtt.state()) + " (state " + mqtt.state() + ")";
-        if (e != mqttLastError) LOGW("mqtt", "%s:%u: %s", mqttCfg.host.c_str(), mqttCfg.port, e.c_str());   // once, not every retry
+        if (e != mqttLastError)   // once, not every retry; refused credentials will not fix themselves
+            logPrintf(mqtt.state() == 4 || mqtt.state() == 5 ? LOG_ERROR : LOG_WARN, "mqtt", "%s:%u: %s", mqttCfg.host.c_str(), mqttCfg.port, e.c_str());
         mqttLastError = e;
         return;
     }

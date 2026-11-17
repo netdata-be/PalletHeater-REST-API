@@ -13,7 +13,8 @@
 // recorded with its exact time. The last EVT_SIZE changes are kept in RAM and
 // persisted in /events.bin (one small append per change, so very few flash writes;
 // the file is compacted when it reaches 2 * EVT_SIZE records).
-enum : uint8_t { EVT_STATE = 0, EVT_ERROR = 1, EVT_PELLET = 2 };   // EVT_PELLET: code = RAM address, from/to = values
+enum : uint8_t { EVT_STATE = 0, EVT_ERROR = 1, EVT_PELLET = 2, EVT_LINK = 3 };   // EVT_PELLET: code = RAM address, from/to = values
+// EVT_LINK: serial link to the stove lost (to = 0) or back (to = 1)
 struct __attribute__((packed)) StateEvent { uint32_t t; uint8_t kind; int8_t from; int8_t to; uint8_t code; };
 struct __attribute__((packed)) StateEventV1 { uint32_t t; int8_t from; int8_t to; };   // PHE1 file layout
 static const int      EVT_SIZE = 200;
@@ -25,6 +26,7 @@ static const size_t   EVT_HDR = sizeof(EVT_MAGIC) + 1;
 static int            evtLastState = -1;   // last known state (from the log or the bus)
 static int            evtLastError = 0;    // last logged error value (0 = none)
 static int            evtLastPellet[2] = { -1, -1 };   // last logged RAM 0xA4 / 0x89
+static int            evtLastLink = -1;    // last logged serial link state (0 down, 1 up, -1 none)
 
 static void evtPush(const StateEvent& e)
 {
@@ -94,6 +96,7 @@ static void eventsLoad()
         const StateEvent& e = evts[(evtHead - 1 - i + 2 * EVT_SIZE) % EVT_SIZE];
         if (e.kind == EVT_STATE && !gotState) { evtLastState = e.to; gotState = true; }
         if (e.kind == EVT_ERROR && !gotError) { evtLastError = e.code; gotError = true; }
+        if (e.kind == EVT_LINK && evtLastLink == -1) evtLastLink = e.to;
         if (e.kind == EVT_PELLET) {
             int k = e.code == palletSensorAddr ? 0 : e.code == palletLevelAddr ? 1 : -1;
             if (k >= 0 && evtLastPellet[k] == -1) evtLastPellet[k] = e.to;
@@ -139,6 +142,10 @@ static String stateChangeReason(int from, int to)
         if (from == 6 && to == 0) break;                  // end of the shut-down: nothing to explain
         int t = timerAt(false);
         if (recent && (lastStateWriteVal == 6 || lastStateWriteVal == 0)) snprintf(b, sizeof(b), "switched off by %s", lastStateWriteSrc);
+        // pellet reserve phase 2 (level sensor 0xA4 = 5, countdown 0x89 at 0, 0x91 running):
+        // the stove switches itself off when the PELLET RESERVE time is over
+        else if (cachedPelletSensor == 5 && cachedPelletCounter == 0)
+            snprintf(b, sizeof(b), "pellet reserve finished: pellets used up (PELLET RESERVE countdown ended)");
         else if (t >= 0) snprintf(b, sizeof(b), "timer PR%d (off at %02d:%02d)", t + 1, cachedTimerOffVal[t] * 10 / 60, cachedTimerOffVal[t] * 10 % 60);
         else snprintf(b, sizeof(b), "on the remote control or by the stove itself");
         break;
@@ -157,18 +164,39 @@ static String stateChangeReason(int from, int to)
 static void evtStore(const StateEvent& e);
 static void eventsTick()
 {
+    // serial link to the stove: lost / back. "Back" needs a real answer (a full read),
+    // so a restart without the stove does not log a false "back".
+    {
+        time_t tn = time(nullptr);
+        int cur = stove.linkDown ? 0 : (lastFastStatesAt ? 1 : -1);
+        if (tn > 1700000000 && cur >= 0 && cur != evtLastLink && !(cur == 1 && evtLastLink == -1)) {
+            StateEvent e = { (uint32_t)tn, EVT_LINK, (int8_t)evtLastLink, (int8_t)cur, 0 };
+            evtLastLink = cur;
+            evtStore(e);
+        }
+    }
     if (lastFastStatesAt == 0) return;                 // no data from the stove yet
     updateConfirmedError(stoveState);
     time_t t = time(nullptr);
     if (t < 1700000000) return;                        // no valid time yet: wait, changes are logged once NTP is in
     int s = stoveState;
+    // Brazier cleaning (5) is a short periodic step while working (every ~45 min):
+    // not an event, it would only clutter the log and the chart. Only in the firmware log (debug).
+    if (s == 5 || (s == 4 && evtLastState == 5)) {
+        static int lastSeen = -1;
+        if (s != lastSeen) LOGD("stove", "state %s", pc::stoveStateName(s));
+        lastSeen = s;
+        if (evtLastState == 5) evtLastState = 4;   // an old event ended in 5: continue as working
+        s = 4;
+    }
     if (s >= 0 && s <= 20 && s != evtLastState) {
         static uint32_t stateSince = 0;   // time of the previous change seen in this run
         char dur[24] = "";
         if (stateSince) { uint32_t d = (uint32_t)t - stateSince; snprintf(dur, sizeof(dur), " after %lu min %02lu s", (unsigned long)(d / 60), (unsigned long)(d % 60)); }
         String why = stateChangeReason(evtLastState, s);
-        if (evtLastState >= 0) LOGI("stove", "state %s -> %s%s%s%s", pc::stoveStateName(evtLastState), pc::stoveStateName(s), dur,
-                                    why.length() ? " - probable cause: " : "", why.c_str());
+        if (evtLastState >= 0) logPrintf(s >= 8 && s <= 10 ? LOG_ERROR : LOG_INFO,   // alarm states are errors
+                                         "stove", "state %s -> %s%s%s%s", pc::stoveStateName(evtLastState), pc::stoveStateName(s), dur,
+                                         why.length() ? " - probable cause: " : "", why.c_str());
         else LOGI("stove", "state %s", pc::stoveStateName(s));
         stateSince = (uint32_t)t;
         StateEvent e = { (uint32_t)t, EVT_STATE, (int8_t)evtLastState, (int8_t)s, 0 };
@@ -187,7 +215,7 @@ static void eventsTick()
     }
     int err = confirmedCurrentError;   // debounced: short pre-warnings are not logged
     if (err >= 0 && err <= 255 && err != evtLastError) {
-        if (err) LOGW("stove", "error %s: %s (state %s)", pc::errorCode(err), pc::errorDesc(err), pc::stoveStateName(stoveState));
+        if (err) LOGE("stove", "error %s: %s (state %s)", pc::errorCode(err), pc::errorDesc(err), pc::stoveStateName(stoveState));
         else if (evtLastError > 0) LOGI("stove", "error %s cleared", pc::errorCode(evtLastError));
         StateEvent e = { (uint32_t)t, EVT_ERROR, -1, -1, (uint8_t)err };
         evtLastError = err;
@@ -230,6 +258,8 @@ void handleRouteEvents()
             if (e.from < 0) strcpy(from, "null"); else snprintf(from, sizeof(from), "%d", e.from);
             snprintf(row, sizeof(row), "%s{\"t\":%lu,\"type\":\"pellet\",\"register\":\"0x%02X\",\"from\":%s,\"to\":%d}",
                      first ? "" : ",", (unsigned long)e.t, e.code, from, e.to);
+        } else if (e.kind == EVT_LINK) {
+            snprintf(row, sizeof(row), "%s{\"t\":%lu,\"type\":\"link\",\"up\":%s}", first ? "" : ",", (unsigned long)e.t, e.to ? "true" : "false");
         } else if (e.kind == EVT_ERROR) {
             if (e.code == 0) snprintf(row, sizeof(row), "%s{\"t\":%lu,\"type\":\"error\",\"id\":0,\"error\":null}", first ? "" : ",", (unsigned long)e.t);
             else snprintf(row, sizeof(row), "%s{\"t\":%lu,\"type\":\"error\",\"id\":%u,\"error\":\"%s\"}", first ? "" : ",",

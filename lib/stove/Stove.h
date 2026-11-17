@@ -17,11 +17,12 @@
 // Called after every bus transaction (also failed ones) when set: the live bus
 // monitor of the web app. Must be fast and must not touch the bus.
 //   isWrite, type (0x00 RAM / 0x20 EEPROM), address, value (read result or the
-//   value written), ok, attempts used, and the raw bytes of the last attempt:
+//   value written), ok, attempt (1..of) and the raw bytes of that attempt. Called
+//   for every attempt, so a retried transaction gives one call per try:
 //   tx = sent (read: type, address; write: 0x80 + type, address, value, checksum)
 //   rx = received (the bus is one wire: first the echo of tx, then the stove's
 //        2 byte answer: checksum, value). rxLen < full length = timeout.
-typedef void (*StoveMonitorFn)(bool isWrite, uint8_t type, uint8_t address, uint8_t value, bool ok, uint8_t attempts,
+typedef void (*StoveMonitorFn)(bool isWrite, uint8_t type, uint8_t address, uint8_t value, bool ok, uint8_t attempt, uint8_t of,
                                const uint8_t* tx, uint8_t txLen, const uint8_t* rx, uint8_t rxLen);
 
 // Receives the library's log lines (errors, and the frames when debug is on);
@@ -39,9 +40,16 @@ class Stove
     static StoveWriteFn   writeHook; // nullptr = off
     static StoveLogFn     logger;    // nullptr = Serial
     Stove(int uart_nr);
+    // When the link is down (LINK_DOWN_AFTER transactions in a row failed after
+    // all attempts) read() returns -1 and write() false at once, without touching
+    // the bus. Only probe() still talks to the stove; one answer brings the link up.
     bool write(byte type, byte address, byte value);
     // Returns the register value (0-255), or -1 on timeout / checksum error.
     int read(byte type, byte address);
+    int probe(byte type, byte address);   // a read that is tried even when the link is down
+    volatile bool linkDown = false;       // the stove does not answer
+    volatile uint32_t skipped = 0;        // reads / writes refused because the link was down
+    static const uint8_t LINK_DOWN_AFTER = 2;
     void setDebug(bool enabled);
     bool isDebugEnabled() const;
 
@@ -53,6 +61,9 @@ class Stove
   private:
     HardwareSerial* StoveSerial;
     void drainRx();
+    int  readTx(byte type, byte address);
+    void linkResult(bool ok);
+    uint8_t failedInRow = 0;
     int  transact(const byte* tx, size_t txLen, byte* rx, size_t rxLen);
     bool _debugEnabled = false;
     void debugLog(const char* msg);

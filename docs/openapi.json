@@ -214,7 +214,9 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           }
-        }
+        },
+        "security": [],
+        "description": "Public: no API key needed."
       }
     },
     "/api/power": {
@@ -3676,6 +3678,58 @@
           "Diagnostics"
         ]
       }
+    },
+    "/api/diag/reset": {
+      "post": {
+        "summary": "Reset diagnostic counters",
+        "parameters": [
+          {
+            "name": "serial",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Stove bus counters: read / write errors, retries, skipped, transactions"
+          },
+          {
+            "name": "crashes",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Crash counter (NVS)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Counters reset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "string"
+                    },
+                    "crashCount": {
+                      "type": "integer"
+                    },
+                    "serial": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Nothing to reset given"
+          }
+        },
+        "tags": [
+          "Diagnostics"
+        ]
+      }
     }
   },
   "components": {
@@ -4327,6 +4381,16 @@
                 "type": "integer"
               },
               "retries": {
+                "type": "integer"
+              },
+              "linkUp": {
+                "type": "boolean",
+                "description": "false: the stove does not answer, bus commands fail at once"
+              },
+              "skipped": {
+                "type": "integer"
+              },
+              "transactions": {
                 "type": "integer"
               }
             }

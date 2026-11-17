@@ -75,9 +75,17 @@ static std::function<void()> withStoveLock(void (*fn)())
 {
     return [fn]() {
         if (!stoveMutex) { fn(); return; }
-        if (xSemaphoreTakeRecursive(stoveMutex, pdMS_TO_TICKS(5000)) != pdTRUE)
+        // The stove does not answer: fail fast instead of trying every register 3 times
+        // while the (single threaded) web server waits - other requests stay responsive.
+        if (stove.linkDown) {   // the serial link to the stove is down: every bus command fails at once
+            LOGD("http", "503 %s: the stove does not answer", wm.server->uri().c_str());
+            if (wm.server->uri() == "/api/health") wm.server->send(500, "application/json", "{\"health\":\"Failed to talk to Stove\"}");
+            else wm.server->send(503, "application/json", "{\"error\":\"The stove does not answer (serial connection) - try again later\"}");
+            return;
+        }
+        if (!stoveLockTake(3000))   // feeds the 5 s task watchdog while waiting
         {
-            LOGW("http", "503 %s %s: stove bus busy for 5 s", wm.server->method() == HTTP_GET ? "GET" : "POST", wm.server->uri().c_str());
+            LOGW("http", "503 %s %s: stove bus busy for 3 s", wm.server->method() == HTTP_GET ? "GET" : "POST", wm.server->uri().c_str());
             wm.server->send(503, "application/json", "{\"error\":\"Stove bus busy, try again\"}");
             return;
         }
@@ -93,6 +101,71 @@ static std::function<void()> withStoveLock(void (*fn)())
     };
 }
 
+// All HTTP routes. Called in setup(), and again when WiFi only connected after
+// WiFiManager had started its config portal (that portal's server is replaced).
+static void registerRoutes()
+{
+    httpRouteMetrics();   // first: counts every request and writes the access log
+    wm.server->on("/on", authed(withStoveLock(setStoveOn)));
+    wm.server->on("/off", authed(withStoveLock(setStoveOff)));
+    
+    wm.server->on("/fan", authed(withStoveLock(handleRouteFanspeed)));
+    wm.server->on("/error", authed(withStoveLock(handleRouteSetError)));
+
+    wm.server->on("/cq", authed(withStoveLock(handleRouteCQ)));
+    wm.server->on("/display", authed(withStoveLock(handleRouteDisplay)));
+    wm.server->on("/flame", authed(withStoveLock(handleRouteFlamePower)));
+
+    wm.server->on("/state", authed(getStatus));
+    wm.server->on("/get", authed(handleRouteDump));        // takes the bus per register itself
+    wm.server->on("/set", authed(withStoveLock(getParams)));
+
+    wm.server->on("/api/flame", authed(withStoveLock(handleRouteFlamePower)));
+    wm.server->on("/api/fan", authed(withStoveLock(handleRouteFanspeed)));
+    wm.server->on("/api/power", authed(withStoveLock(handleRoutePower)));
+    wm.server->on("/api/energysaving", authed(withStoveLock(handleRouteEnergysaving)));
+    wm.server->on("/api/errors", authed(withStoveLock(handleRouteErrors)));
+    wm.server->on("/api/state", authed(getStatus));
+    wm.server->on("/api/health", withStoveLock(handleRouteHealth));   // public: for monitoring without a key
+    wm.server->on("/api/time", authed(withStoveLock(handleRouteTime)));
+    wm.server->on("/api/remote", authed(withStoveLock(handleRouteRemote)));
+    wm.server->on("/api/burn", authed(withStoveLock(handleRouteBurn)));
+    wm.server->on("/api/beep", authed(withStoveLock(handleRouteBeep)));
+    wm.server->on("/api/setpoint", authed(withStoveLock(handleRouteSetpoint)));
+    wm.server->on("/api/timers",     authed(withStoveLock(handleRouteTimers)));
+    wm.server->on("/api/timers/pr1", authed(withStoveLock(handleRouteTimer)));
+    wm.server->on("/api/timers/pr2", authed(withStoveLock(handleRouteTimer)));
+    wm.server->on("/api/timers/pr3", authed(withStoveLock(handleRouteTimer)));
+    wm.server->on("/api/timers/pr4", authed(withStoveLock(handleRouteTimer)));
+    wm.server->on("/api/timers/pr5", authed(withStoveLock(handleRouteTimer)));
+    wm.server->on("/api/timers/pr6", authed(withStoveLock(handleRouteTimer)));
+    wm.server->on("/api/dump", authed(handleRouteDump));   // takes the bus per register itself
+    wm.server->on("/api/keywatch", authed(handleRouteKeyWatch));   // takes the stove lock itself, in the sensor task
+    wm.server->on("/api", handleRouteSwaggerUI);
+    wm.server->on("/api-specs.json", handleRouteSwaggerJSON);
+    wm.server->on("/app", HTTP_GET, handleRouteWebApp);   // also served on / (kept for old links)
+    wm.server->on("/api/history", authed(handleRouteHistory));
+    wm.server->on("/api/events", authed(handleRouteEvents));
+    wm.server->on("/api/auth", handleRouteAuth);   // public: does its own check
+    wm.server->on("/api/update", HTTP_POST, handleUpdateDone, handleUpdateUpload);   // does its own check
+    wm.server->on("/api/telnet", authed(handleRouteTelnet));
+    wm.server->on("/api/bluetooth", authed(handleRouteBluetooth));
+    wm.server->on("/api/mqtt", authed(handleRouteMqtt));
+    wm.server->on("/api/wifi/scan", authed(handleRouteWifiScan));
+    wm.server->on("/api/wifi", authed(handleRouteWifi));
+    wm.server->on("/api/firmware", authed(handleRouteFirmware));
+    wm.server->on("/api/log", authed(handleRouteLog));
+    wm.server->on("/api/busmon", authed(handleRouteBusmon));
+    wm.server->on("/api/loglevel", authed(handleRouteLogLevel));
+    wm.server->on("/api/diag/reset", authed(handleRouteDiagReset));
+    wm.server->on("/", HTTP_GET, handleRouteWebApp);   // the web app is the start page
+    wm.server->on("/device", handleRouteIndex);          // small fallback page with links
+    wm.server->on("/manifest.webmanifest", HTTP_GET, handleRouteManifest);   // home screen install (public)
+    wm.server->on("/icon.svg", HTTP_GET, handleRouteIconSvg);
+    wm.server->on("/icon-180.png", HTTP_GET, handleRouteIcon180);
+    wm.server->on("/restart", authed(handleRouteRestart));
+}
+
 void setup()
 {
     esp_log_level_set("*", ESP_LOG_WARN);
@@ -104,7 +177,7 @@ void setup()
     // bus: a transaction that failed for good is a warning; retried attempts and the
     // frames of the telnet bus debug are debug
     Stove::writeHook = stoveWriteLogger;   // every write with its source (liveDebug.h)
-    Stove::logger = [](bool failed, const char* line) { if (failed) LOGW("bus", "%s", line); else LOGD("bus", "%s", line); };
+    Stove::logger = [](bool failed, const char* line) { if (failed && !stove.linkDown) LOGW("bus", "%s", line); else LOGD("bus", "%s", line); };
     
     spiffsMounted = SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED); // Mount SPIFFS
     if (spiffsMounted)
@@ -145,7 +218,6 @@ void setup()
         WiFi.setSleep(false);
         LOGI("sys", "Bluetooth disabled (setting) - BLE not started");
     }
-    httpRouteMetrics();
     enableOTA();
     if (spiffsMounted) {
         File configFile = SPIFFS.open("/config.txt", "r");
@@ -173,63 +245,7 @@ void setup()
 
     onboardLED.on();
 
-    wm.server->on("/on", authed(withStoveLock(setStoveOn)));
-    wm.server->on("/off", authed(withStoveLock(setStoveOff)));
-    
-    wm.server->on("/fan", authed(withStoveLock(handleRouteFanspeed)));
-    wm.server->on("/error", authed(withStoveLock(handleRouteSetError)));
-
-    wm.server->on("/cq", authed(withStoveLock(handleRouteCQ)));
-    wm.server->on("/display", authed(withStoveLock(handleRouteDisplay)));
-    wm.server->on("/flame", authed(withStoveLock(handleRouteFlamePower)));
-
-    wm.server->on("/state", authed(getStatus));
-    wm.server->on("/get", authed(withStoveLock(handleRouteDump)));
-    wm.server->on("/set", authed(withStoveLock(getParams)));
-
-    wm.server->on("/api/flame", authed(withStoveLock(handleRouteFlamePower)));
-    wm.server->on("/api/fan", authed(withStoveLock(handleRouteFanspeed)));
-    wm.server->on("/api/power", authed(withStoveLock(handleRoutePower)));
-    wm.server->on("/api/energysaving", authed(withStoveLock(handleRouteEnergysaving)));
-    wm.server->on("/api/errors", authed(withStoveLock(handleRouteErrors)));
-    wm.server->on("/api/state", authed(getStatus));
-    wm.server->on("/api/health", authed(withStoveLock(handleRouteHealth)));
-    wm.server->on("/api/time", authed(withStoveLock(handleRouteTime)));
-    wm.server->on("/api/remote", authed(withStoveLock(handleRouteRemote)));
-    wm.server->on("/api/burn", authed(withStoveLock(handleRouteBurn)));
-    wm.server->on("/api/beep", authed(withStoveLock(handleRouteBeep)));
-    wm.server->on("/api/setpoint", authed(withStoveLock(handleRouteSetpoint)));
-    wm.server->on("/api/timers",     authed(withStoveLock(handleRouteTimers)));
-    wm.server->on("/api/timers/pr1", authed(withStoveLock(handleRouteTimer)));
-    wm.server->on("/api/timers/pr2", authed(withStoveLock(handleRouteTimer)));
-    wm.server->on("/api/timers/pr3", authed(withStoveLock(handleRouteTimer)));
-    wm.server->on("/api/timers/pr4", authed(withStoveLock(handleRouteTimer)));
-    wm.server->on("/api/timers/pr5", authed(withStoveLock(handleRouteTimer)));
-    wm.server->on("/api/timers/pr6", authed(withStoveLock(handleRouteTimer)));
-    wm.server->on("/api/dump", authed(withStoveLock(handleRouteDump)));
-    wm.server->on("/api/keywatch", authed(handleRouteKeyWatch));   // takes the stove lock itself, in the sensor task
-    wm.server->on("/api", handleRouteSwaggerUI);
-    wm.server->on("/api-specs.json", handleRouteSwaggerJSON);
-    wm.server->on("/app", HTTP_GET, handleRouteWebApp);   // also served on / (kept for old links)
-    wm.server->on("/api/history", authed(handleRouteHistory));
-    wm.server->on("/api/events", authed(handleRouteEvents));
-    wm.server->on("/api/auth", handleRouteAuth);   // public: does its own check
-    wm.server->on("/api/update", HTTP_POST, handleUpdateDone, handleUpdateUpload);   // does its own check
-    wm.server->on("/api/telnet", authed(handleRouteTelnet));
-    wm.server->on("/api/bluetooth", authed(handleRouteBluetooth));
-    wm.server->on("/api/mqtt", authed(handleRouteMqtt));
-    wm.server->on("/api/wifi/scan", authed(handleRouteWifiScan));
-    wm.server->on("/api/wifi", authed(handleRouteWifi));
-    wm.server->on("/api/firmware", authed(handleRouteFirmware));
-    wm.server->on("/api/log", authed(handleRouteLog));
-    wm.server->on("/api/busmon", authed(handleRouteBusmon));
-    wm.server->on("/api/loglevel", authed(handleRouteLogLevel));
-    wm.server->on("/", HTTP_GET, handleRouteWebApp);   // the web app is the start page
-    wm.server->on("/device", handleRouteIndex);          // small fallback page with links
-    wm.server->on("/manifest.webmanifest", HTTP_GET, handleRouteManifest);   // home screen install (public)
-    wm.server->on("/icon.svg", HTTP_GET, handleRouteIconSvg);
-    wm.server->on("/icon-180.png", HTTP_GET, handleRouteIcon180);
-    wm.server->on("/restart", authed(handleRouteRestart));
+    registerRoutes();
     if (wifiConnected && wm.server) {
         authCollectHeaders();
         wm.server->begin();
@@ -269,6 +285,25 @@ void loop()
         wm.server->handleClient();
     }
     wm.process();
+    // WiFi connected only after WiFiManager had started its config portal (connect
+    // timeout at start-up): close the portal and start our own server, otherwise
+    // the portal keeps answering "/" instead of the web app.
+    if (!wifiConnected && WiFi.status() == WL_CONNECTED) {
+        LOGI("wifi", "connected to '%s' (IP %s) after the config portal started - closing the portal, starting the web app",
+             WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
+        wm.stopConfigPortal();
+        wm.server.reset(new WebServer(80));
+        registerRoutes();
+        authCollectHeaders();
+        wm.server->begin();
+        wifiConnected = true;
+        MDNS.end();
+        MDNS.begin(WiFi.getHostname());
+        MDNS.addService("http", "tcp", 80);
+        if (telnetEnabled) setupTelnet();
+        esp_task_wdt_init(WDT_TIMEOUT, true);
+        esp_task_wdt_add(NULL);
+    }
     resetButton.read();
     ArduinoOTA.handle();
 
@@ -325,7 +360,7 @@ void loop()
             wifiDownSince = 0;
             static bool ntpOk = true;
             bool ok = getNTPtime(2);      // snapshot of the system clock + DST flag (SNTP syncs it in the background)
-            if (!ok && ntpOk) LOGW("sys", "NTP: no valid time - check internet access / DNS (history, timers and HTTPS need it)");
+            if (!ok && ntpOk) LOGE("sys", "NTP: no valid time - check internet access / DNS (history, timers and HTTPS need it)");
             if (ok && !ntpOk) LOGI("sys", "NTP: valid time again");
             ntpOk = ok;
             onboardLED.on();

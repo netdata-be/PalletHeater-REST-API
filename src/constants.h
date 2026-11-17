@@ -68,9 +68,23 @@ SemaphoreHandle_t stoveMutex = NULL;
 // Scoped lock for the stove serial bus (recursive, so nested use is safe).
 // Use it around any code that calls stove.read()/stove.write() outside the
 // sensor task, e.g. { StoveBusLock lock; ... }.
+// Take the stove bus lock, waiting at most maxMs (0 = as long as needed). Waits in
+// steps of 0.5 s and feeds the task watchdog in between: the loop task is watched
+// with a 5 s timeout, and the sensor task can hold the lock for seconds when the
+// stove answers slowly. Returns false when it gave up.
+static bool stoveLockTake(uint32_t maxMs = 0)
+{
+    if (!stoveMutex) return true;
+    uint32_t t0 = millis();
+    while (xSemaphoreTakeRecursive(stoveMutex, pdMS_TO_TICKS(500)) != pdTRUE) {
+        esp_task_wdt_reset();   // no effect in a task that is not watched
+        if (maxMs && millis() - t0 >= maxMs) return false;
+    }
+    return true;
+}
 struct StoveBusLock {
     bool held = false;
-    StoveBusLock()  { if (stoveMutex) held = xSemaphoreTakeRecursive(stoveMutex, portMAX_DELAY) == pdTRUE; }
+    StoveBusLock()  { held = stoveMutex && stoveLockTake(); }
     ~StoveBusLock() { if (held) xSemaphoreGiveRecursive(stoveMutex); }
     StoveBusLock(const StoveBusLock&) = delete;
     StoveBusLock& operator=(const StoveBusLock&) = delete;
@@ -88,6 +102,9 @@ WiFiManagerParameter custom_TimeZone("ntp_server", "NTP server", "CET-1CEST,M3.5
 
 bool spiffsMounted = false;
 bool wifiConnected = false;
+// millis() of the last complete fast / slow read of the stove (0 = never since the start)
+unsigned long lastFastStatesAt = 0;
+unsigned long lastSlowStatesAt = 0;
 
 unsigned long lastDebounceTime = 0;
 unsigned long debounceDelay = 50;
@@ -214,6 +231,7 @@ int cachedLowPallet = 0;
 #define pelletReserveEnabledAddr 0xc6
 int cachedPelletSensor = -1;      // RAM 0xA4, -1 = not read yet
 int cachedPelletCounter = -1;     // RAM 0x89
+int cachedPelletShutdown = -1;    // RAM 0x91: pellet reserve, half minutes until the stove switches off (only read in that phase)
 int cachedPelletReserveOn = -1;   // EEPROM 0xC6
 bool cachedBeepEnabled = false;
 int cachedNumberOfStarts = 0;
