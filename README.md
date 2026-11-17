@@ -240,7 +240,7 @@ curl http://openpelletbridge.local/api/power
 # {"stoveState":0,"state":"Off","poweredOn":false}
 
 curl -X POST "http://openpelletbridge.local/api/power?state=on"
-# 200 {"result":"Powered on sended","stoveState":1,"state":"Starting","poweredOn":true}
+# 200 {"result":"Powered on sent","stoveState":1,"state":"Starting","poweredOn":true}
 # 202 {"result":"Stove already on","stoveState":4,"state":"Working","poweredOn":true}
 ```
 
@@ -375,7 +375,7 @@ The stove keeps the last 5 errors in `MemoryPos_1` … `MemoryPos_5`.
 ```bash
 curl http://openpelletbridge.local/api/errors
 # {"previousErrors":false}
-# {"previousErrors":{"MemoryPos_1":{"id":32,"error":"E1","desc":"Pellet loading door is open for to long or air pressure inside stove is wrong"}}}
+# {"previousErrors":{"MemoryPos_1":{"id":32,"error":"E1","desc":"Pellet loading door is open for too long or air pressure inside stove is wrong"}}}
 
 # clear position 1
 curl -X POST "http://openpelletbridge.local/api/errors?MemoryPos_1=0"
@@ -719,7 +719,7 @@ curl -X POST "http://openpelletbridge.local/api/firmware?autoCheck=false"
 
 | `stoveState` | `state` | `poweredOn` |
 |---|---|---|
-| -1 | Unkown [RS232 Serial Error] | false |
+| -1 | Unknown [RS232 Serial Error] | false |
 | 0 | Off | false |
 | 1 | Starting | true |
 | 2 | Pellet loading | true |

@@ -288,13 +288,13 @@ String doStoveOff(int &http_code)
         return "Stove already off";
     case STARTING:
     case PALLET_LOADING:
-        if (stove.write(ram, stoveStateAddr, 0)) return "Powered off sended - 0";
+        if (stove.write(ram, stoveStateAddr, 0)) return "Powered off sent - 0";
         http_code = 500;
         return "FAILED to send Power off - 0";
     case IGNITION:
     case WORKING:
     case ALARM:
-        if (stove.write(ram, stoveStateAddr, 6)) return "Powered off sended - 6";
+        if (stove.write(ram, stoveStateAddr, 6)) return "Powered off sent - 6";
         http_code = 500;
         return "FAILED to send Power off - 6";
     case BRAZIER_CLEANING:
@@ -314,7 +314,7 @@ String doStoveOn(int &http_code)
     http_code = 200;
     if (stoveState == OFF)
     {
-        if (stove.write(ram, stoveStateAddr, 1)) return "Powered on sended";
+        if (stove.write(ram, stoveStateAddr, 1)) return "Powered on sent";
         http_code = 500;
         return "FAILED to send Power on";
     }

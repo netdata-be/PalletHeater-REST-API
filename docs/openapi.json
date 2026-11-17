@@ -307,7 +307,7 @@
                 "examples": {
                   "Power on": {
                     "value": {
-                      "result": "Powered on sended",
+                      "result": "Powered on sent",
                       "stoveState": 1,
                       "state": "Starting",
                       "poweredOn": true
@@ -315,7 +315,7 @@
                   },
                   "Power off": {
                     "value": {
-                      "result": "Powered off sended - 6",
+                      "result": "Powered off sent - 6",
                       "stoveState": 6,
                       "state": "Final cleaning",
                       "poweredOn": false
@@ -1197,7 +1197,7 @@
                         "MemoryPos_1": {
                           "id": 32,
                           "error": "E1",
-                          "desc": "Pellet loading door is open for to long or air pressure inside stove is wrong"
+                          "desc": "Pellet loading door is open for too long or air pressure inside stove is wrong"
                         },
                         "MemoryPos_2": {
                           "id": 4,
@@ -3219,7 +3219,7 @@
         "content": {
           "application/json": {
             "example": {
-              "result": "Powered on sended",
+              "result": "Powered on sent",
               "stoveState": {
                 "stoveState": 1,
                 "state": "Starting",

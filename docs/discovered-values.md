@@ -31,7 +31,7 @@ RAM (0x00)
 | 0x33       | 51         | bitmask   | error  | Errorcode in a bitmask? 32 = E1 ?           | 32                       |            |
 | 0x34       | 52         | x         | amount | Flame power the stove actually runs at (modulates to 1 at the set point; setting is EEPROM 0x7F). Seen 1 with setting 2 in standby after reaching the set point | | 1 - 4 |
 | 0x37       | 55         | (x+25)*10 | rpm    | smoke fan RPM                               | 130 (== 1550 )           |            |
-| 0x3E       | 62         | x         | °C     | Fumesmoke temperature                       | 105                      |            |
+| 0x3E       | 62         | x         | °C     | Fume temperature                       | 105                      |            |
 | 0x44       | 68         | x/2       | °C     | Stove room temp ??                          |                          |            |
 | 0x48       | 72         | (x+25)*10 | rpm    | smoke fan RPM                               | 130 (== 1550 )           |            |
 | 0x4B       | 75         | x         |        | Counter                                     |                          |   0 - 254  |
@@ -59,9 +59,9 @@ RAM (0x00)
 | 0x80       | 128        | x         | year   | Current year                                | 22                       |   0 -  99  |
 | 0x81       | 129        | x         |        | Low byte of the stove clock as seconds since midnight / 2 (16-bit LE with 0x82; +1 every 2 s). Verified 17/11/2026: 0x82/0x81 = 4/247 -> 1271 × 2 s = 00:42:22, stove clock 00:42:22. Also matches the 16/11 16:32 dump (116/46 -> 16:31:24) | | 0 - 255 |
 | 0x82       | 130        | x         |        | High byte of the seconds-since-midnight / 2 counter (see 0x81); 0 – 168, back to 0 at midnight | | 0 - 168 |
-| 0x89       | 137        | x         | Min    | Countdown till low pellet alerm starts (hypothesis). 16/11/2026, while working: dropped 20 -> 19 and back after ~35 s, first at 19:02, then about every 9.5 – 13.5 min until shutdown; never while off. Possibly the hopper level sensor briefly seeing no pellets (unconfirmed; 0xA4 did not change in the log) | 20 | 20 - 0 |
+| 0x89       | 137        | x         | Min    | Countdown till low pellet alarm starts (hypothesis). 16/11/2026, while working: dropped 20 -> 19 and back after ~35 s, first at 19:02, then about every 9.5 – 13.5 min until shutdown; never while off. Possibly the hopper level sensor briefly seeing no pellets (unconfirmed; 0xA4 did not change in the log) | 20 | 20 - 0 |
 | 0x8F       | 143        | x/2       | °C     | Remote control temp                         |                          |            |
-| 0x96       | 150        |           |        | Unkown 84 - 89                              |                          |            |
+| 0x96       | 150        |           |        | Unknown 84 - 89                              |                          |            |
 | 0xAB       | 171        |           |        | Looks random                                |                          |            |
 | 0xAF       | 175        |           |        | Unknown. 47 – 48 off (stove cold, 17/11/2026), 68 working. Possibly a board / electronics temperature in x/2 (23.5 °C vs 34 °C) - unconfirmed | | |
 | 0xB6       | 182        | x         | bits   | Active "INSTELL WIRELESS" (external wireless temperature sensor, manual §23.9). Bit 0 = 1: off, bit 0 = 0: on. Bit 1 unknown (seen 1, 3 = off, 2 = on). Read-only: restored by the stove right after a write | 1 | |
@@ -218,7 +218,7 @@ Not fully completed yet
 | 5    | Clock                 |
 | 7    | Multicomfort          |
 | 8    | Multi Comfort Plus    |
-| 9    | Enegery Saving        |
+| 9    | Energy Saving        |
 | 11   | Beep                  |
 | 12   | Display               |
 | 13   | Installer             |
@@ -274,16 +274,16 @@ Not fully completed yet
 |   4   | 00000100 | E9          | Ignition temperature not reached within limit                                 |
 |   8   | 00001000 | E7          | Fume temperatuer to low                                                       |
 |  16   | 00010000 | E3          | Temperature inside stove to high                                              |
-|  32   | 00100000 | E1          | Pellet loading door is open for to long or air pressure inside stove is wrong |
+|  32   | 00100000 | E1          | Pellet loading door is open for too long or air pressure inside stove is wrong |
 |  64   | 01000000 | E2          | Pressure sensor error during ignition                                         |
-| 128   | 10000000 | E6          | Auger error - To much pellets are dispatched                                  |
+| 128   | 10000000 | E6          | Auger error - Too many pellets dispatched                                  |
 | 129   | 10000001 | E12         | Fume fan error                                                                |
 | 130   | 10000010 | E11         | Unknown error - Not described in manual                                       |
 | 132   | 10000100 | E19         | External contact N.PEL / Pellet is active                                     |
 | 136   | 10001000 | E13         | Unknown error - Not described in manual                                       |
 | 255   | 11111111 | Power Error | Display shows power error                          
 
-Coundn't reverse the following error codes :
+Couldn't reverse the following error codes :
 - E10
 - E14
 

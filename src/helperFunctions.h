@@ -57,7 +57,7 @@ void getStoveState() // Get detailed stove state
         StoveIsOn = false;
         break;
     case UNKNOWN:
-        snprintf(StoveStateStr, sizeof(StoveStateStr), "Unkown [RS232 Serial Error]");
+        snprintf(StoveStateStr, sizeof(StoveStateStr), "Unknown [RS232 Serial Error]");
         StoveIsOn = false;
         break;
     }
@@ -76,9 +76,9 @@ static const ErrorEntry errorTable[] = {
     {   4, "E9",         "Ignition temperature not reached within limit" },
     {   8, "E7",         "Fume temperatuer to low" },
     {  16, "E3",         "Temperature inside stove to high" },
-    {  32, "E1",         "Pellet loading door is open for to long or air pressure inside stove is wrong" },
+    {  32, "E1",         "Pellet loading door is open for too long or air pressure inside stove is wrong" },
     {  64, "E2",         "Pressure sensor error during ignition" },
-    { 128, "E6",         "Auger error - To much pellets are dispatched" },
+    { 128, "E6",         "Auger error - Too many pellets dispatched" },
     { 129, "E12",        "Fume fan error" },
     { 130, "E11",        "Unknown error - Not described in manual" },
     { 132, "E19",        "External contact N.PEL / Pellet is active" },

@@ -31,7 +31,7 @@ bool getStoveDateTime()
              cur_year, cur_month, cur_day, cur_hour, cur_min, cur_sec);
 
     strptime(stoveTimeBuffer, "%Y-%m-%d %H:%M:%S", &stove_tm);
-    // Take the current NTP based DST setting in order to interprete the stove it's Time
+    // Take the current NTP based DST setting in order to interpret the stove's time
     // The stove does not support DST so a time change is required
     stove_tm.tm_isdst = currentDst;
     time_t newStoveTime = mktime(&stove_tm);
