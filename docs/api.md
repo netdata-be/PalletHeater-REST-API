@@ -1,0 +1,694 @@
+# REST API reference
+
+[← README](../README.md)
+
+The HTTP REST API of the controller. The OpenAPI 3 specification is [openapi.json](openapi.json); the firmware renders it with Swagger UI on `http://<device>/api`.
+
+## API conventions
+
+- **Base URL:** `http://<device-ip>` or `http://openpelletbridge.local`. Port 80, plain HTTP. Only expose it on a trusted network.
+- **API key (optional):** see [Authentication](#authentication).
+- **Request parameters:** write operations take **query parameters** (form-encoded bodies also work), e.g. `POST /api/flame?power=3`. Only the timer endpoints take a **JSON body**.
+- **Responses:** always `application/json`, except `/metrics` (Prometheus text), `/`, `/api` (HTML) and `/restart` (plain text).
+- **Write responses** contain a `result` field (`"success"` or an error message) plus the value read back from the stove after the write.
+- **Status codes:**
+
+  | Code | Meaning |
+  |---|---|
+  | `200` | Success |
+  | `202` | Accepted but nothing changed (e.g. power on while already on) |
+  | `400` | Invalid parameter value |
+  | `405` | HTTP method not supported on this route |
+  | `500` | Serial communication with the stove failed |
+  | `503` | The stove bus is busy (another request held it for more than 5 s). Retry. |
+
+- **Caching:** `/api/state` and `/metrics` are served from a cache that a background task keeps up to date. All other endpoints talk to the stove directly, so each call takes a few serial round trips.
+- **Bus locking:** the serial bus is shared with the background sensor task and BLE. Every endpoint that talks to the stove takes the bus lock first, so requests are handled one at a time on the bus.
+- **Retries:** every serial read and write is retried up to 3 times by the firmware before an endpoint reports a `500`. Clients do not need their own retry logic. Failures and retries are counted in `/metrics` (`stove_serial_read_errors_total`, `stove_serial_write_errors_total`, `stove_serial_retries_total`).
+
+## Authentication
+
+The controller generates a random 128-bit API key (32 hex characters) on first boot and keeps it in NVS; an existing key is reused. Using it is **optional** and off by default.
+
+When the key is **required**, every route needs one of these headers, otherwise the response is `401`:
+
+```bash
+curl -H "X-API-Key: <key>" http://openpelletbridge.local/api/state
+curl -H "Authorization: Bearer <key>" http://openpelletbridge.local/metrics
+```
+
+Always reachable without key: `/` and `/app` (web app), `/device` (fallback page), `/api/health` (for monitoring), `/api` + `/api-specs.json` (API docs, use **Authorize** in Swagger UI) and `/api/auth`.
+
+| Call | Effect |
+|---|---|
+| `GET /api/auth` | `{ "required": false, "key": "…" }`. The key is only returned to authorised callers (or while it is not required). |
+| `POST /api/auth?required=true` | Require the key (`false` makes it optional again). Needs the key while it is required. |
+| `POST /api/auth?rotate=true` | Generate a new key. |
+
+The web app (Device card) shows, copies and rotates the key and asks for it once when needed. The key is also printed on the serial console at boot. Plain HTTP is not encrypted: the key protects against other devices and web pages on the network, not against someone sniffing traffic. Telnet and BLE are not covered by the key; telnet can be switched off with [`/api/telnet`](#apitelnet).
+
+For Prometheus:
+
+```yaml
+scrape_configs:
+  - job_name: openpelletbridge
+    authorization:
+      credentials: "<key>"
+    static_configs:
+      - targets: ["openpelletbridge.local:80"]
+```
+
+## Endpoint overview
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | [`/api/state`](#get-apistate) | All stove info in one call (cached) |
+| `GET` | [`/api/health`](#get-apihealth) | Serial link health check |
+| `GET` `POST` | [`/api/power`](#apipower) | Get or switch the power state |
+| `GET` `POST` | [`/api/flame`](#apiflame) | Flame power 1 – 4 |
+| `GET` `POST` | [`/api/fan`](#apifan) | Room fan speed 0 – 3 |
+| `GET` `POST` | [`/api/setpoint`](#apisetpoint) | Room temperature set point 7 – 30 °C |
+| `GET` `POST` | [`/api/energysaving`](#apienergysaving) | Energy saving start/stop offsets |
+| `GET` `POST` | [`/api/burn`](#apiburn) | Combustion quality and pellet quality |
+| `GET` `POST` | [`/api/beep`](#apibeep) | Stove beep on/off |
+| `GET` `PATCH` | [`/api/time`](#apitime) | Stove clock vs NTP, sync clock |
+| `GET` `POST` | [`/api/errors`](#apierrors) | Error memory (5 positions) |
+| `GET` `POST` | [`/api/timers`](#apitimers) | All chrono programs PR1 – PR6 |
+| `GET` `POST` `PATCH` `DELETE` | [`/api/timers/pr{1-6}`](#apitimerspr1-6) | Single chrono program |
+| `GET` | [`/api/remote`](#get-apiremote) | Current menu on the remote / display |
+| `GET` | [`/api/dump`](#get-apidump) | Raw RAM / EEPROM register dump |
+| `GET` `POST` `DELETE` | [`/api/keywatch`](#apikeywatch) | Fast watch of a few RAM addresses (reverse engineering) |
+| `GET` | [`/api/history`](#get-apihistory) | Last 24 h (2-min samples) or 7 days (hourly averages) |
+| `GET` | [`/api/log`](debugging.md#live-debugging) | Live firmware log (cursor) |
+| `GET` `POST` | [`/api/busmon`](debugging.md#live-debugging) | Live stove bus monitor (cursor) |
+| `GET` `POST` | [`/api/loglevel`](debugging.md#live-debugging) | Log level per firmware module |
+| `POST` | [`/api/diag/reset`](debugging.md#live-debugging) | Reset the serial counters (`serial=true`) and / or the crash counter (`crashes=true`) |
+| `GET` | [`/api/events`](#get-apievents) | Log of stove state changes and errors with exact times |
+| `GET` `POST` | [`/api/bluetooth`](#apibluetooth) | Enable / disable Bluetooth (BLE) |
+| `GET` `POST` | [`/api/mqtt`](#apimqtt) | MQTT settings and status |
+| `GET` `POST` | [`/api/wifi`](#apiwifi) | WiFi status, network, hostname and DHCP / static IP |
+| `GET` | [`/api/wifi/scan`](#apiwifi) | WiFi networks in range |
+| `GET` `POST` | [`/api/telnet`](#apitelnet) | Enable / disable the telnet menu |
+| `GET` `POST` | [`/api/auth`](#authentication) | API key status, require, rotate |
+| `POST` | [`/api/update`](debugging.md#post-apiupdate) | Firmware update over HTTP |
+| `GET` `POST` | [`/api/firmware`](debugging.md#apifirmware) | Check GitHub for a new firmware release and install it |
+| `GET` | [`/metrics`](#get-metrics) | Prometheus metrics |
+| `GET` | [`/`](../README.md#web-app) | Web app (also on `/app`) |
+| `GET` | `/device` | Small fallback page (IP, SSID, RSSI, uptime, links) |
+| `GET` | `/restart` | Reboot the ESP32 |
+| `GET` | `/api` | Swagger UI |
+| `GET` | `/api-specs.json` | OpenAPI specification |
+| | [Legacy routes](#legacy-routes) | `/on`, `/off`, `/state`, `/flame`, `/fan`, `/get`, `/set`, `/error`, `/cq`, `/display` |
+
+## Endpoint reference
+
+The examples use `curl` against `openpelletbridge.local`.
+
+### `GET /api/state`
+
+Everything you need for a dashboard in one call, served from cache.
+
+```bash
+curl http://openpelletbridge.local/api/state
+```
+
+```json
+{
+  "stoveState": { "stoveState": 4, "state": "Working", "poweredOn": true },
+  "flame": { "power": 2, "actual": 1 },
+  "bluetooth": true,
+  "temperatures": { "room": 20.5, "stove": 21.0, "remoteControl": 20.5, "setPoint": 21, "fume": 118 },
+  "wirelessSensor": "off",
+  "energySaving": { "start": -1, "stop": 2, "enabled": true, "startTemperature": 20, "stopTemperature": 23 },
+  "RoomFanSpeed": 2,
+  "roomFan": { "speed": 2, "actual": 2, "running": true, "mode": "on", "hotEnough": true, "drive": 23 },
+  "lowPalletAlarm": 0,
+  "pelletReserve": { "enabled": true, "sensor": 0, "counter": 20 },
+  "brazierCleaning": { "minutesLeft": 12, "active": false, "interval": 45 },
+  "stoveBeepEnabled": true,
+  "numberOfStarts": 412,
+  "hoursSinceLastService": 213,
+  "totalRuntime": 1873,
+  "firmwareVersion": "FW-PZ-02-V-01-04-00",
+  "augerSpeed": 2.4,
+  "burn": { "combustionQuality": "0", "pelletQuality": "0" },
+  "fumeFanRPM": 1550,
+  "RemoteControlLastSeen": 12,
+  "previousErrors": false,
+  "time": { "ntp": "2026-11-15 17:50:06", "stove": "2026-11-15 17:49:35", "delta": 31 },
+  "dataAge": { "fastSeconds": 2, "slowSeconds": 9 },
+  "serial": { "readErrors": 0, "writeErrors": 0, "retries": 3 },
+  "uptime": { "seconds": 93784, "human": "1d 02h 03m 04s" },
+  "controller": { "version": "674b88d-dirty", "built": "2026-11-16T17:05:12Z", "branch": "master", "env": "esp32doit-devkit-v1-http" }
+}
+```
+
+| Field | Description |
+|---|---|
+| `stoveState` | Numeric state, label and `poweredOn` flag. See [stove states](#stove-states). |
+| `flame.power` / `flame.actual` | Set flame power (EEPROM `0x7F`) and the power the stove actually runs at (RAM `0x34`); when the set point is reached the stove modulates down, e.g. set 2, actual 1. |
+| `bluetooth` | `true` when BLE is running on the controller (see [`/api/bluetooth`](#apibluetooth)). |
+| `hydro` | `{ "Pressure", "Temp" }`, only present when hydro mode is enabled in `/config.txt` on SPIFFS. |
+| `temperatures.room` | Room temperature as used by the stove (RAM `0x01`). Comes from the sensor selected in the MULTICOMFORT menu (remote control, stove or wireless sensor); without contact with the remote / wireless sensor for more than 4 minutes the stove falls back to its own sensor. The MULTICOMFORT register is not known yet. |
+| `wirelessSensor` | Installer setting *INSTELL WIRELESS* (bit 0 of RAM `0xB6`): `on` / `off` = external wireless temperature sensor enabled, `unknown` until the first read. Read-only: it can only be changed on the remote control, see [docs/discovered-values.md](discovered-values.md#instell-wireless-wireless-temperature-sensor). |
+| `temperatures.stove` / `remoteControl` | Raw readings of the stove sensor and the remote control sensor (°C). |
+| `temperatures.fume` | Exhaust temperature (°C). |
+| `energySaving` | See [`/api/energysaving`](#apienergysaving). |
+| `lowPalletAlarm` | `1` when the pellet level is low. |
+| `pelletReserve` | `enabled` (installer setting PELLET RESERVE), `sensor` (RAM 0xA4: `5` = the level sensor sees low pellets), `counter` (RAM 0x89) and `minutesLeft`: while the sensor reports low pellets RAM 0x89 counts down from 20 to 0, about one step per minute, to the reserve alarm; `null` otherwise. |
+| `pendingError` | The error the stove reports right now (RAM 0x33), also before it counts as `currentError`, with `secondsLeft`: seconds until the stove acts on it (RAM 0x30). E1 (hopper lid open) gives 55 s; closing the lid in time clears it. `null` without an error. The web app shows it as an alert with the countdown. |
+| `brazierCleaning` | `minutesLeft`: minutes to the next brazier cleaning (RAM 0x32), `null` when the stove is not working; `active`: `true` while the cleaning runs (state 5); `interval`: minutes between cleanings (EEPROM 0x02). |
+| `totalRuntime` | Total working hours. |
+| `augerSpeed` | Auger speed in rpm. |
+| `RemoteControlLastSeen` | Seconds since the last contact with the remote control, `-1` when unknown. |
+| `previousErrors` | `false` when the error memory is empty, otherwise an object with the non-empty positions. See [`/api/errors`](#apierrors). |
+| `time.delta` | NTP time minus stove time, in seconds. |
+| `dataAge` | Seconds since the cache was last refreshed: `fastSeconds` (state, flame, fan, fumes; every ~2 – 4 s) and `slowSeconds` (temperatures, settings, timers; every ~16 – 60 s). `null` until the first refresh. A large value means the stove is not answering. |
+| `serial` | Serial bus counters since boot: reads / writes that failed after all retries, and individual retries. |
+| `currentError` | Active error: `false`, or `{ "id", "error", "desc", "source" }`. `source` `stove`: an error code of the stove (RAM `0x33`, like the error memory). `source` `controller`: `{"id": -1, "error": "LINK", "desc": "No answer from the stove (serial link down)"}` while the stove does not answer. |
+| Unknown values | Values never read from the stove since the start are `null`; once read, the last known value stays (see `dataAge`). While the stove does not answer `stoveState.poweredOn` and `brazierCleaning.active` are `null` too. |
+| `controller` | Controller (ESP32) firmware build: `version` from `git describe --tags --always --dirty` (`-dirty` = built with uncommitted changes), `built` build time in UTC, `branch`, PlatformIO `env`. Generated by [scripts/buildinfo.py](../scripts/buildinfo.py) on every build. Also exported as the Prometheus metric `esp32_build_info`. |
+
+On a serial error the cache keeps the last known value, so a failed read never shows up as `-1` or `255`.
+
+### `GET /api/health`
+
+Checks whether the stove answers on the serial bus.
+
+```bash
+curl http://openpelletbridge.local/api/health
+# 200 {"health":"Healthy"}
+# 500 {"health":"Failed to talk to Stove"}
+```
+
+### `/api/power`
+
+```bash
+curl http://openpelletbridge.local/api/power
+# {"stoveState":0,"state":"Off","poweredOn":false}
+
+curl -X POST "http://openpelletbridge.local/api/power?state=on"
+# 200 {"result":"Powered on sent","stoveState":1,"state":"Starting","poweredOn":true}
+# 202 {"result":"Stove already on","stoveState":4,"state":"Working","poweredOn":true}
+```
+
+| Parameter | Values |
+|---|---|
+| `state` | `on`, `off` |
+
+- `on` only acts when the stove is `Off` (state 0); otherwise `202 Stove already on`.
+- `off` writes state `0` while starting / pellet loading and state `6` (final cleaning) while igniting / working. When the stove is already off, in standby, or cleaning, it returns `202`.
+
+### `/api/flame`
+
+```bash
+curl http://openpelletbridge.local/api/flame
+# {"power":2}
+
+curl -X POST "http://openpelletbridge.local/api/flame?power=3"
+# {"result":"success","power":3}
+```
+
+| Parameter | Values |
+|---|---|
+| `power` | `1` – `4` |
+
+### `/api/fan`
+
+```bash
+curl http://openpelletbridge.local/api/fan
+# {"speed":2}
+
+curl -X POST "http://openpelletbridge.local/api/fan?speed=0"
+# {"result":"success","speed":0}
+```
+
+| Parameter | Values |
+|---|---|
+| `speed` | `0` (off) – `3` |
+
+### `/api/setpoint`
+
+```bash
+curl http://openpelletbridge.local/api/setpoint
+# {"setpoint":21}
+
+curl -X POST "http://openpelletbridge.local/api/setpoint?value=22"
+# {"result":"success","setpoint":22}
+```
+
+| Parameter | Values |
+|---|---|
+| `value` | `7` – `30` (°C) |
+
+### `/api/energysaving`
+
+Energy saving: when the room reaches the set point the stove goes to power 1; when it keeps rising to `setpoint + stop` the stove extinguishes (standby); when it drops below `setpoint + start` it restarts. `stop = 0` (OFF) disables energy saving (the stove only modulates); `start = 0` (OFF) means the stove does not restart automatically after stopping. `enabled` is `true` when `stop` is set.
+
+```bash
+curl http://openpelletbridge.local/api/energysaving
+# {"energySaving":{"start":-1,"stop":2,"enabled":true,"startTemperature":20,"stopTemperature":23}}
+
+curl -X POST "http://openpelletbridge.local/api/energysaving?start=-1&stop=2"
+# {"result":"success","energySaving":{...}}
+```
+
+| Parameter | Values |
+|---|---|
+| `start` | `-3`, `-2`, `-1`, `0` |
+| `stop` | `0`, `1`, `2`, `3` |
+
+Both parameters are optional; pass either one or both.
+
+### `/api/burn`
+
+Combustion quality and pellet quality correction (installer menu).
+
+```bash
+curl http://openpelletbridge.local/api/burn
+# {"combustionQuality":"0","pelletQuality":"-1"}
+
+curl -X POST "http://openpelletbridge.local/api/burn?combustionQuality=1&pelletQuality=-2"
+# {"result":"success","combustionQuality":"1","pelletQuality":"-2"}
+
+curl -X POST "http://openpelletbridge.local/api/burn?combustionQuality=%2BG"
+# {"result":"success","combustionQuality":"+G","pelletQuality":"-2"}
+```
+
+| Parameter | Values |
+|---|---|
+| `combustionQuality` | `+G`, `-3`, `-2`, `-1`, `0`, `1`, `2`, `3` |
+| `pelletQuality` | `-5` … `5` |
+
+The leading `+` is optional (`+1` and `1`, `+G` and `G` are equivalent), so an unencoded `+` that a client turns into a space is accepted too. Responses always return positive values without a sign, except `+G`.
+
+### `/api/beep`
+
+```bash
+curl http://openpelletbridge.local/api/beep
+# {"enabled":true}
+
+curl -X POST "http://openpelletbridge.local/api/beep?enabled=false"
+# {"result":"success","enabled":false}
+```
+
+| Parameter | Values |
+|---|---|
+| `enabled` | `true`, `false`, `1`, `0` |
+
+### `/api/time`
+
+The stove has its own clock without DST support. The firmware compares it with NTP time.
+
+```bash
+curl http://openpelletbridge.local/api/time
+# {"time":{"stove":"2026-11-15 17:50:12","ntp":"2026-11-15 17:50:38","delta":26}}
+
+curl -X PATCH http://openpelletbridge.local/api/time
+# {"result":"success Synced NTP time to stove","time":{"stove":"2026-11-15 17:51:00","ntp":"2026-11-15 17:51:01","delta":1}}
+```
+
+`PATCH` writes the current NTP time into the stove clock. Pass `datetime=YYYY-MM-DDTHH:MM[:SS]` (local time) to set a specific time instead, e.g. the browser time:
+
+```bash
+curl -X PATCH "http://openpelletbridge.local/api/time?datetime=2026-11-16T14:30:00"
+```
+
+The day of the week is written as 1 = Monday … 7 = Sunday, which the chrono timers depend on. The stove has no daylight saving time; set the clock again after the change. The stove clock is read from the stove every 5 min (every 10 s until a valid time has been read); in between the controller lets it tick on, so `stove`, `ntp` and `delta` are current on every request. A clock change made on the stove itself shows up after at most 5 min. A PATCH re-reads the stove clock right away.
+
+### `/api/errors`
+
+The stove keeps the last 5 errors in `MemoryPos_1` … `MemoryPos_5`.
+
+```bash
+curl http://openpelletbridge.local/api/errors
+# {"previousErrors":false}
+# {"previousErrors":{"MemoryPos_1":{"id":32,"error":"E1","desc":"Pellet loading door is open for too long or air pressure inside stove is wrong"}}}
+
+# clear position 1
+curl -X POST "http://openpelletbridge.local/api/errors?MemoryPos_1=0"
+# {"action":"MemoryPos_1 set","previousErrors":false}
+```
+
+| Parameter | Values |
+|---|---|
+| `MemoryPos_1` … `MemoryPos_5` | Error id, see [error codes](#error-codes). `0` clears the position. Unknown ids return `400` and nothing is written. |
+
+### `/api/timers`
+
+The six chrono programs `PR1` – `PR6`. A disabled program returns its stored times and settings too, with `"enabled": false`. When a program cannot be read (after the serial retries) it is returned as `{"error": "Failed to read timer from stove - RS232 error"}` instead of partial data (and `GET /api/timers/prN` returns `500`).
+
+```bash
+curl http://openpelletbridge.local/api/timers
+```
+
+```json
+{
+  "timers": {
+    "PR1": {
+      "enabled": true,
+      "on": "06:30",
+      "off": "08:30",
+      "enabled_on": { "monday": true, "tuesday": true, "wednesday": true, "thursday": true, "friday": true, "saturday": false, "sunday": false },
+      "settings": { "setpoint": 21, "flame_power": 3, "RoomFanSpeed": 2 }
+    },
+    "PR2": { "enabled": false }
+  }
+}
+```
+
+`POST` updates several programs at once. Only the programs and fields present in the body are written:
+
+```bash
+curl -X POST http://openpelletbridge.local/api/timers \
+  -H "Content-Type: application/json" \
+  -d '{"timers":{"PR1":{"enabled":true,"on":"06:30","off":"08:30"},"PR2":{"enabled":false}}}'
+# {"result":"success"}
+```
+
+Timer fields:
+
+| Field | Values |
+|---|---|
+| `enabled` | `true` / `false` |
+| `on`, `off` | `HH:MM` on a 10 minute boundary (`06:30`, not `06:35`), or `off` |
+| `enabled_on.<day>` | `monday` … `sunday`: `true` / `false`. If you send `enabled_on`, days you leave out are disabled. |
+| `settings.setpoint` | `7` – `30` |
+| `settings.flame_power` | `1` – `4` |
+| `settings.RoomFanSpeed` | `0` – `3` |
+
+The whole body is validated before anything is written. Invalid values, unknown program names or unknown days return `400` with an `error` message, and nothing is written:
+
+```json
+{ "error": "PR1: 'on' must be HH:MM on a 10 minute boundary or 'off'" }
+```
+
+### `/api/timers/pr{1-6}`
+
+Single program, path `pr1` … `pr6`.
+
+| Method | Body | Effect |
+|---|---|---|
+| `GET` | – | Return the program |
+| `POST` | none | Enable the program, keep its settings |
+| `POST` | JSON timer object | Partial update (same as `PATCH`). Not a full replace. |
+| `PATCH` | JSON timer object | Partial update, only provided fields are written |
+| `DELETE` | – | Disable the program (times and settings are kept) |
+
+```bash
+curl -X PATCH http://openpelletbridge.local/api/timers/pr1 \
+  -H "Content-Type: application/json" \
+  -d '{"off":"09:00","settings":{"setpoint":22}}'
+# {"result":"success","PR1":{"enabled":true,"on":"06:30","off":"09:00",...}}
+
+curl -X DELETE http://openpelletbridge.local/api/timers/pr1
+# {"result":"success","PR1":{"enabled":false}}
+```
+
+### `GET /api/remote`
+
+What the remote control / display currently shows. Useful for reverse engineering.
+
+```bash
+curl http://openpelletbridge.local/api/remote
+# {"displayed_menu":"Main screen","diplayed_menu":"Main screen","selected_parameter":"Flame power","language":"NLD","menuId":0,"parameterId":0,"editValue":0}
+```
+
+`menuId` is the raw id of the screen on the remote (RAM `0x1A`, 0 = main screen), `parameterId` the parameter being edited (RAM `0x18`, 0 = none) and `editValue` the value the remote shows while editing, before it is confirmed (RAM `0x19`). The web app uses these to mirror the remote's display.
+
+`diplayed_menu` is a deprecated, misspelled alias of `displayed_menu` kept for existing clients. It will be removed in a future release.
+
+### `/api/keywatch`
+
+Reverse-engineering aid to find what the remote control does when a key is pressed. The remote talks to the stove over radio, so only its effect in the stove RAM can be seen, and some registers change for well under a second. While a watch runs the controller stops its normal polling and reads only the chosen RAM addresses back to back (about 20 reads per second in total), logging every change with a millisecond timestamp. Read-only: nothing is written to the stove. `/api/state` is not refreshed during a watch.
+
+| Method | Parameters | |
+|---|---|---|
+| `POST` | `address` (max 8, default `0x08,0x15,0x16,0x18,0x19,0x1A,0x24`), `seconds` (1 – 300, default 60) | Start a watch; clears the log |
+| `GET` | | Status and log |
+| `DELETE` | | Stop |
+
+```bash
+curl -X POST "http://openpelletbridge.local/api/keywatch?address=0x08,0x16,0x24&seconds=60"
+curl "http://openpelletbridge.local/api/keywatch"
+```
+
+```json
+{
+  "active": true, "remainingSeconds": 42, "started": 1794901687, "elapsedMs": 18120,
+  "reads": 362, "readErrors": 0, "readsPerSecond": 20.0, "overflow": false,
+  "addresses": { "0x08": { "start": 0, "now": 0 }, "0x16": { "start": 0, "now": 0 }, "0x24": { "start": 0, "now": 0 } },
+  "events": [ { "ms": 5310, "addr": "0x08", "from": 0, "to": 8 }, { "ms": 5460, "addr": "0x08", "from": 8, "to": 0 } ]
+}
+```
+
+`ms` is the time since the start of the watch (`started`, Unix time). The log holds 600 changes; `overflow` is `true` when more were dropped.
+
+### `GET /api/dump`
+
+Raw register dump for reverse engineering. Each register is read over the serial bus, so a full dump takes several seconds.
+
+| Parameter | Values |
+|---|---|
+| `register` | `ram` (default), `eeprom`, `all`. Add `unknown` (e.g. `ram,unknown`) to only return addresses that are not decoded yet. |
+| `address` | Comma separated list, decimal or hex (`0x21,0x34,125`). Default: all 256. |
+
+```bash
+curl "http://openpelletbridge.local/api/dump?register=ram&address=0x21,0x34"
+```
+
+```json
+{
+  "RAM(0x00)": {
+    "0x21": { "Address_int": 33, "Value_int": 4, "Value_txt": "Working", "Value_hex": "0x04" },
+    "0x34": { "Address_int": 52, "Value_int": 2, "Value_txt": "Flame power 2", "Value_hex": "0x02" }
+  }
+}
+```
+
+Known addresses are documented in [docs/discovered-values.md](discovered-values.md).
+
+### `GET /api/history`
+
+The controller keeps one sample every 2 minutes for the last 24 hours (720 samples). Samples are kept in RAM and every sample is also appended to SPIFFS (`/hist_a.bin` and `/hist_b.bin`, rotated every 24 h), so the history survives a restart, an OTA update or a power cut; at most the last sample is lost. Appending ≈16 bytes per 2 minutes keeps flash wear far below the endurance of the 128 KB SPIFFS partition. Samples are only recorded once NTP time and stove data are available.
+
+| Parameter | Values |
+|---|---|
+| `hours` | `1` – `24` (default `24`): the 2-minute samples. `25` – `168`: hourly averages of the last 7 days (see below). |
+
+```bash
+curl "http://openpelletbridge.local/api/history?hours=6"
+```
+
+```json
+{
+  "interval": 120,
+  "fields": ["t", "room", "stove", "remote", "setpoint", "fume", "flame", "state", "fan", "flameActual", "auger", "fumeFan", "fanActual", "fanPower"],
+  "samples": [[1794843000, 20.5, 22.0, 20.5, 22, 118, 2, 4, 1, 2, 1.6, 2650, 1, 21], [1794843120, 20.5, 22.0, 20.5, 22, 119, 2, 4, 1, 1, 1.2, 2590, 1, 21]]
+}
+```
+
+`t` is Unix time (UTC), temperatures in °C (0.5 °C resolution as reported by the stove), `state` is the stove state code, `fan` the room fan speed, `flame` the set and `flameActual` the actual flame power, `auger` the auger (feed screw) speed in rpm, `fumeFan` the fume fan speed in rpm, `fanActual` the speed the room fan really ran at (0 = stopped), `fanPower` the raw room fan power (RAM 0x0A: 0 off, 21/23/25 at speed 1/2/3) (`null` for samples recorded by older firmware). Each sample is an array in the order of `fields`. Changes shorter than the 2 minute interval are not captured in the samples; use [`/api/events`](#get-apievents) for exact state changes.
+
+**7 days (`hours` 25 – 168):** the 2-minute samples are also averaged per clock hour into 168 hourly records, kept in `/hist_week.bin` (one append per hour). After an update to firmware with this feature the week is filled from the 24 h history. The answer has `"interval": 3600` and the fields `t` (start of the hour), `room`, `stove`, `remote`, `fume`, `flame`, `flameActual`, `fan`, `fanActual`, `auger`, `fumeFan` (hourly averages), `setpoint` (last value), `fumeMax`, `state` (most frequent state), `burning` (% of the hour in a heating state 1 – 5) and `n` (samples in that hour). The hour in progress is included as the last record.
+
+```bash
+curl "http://openpelletbridge.local/api/history?hours=168"
+# {"interval":3600,"fields":["t","room","stove","remote","setpoint","fume","fumeMax","flame","flameActual","fan","fanActual","auger","fumeFan","state","burning","n"],
+#  "samples":[[1794841200,20.6,21.0,20.8,21,118,131,2.0,1.8,1.0,1.0,1.5,2610,4,100,30], …]}
+```
+
+### `GET /api/events`
+
+Log of every stove state change and every change of the active error, with the exact time. The stove itself does not store when an error happened, so this log is the only source for error times. Values are read about once a second; the last 200 entries are kept and appended to SPIFFS (`/events.bin`), so the log survives restarts and costs only one small flash write per change. Changes are recorded once NTP time is available.
+
+| Parameter | Description |
+|---|---|
+| `hours` | Optional, 1–720: only return changes from the last N hours. Default: all stored changes |
+
+```bash
+curl "http://openpelletbridge.local/api/events?hours=24"
+```
+
+```json
+{"events": [
+  {"t": 1794843000, "type": "state", "from": 7, "to": 1},
+  {"t": 1794843065, "type": "state", "from": 1, "to": 2},
+  {"t": 1794843600, "type": "error", "id": 4, "error": "E9"},
+  {"t": 1794844200, "type": "error", "id": 0, "error": null}
+]}
+```
+
+`t` is Unix time (UTC). For `type: "state"`, `from` and `to` are stove state codes (see `/api/state`); `from` is `null` for the first change after the log was empty. For `type: "error"`, `id` is the raw error value and `error` the code (`id` 0 / `error` null = error cleared). Errors are only logged once they last 30 s (3 minutes during start-up, pellet loading, ignition, brazier cleaning and shut-down) or the stove is in an alarm state; RAM 0x33 briefly shows E12 when brazier cleaning starts and stops and E1 during the start-up check, which are not errors. For `type: "pellet"`, `register` is `0xA4` (pellet reserve sensor) or `0x89` (pellet reserve counter) with the old and new value; these are logged to find out how the pellet reserve works. Oldest first. The web app uses the error entries to show when each error memory entry occurred.
+
+
+Serial link events: `{"t": …, "type": "link", "up": false}` when the stove stopped answering on the serial bus, `"up": true` when it answered again (the chart draws them red / green). Brazier cleaning (state 5) is not logged as a state change: it is a short periodic step while working.
+
+### `/api/pellets`
+
+Pellets and burning hours left until the low pellet alarm. The controller counts the auger feed: the auger value (RAM 0x0D, fixed per flame power: 3.0 / 4.6 / 6.2 / 7.8) times the time, in "auger units". The level sensor (RAM 0xA4) trips at the same level in the hopper each time, so between two alarms exactly the pellets added in between were burned: kg per unit = kg added / units. The last 10 cycles are kept in NVS and averaged.
+
+- **Refill:** detected when the alarm clears again (sensor back to normal for 30 s after it was low for at least 1 min), with the standard amount `refillKg` (15 kg). E1 (hopper lid) is not used: it does not always occur.
+- **Topped up without an alarm, or another amount:** `POST /api/pellets?add=<kg>`, or *Refilled…* in the web app. While the alarm is on, `add` sets the amount of the coming refill instead of the standard one.
+- **First estimate:** after one refill at the alarm and the next alarm. Each cycle after that makes it more accurate (`spread`).
+
+| Method | Parameters |
+|---|---|
+| `GET` | – |
+| `POST` | `add` (kg, 0 – 100), `refillKg` (kg, 1 – 100), `resetCalibration=true` |
+
+```json
+{"calibrated": true, "cycles": 3, "low": false, "lastRefillAt": 1794990120, "lastRefillKg": 15, "remainingKg": 6.2, "hoursLeft": 4.15, "hoursLeftAverage": 9.6,
+ "alarmExpectedAt": 1795037700, "kgPerHour": 1.49, "refillKg": 15, "kgSinceAlarm": 15.0, "gramsPerUnit": 0.0668,
+ "spread": 0.041, "averageAuger": 2.91, "averageHours": 168, "unitsSinceAlarm": 131740, "pendingKg": null,
+ "history": [{"t": 1794990000, "kg": 15, "units": 224300, "gramsPerUnit": 0.0669}]}
+```
+
+`lastRefillAt` / `lastRefillKg`: time (Unix) and amount of the last refill, detected or entered with `add` (`null` before the first one). `hoursLeft` is the time at the current auger value (`null` while the auger does not feed); `hoursLeftAverage` and `alarmExpectedAt` use the average auger value of the hourly history of the last 7 days (from 6 hours of history). After the alarm the stove's own countdown takes over (`pelletReserve` in `/api/state`). `/api/state` has the same estimate under `pellets` (without the calibration detail); MQTT publishes `pellets_kg` and `pellets_hours` (at the average use).
+
+### `/api/bluetooth`
+
+Bluetooth (BLE) can be switched off to give WiFi the radio to itself. The setting is stored in NVS and applied at the next boot: with BLE off, `setupBLE()` and `bleLoop()` are skipped, the BT controller memory is released and WiFi modem sleep is disabled. The iOS app then only works via WiFi.
+
+```bash
+curl http://openpelletbridge.local/api/bluetooth
+# {"enabled":true,"active":true,"restartRequired":false}
+
+curl -X POST "http://openpelletbridge.local/api/bluetooth?enabled=false&restart=true"
+# {"result":"success - restarting","enabled":false,"active":true,"restartRequired":true}
+```
+
+| Parameter | Values |
+|---|---|
+| `enabled` | `true`, `false` |
+| `restart` | `true` to restart the controller right away when the setting changed (the stove keeps running) |
+
+### `/api/mqtt`
+
+MQTT settings and connection status, see [MQTT and Home Assistant](mqtt.md#mqtt-and-home-assistant). Stored in NVS; a change reconnects right away. The password is never returned.
+
+```bash
+curl -X POST "http://openpelletbridge.local/api/mqtt?enabled=true&host=192.168.1.10&user=ha&password=secret"
+curl http://openpelletbridge.local/api/mqtt
+# {"enabled":true,"host":"192.168.1.10","port":1883,"user":"ha","passwordSet":true,"prefix":"openpelletbridge",
+#  "discovery":true,"discoveryPrefix":"homeassistant","clientId":"openpelletbridge_a1b2c3","connected":true,
+#  "lastError":null,"publishes":42,"commands":0}
+```
+
+| Parameter (POST) | Values |
+|---|---|
+| `enabled` | `true` / `false` |
+| `host`, `port` | Broker address, port (default 1883) |
+| `user`, `password` | Optional. An empty `password` keeps the stored one, `-` clears it |
+| `prefix` | Topic prefix, default `openpelletbridge` |
+| `discovery`, `discoveryPrefix` | Home Assistant discovery on / off (default on), prefix (default `homeassistant`) |
+
+Only the given parameters change.
+
+### `/api/wifi`
+
+WiFi status, the WiFi network and the IP settings. Hostname and IP settings are stored in NVS (shared with the BLE and telnet menus) and take effect after a restart; a network change is done right away. Without any working network, hold the reset button 5 s for the WiFiManager portal.
+
+```bash
+curl http://openpelletbridge.local/api/wifi
+# {"connected":true,"ssid":"Home","bssid":"…","channel":6,"rssi":-61,"quality":78,"ip":"192.168.50.222","netmask":"255.255.255.0",
+#  "gateway":"192.168.50.1","dns":"192.168.50.1","mac":"…","hostname":"openpelletbridge","sleep":false,
+#  "saved":{"hostname":"openpelletbridge","mode":"dhcp"},"restartRequired":false}
+
+curl -X POST "http://openpelletbridge.local/api/wifi?mode=static&ip=192.168.50.30&netmask=255.255.255.0&gateway=192.168.50.1&dns=192.168.50.1&restart=true"
+```
+
+| Parameter (POST) | Values |
+|---|---|
+| `hostname` | 1 – 32 letters, digits or `-` |
+| `mode` | `dhcp` or `static` (then `ip`, `netmask`, `gateway`, optional `dns`; checked: valid netmask, gateway in the same subnet) |
+| `restart` | `true` to restart right away |
+| `ssid`, `password` | Switch to another WiFi network now (password empty for an open network, else 8 – 63 characters). Uses DHCP on the new network. Handled on its own: other parameters in the same request are ignored |
+
+`GET /api/wifi/scan` lists the networks in range: `{"scanning":true}` while the scan runs (a few seconds, poll again), then `{"scanning":false,"networks":[{"ssid":"Home","rssi":-61,"quality":78,"channel":6,"secure":true}]}`, strongest first per network. `?refresh=true` starts a new scan.
+
+**Lock-out protection:** when the controller cannot connect to a new network within 25 s, or nobody reaches it there within 5 minutes, it restores the previous network and IP settings and restarts (`lastChange` tells what happened). After a restart with a new static address the controller waits up to 5 minutes for any HTTP request (opening the web app on the new address is enough). Without one it switches back to DHCP and restarts. `confirmSecondsLeft` shows the remaining time.
+
+### `/api/telnet`
+
+Switches the telnet debug menu (port 23) on or off. Applied immediately, no restart, and stored in NVS.
+
+```bash
+curl -X POST "http://openpelletbridge.local/api/telnet?enabled=false"
+# {"result":"success","enabled":false}
+```
+
+### `GET /metrics`
+
+Prometheus text format. Contains:
+
+- ESP32: uptime, CPU frequency, heap, flash/sketch size
+- WiFi: connected, RSSI, channel, TX power
+- HTTP: request counters per method and per endpoint
+- Serial bus: read/write errors after retries, number of retries
+- Stove: state, temperatures, wireless sensor setting (`stove_wireless_sensor_enabled`), flame power, fan speed, fume fan rpm, auger speed, energy saving, low pellet alarm, remote last seen, timers, stove/NTP time delta, firmware version
+
+Example scrape config:
+
+```yaml
+scrape_configs:
+  - job_name: openpelletbridge
+    static_configs:
+      - targets: ["openpelletbridge.local:80"]
+```
+
+### Legacy routes
+
+Kept for backwards compatibility. Use the `/api/...` routes for new integrations. `/state`, `/flame`, `/fan` and `/get` share the handler (and allowed methods) of their `/api` counterpart; the other legacy routes accept any HTTP method.
+
+| Route | Replacement / behaviour |
+|---|---|
+| `/on`, `/off` | `POST /api/power?state=on\|off`. Response nests the state under `stoveState`. |
+| `/state` | `GET /api/state` |
+| `/flame` | `/api/flame` |
+| `/fan` | `/api/fan` |
+| `/get` | `GET /api/dump` |
+| `/set?type=ram\|eeprom&int=<addr>` | Reads **one** register (decimal, or `address=0x..`). Despite the name nothing is written. `Value_txt` is decoded like `/api/dump`. `400` on an invalid address, `500` on a serial error. |
+| `/error?0=<id>&1=<id>…` | Write error memory by index 0 – 4. Use `POST /api/errors`. |
+| `/cq?s=<raw>` | Write the raw combustion quality value. Use `POST /api/burn`. |
+| `/display?menu=<id>` | Force the display to a menu id. |
+
+## Reference tables
+
+### Stove states
+
+| `stoveState` | `state` | `poweredOn` |
+|---|---|---|
+| -1 | No answer (serial link down) | `null` (unknown) |
+| 0 | Off | false |
+| 1 | Starting | true |
+| 2 | Pellet loading | true |
+| 3 | Ignition | true |
+| 4 | Working | true |
+| 5 | Brazier cleaning | true |
+| 6 | Final cleaning | false |
+| 7 | Standby | true |
+| 8 | Alarm State | true |
+| 9 | Ignition failure | false |
+| 10 | Alarm | false |
+
+### Error codes
+
+| id | Code | Description |
+|---|---|---|
+| 0 | `---` | No error |
+| 1 | E8 | Fume sensor error |
+| 2 | E4 | Fume temperature too high |
+| 4 | E9 | Ignition temperature not reached within limit |
+| 8 | E7 | Fume temperature too low |
+| 16 | E3 | Temperature inside stove too high |
+| 32 | E1 | Pellet loading door open too long, or wrong air pressure inside the stove |
+| 64 | E2 | Pressure sensor error during ignition |
+| 128 | E6 | Auger error, too many pellets dispatched |
+| 129 | E12 | Fume fan error |
+| 130 | E11 | Unknown, not described in the manual |
+| 132 | E19 | External contact N.PEL / pellet is active |
+| 136 | E13 | Unknown, not described in the manual |
+| 255 | PowerError | Display shows power error |
+
+The `desc` strings in API responses are returned as defined in the firmware and may differ slightly in wording from this table.

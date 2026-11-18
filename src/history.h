@@ -388,14 +388,14 @@ static void handleRouteHistoryWeek(int hours)
                  r.flame10 / 10.0f, fa, r.fan10 / 10.0f, fna, aug, rpm, r.state, r.burnPct, r.n);
         out += line;
         first = false;
-        if (out.length() > 1500) { wm.server->sendContent(out); out = ""; }
+        if (out.length() > 1500) httpSendChunk(out);
     };
     int start = (weekHead - weekCount + WEEK_SIZE) % WEEK_SIZE;
     for (int i = 0; i < weekCount; i++) row(week[(start + i) % WEEK_SIZE]);
     if (!weekAcc.empty()) row(weekAcc.result());   // the hour in progress
     out += "]}";
-    wm.server->sendContent(out);
-    wm.server->sendContent("");
+    httpSendChunk(out);
+    httpEndChunks();
 }
 
 void handleRouteHistory()
@@ -429,9 +429,9 @@ void handleRouteHistory()
                  s.setpoint, s.fume, s.flame, s.state, s.fan, act, aug, rpm, fa, fp);
         out += row;
         first = false;
-        if (out.length() > 1500) { wm.server->sendContent(out); out = ""; }
+        if (out.length() > 1500) httpSendChunk(out);
     }
     out += "]}";
-    wm.server->sendContent(out);
-    wm.server->sendContent("");
+    httpSendChunk(out);
+    httpEndChunks();
 }

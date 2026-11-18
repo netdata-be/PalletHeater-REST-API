@@ -5,12 +5,11 @@
 # Release:  git tag v1.0.0 && git push origin v1.0.0
 #   openpelletbridge-firmware.bin  OTA image: the web app, POST /api/update or the
 #                              GitHub update of the controller (/api/firmware)
-#   palletheater-firmware.bin      the same OTA image under the old project name, for
-#                              controllers on v1.0.0 (they only look for this name);
-#                              temporary, drop once no controller runs v1.0.0
 #   openpelletbridge-factory.bin   complete flash image for a new ESP32, at offset 0:
 #                              esptool.py --chip esp32 write_flash 0x0 openpelletbridge-factory.bin
 #   SHA256SUMS
+# firmware.elf (debug symbols, to decode a core dump) is a separate artifact, not
+# part of the release.
 name: Firmware
 
 on:
@@ -100,9 +99,7 @@ jobs:
           b=".pio/build/$PIO_ENV"
           mkdir -p dist
           cp "$b/firmware.bin" dist/openpelletbridge-firmware.bin
-          # same image under the old project name: controllers running v1.0.0
-          # (still "PalletHeater") only look for this asset. Drop once they are updated.
-          cp "$b/firmware.bin" dist/palletheater-firmware.bin
+          mkdir -p elf && cp "$b/firmware.elf" elf/firmware.elf
           esptool=$(find ~/.platformio/packages -path '*tool-esptoolpy*/esptool.py' | head -1)
           boot_app0=$(find ~/.platformio/packages -path '*framework-arduinoespressif32*/tools/partitions/boot_app0.bin' | head -1)
           python "$esptool" --chip esp32 merge_bin -o dist/openpelletbridge-factory.bin \
@@ -119,6 +116,13 @@ jobs:
         with:
           name: openpelletbridge-${{ steps.version.outputs.version }}
           path: dist/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          # debug symbols of this build: decode a core dump (/api/coredump) or backtrace
+          name: openpelletbridge-elf-${{ steps.version.outputs.version }}
+          path: elf/
           if-no-files-found: error
 
   release:

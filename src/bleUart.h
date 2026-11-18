@@ -54,7 +54,8 @@ bool setEnergySavingStop(int stop);
 
 // ─── OTA service UUIDs ────────────────────────────────────────────────────────
 // Protocol:
-//   1. Client writes CTRL: 0x01 + uint32_t LE firmware size → NOTIFY 0x01 (ready) | 0xFF (error)
+//   1. Client writes CTRL: 0x01 + uint32_t LE firmware size + API key (ASCII, /api/auth)
+//                                                           → NOTIFY 0x01 (ready) | 0xFF (error, also a wrong key)
 //   2. Client writes DATA chunks (WRITE_NR)                 → NOTIFY 0x50 <pct%> every 4 KB
 //   3. Client writes CTRL: 0x02                             → NOTIFY 0x02 (success, reboots) | 0xFF
 //   Abort: client writes CTRL 0x03 at any time             → NOTIFY 0x03
@@ -501,6 +502,8 @@ static void otaNotify(uint8_t status) {
     otaCtrl->notify();
 }
 
+static bool bleOtaKeyOk(const uint8_t* key, size_t len);   // auth.h: the API key
+
 class OtaCtrlCB : public NimBLECharacteristicCallbacks {
     void onWrite(NimBLECharacteristic* pChar) override {
         size_t len = pChar->getDataLength();
@@ -511,6 +514,11 @@ class OtaCtrlCB : public NimBLECharacteristicCallbacks {
         if (cmd == 0x01) {
             uint32_t size = 0;
             if (len >= 5) memcpy(&size, &data[1], 4);
+            // the API key follows the size: without it anyone in Bluetooth range could flash
+            if (len <= 5 || !bleOtaKeyOk(&data[5], len - 5)) {
+                LOGW("ble", "BLE OTA refused: API key missing or wrong");
+                otaNotify(0xFF); return;
+            }
 
             otaPartition = esp_ota_get_next_update_partition(nullptr);
             if (!otaPartition) { otaNotify(0xFF); return; }

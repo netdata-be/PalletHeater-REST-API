@@ -44,8 +44,8 @@ void authCollectHeaders()
 {
     // Content-Type: /api/update must only touch the upload for multipart requests (httpUpdate.h)
     // Accept-Encoding: the web app and spec are only served gzipped (routesBasic.h)
-    static const char* keys[] = { "X-API-Key", "Authorization", "X-OTA-Password", "Content-Type", "Accept-Encoding" };
-    wm.server->collectHeaders(keys, 5);
+    static const char* keys[] = { "X-API-Key", "Authorization", "Content-Type", "Accept-Encoding" };
+    wm.server->collectHeaders(keys, 4);
 }
 
 static bool constantTimeEquals(const String& a, const String& b)
@@ -68,6 +68,16 @@ static bool requestHasValidKey()
     return k.length() && constantTimeEquals(k, apiKey);
 }
 
+// Bluetooth OTA: the key sent after the size (bleUart.h)
+static bool bleOtaKeyOk(const uint8_t* key, size_t len)
+{
+    String k;
+    k.reserve(len);
+    for (size_t i = 0; i < len; i++) k += (char)key[i];
+    k.trim();
+    return k.length() && constantTimeEquals(k, apiKey);
+}
+
 bool authOk() { return !apiKeyRequired || requestHasValidKey(); }
 
 static const char* httpMethodName(HTTPMethod m)
@@ -81,6 +91,7 @@ static const char* httpMethodName(HTTPMethod m)
 // Breadcrumb for a web request: method and URI while the handler runs (liveLog.h)
 static void crumbRequest()
 {
+    httpStalled = false;
     crumbf("http %s %s", httpMethodName(wm.server->method()), wm.server->uri().c_str());
 }
 // Wrap a route handler so the breadcrumb shows its request (public routes; authed() does it too)
@@ -139,6 +150,8 @@ void handleRouteAuth()
         if (wm.server->arg("rotate") == "true") {
             apiKey = generateApiKey();
             prefs.putString("key", apiKey);
+            ArduinoOTA.setPassword(apiKey.c_str());   // the OTA password is the API key (ota.h)
+            LOGI("sys", "API key rotated by %s (also the OTA password)", wm.server->client().remoteIP().toString().c_str());
         }
         prefs.end();
     }

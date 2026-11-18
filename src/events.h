@@ -269,9 +269,9 @@ void handleRouteEvents()
             snprintf(row, sizeof(row), "%s{\"t\":%lu,\"type\":\"state\",\"from\":%s,\"to\":%d}", first ? "" : ",", (unsigned long)e.t, from, e.to);
         }
         out += row; first = false;
-        if (out.length() > 1500) { wm.server->sendContent(out); out = ""; }
+        if (out.length() > 1500) httpSendChunk(out);
     }
     out += "]}";
-    wm.server->sendContent(out);
-    wm.server->sendContent("");
+    httpSendChunk(out);
+    httpEndChunks();
 }

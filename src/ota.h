@@ -2,10 +2,12 @@
 #include <NimBLEDevice.h>
 #include "constants.h"
 
-void enableOTA(){
+// The OTA password is the controller's API key (auth.h, NVS; /api/auth shows it),
+// not a password in the source code: that one was public in the repository.
+void enableOTA(const String& password){
     ArduinoOTA.setHostname("Pelletheater");
     ArduinoOTA.setPort(3232);
-    ArduinoOTA.setPassword(OTA_PASSWORD);
+    ArduinoOTA.setPassword(password.c_str());
     ArduinoOTA.onStart([](){
         otaActive = true;   // pauses the sensor task: no serial traffic, more time for WiFi
         // Stop BLE advertising so it stops competing with WiFi for the shared radio.

@@ -6,8 +6,7 @@
 // and written to the OTA partition while it arrives.
 //
 // Authorisation (checked when the upload starts, before anything is written):
-//   X-API-Key / Authorization: Bearer <api key>   (see auth.h), or
-//   X-OTA-Password: <OTA password from platformio.ini>
+//   X-API-Key / Authorization: Bearer <api key>   (see auth.h)
 // A valid key is always needed, also when the API key is not required for the
 // other routes (the web app reads it from /api/auth in that case).
 #include <constants.h>
@@ -20,12 +19,11 @@ static bool        updStarted    = false;
 static String      updError;
 static size_t      updWritten    = 0;
 
+// Always the API key (X-API-Key / Authorization: Bearer), also when it is not required
+// for the rest of the API. The fixed OTA password (X-OTA-Password) is gone: it was public.
 static bool updRequestAuthorised()
 {
-    if (requestHasValidKey()) return true;
-    String pw = wm.server->header("X-OTA-Password");
-    pw.trim();
-    return pw.length() && constantTimeEquals(pw, String(OTA_PASSWORD));
+    return requestHasValidKey();
 }
 
 static void updFail(const String& msg)

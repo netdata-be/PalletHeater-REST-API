@@ -82,7 +82,7 @@ void handleRouteLog()
     free(chunk);
     out += "\"}";
     wm.server->sendHeader("Cache-Control", "no-store");
-    wm.server->send(200, "application/json", out);
+    httpSendText(200, "application/json", out);
 }
 
 void handleRouteBusmon()
@@ -140,7 +140,7 @@ void handleRouteBusmon()
     out += "]}";
     free(ev);
     wm.server->sendHeader("Cache-Control", "no-store");
-    wm.server->send(200, "application/json", out);
+    httpSendText(200, "application/json", out);
 }
 
 // GET  /api/loglevel                     levels per module
@@ -269,5 +269,5 @@ void handleRouteDiagReset()
     JsonObject se = json.createNestedObject("serial");
     se["readErrors"] = stove.readErrors; se["writeErrors"] = stove.writeErrors; se["retries"] = stove.retries;
     String out; serializeJson(json, out);
-    wm.server->send(200, "application/json", out);
+    httpSendText(200, "application/json", out);
 }

@@ -42,6 +42,33 @@ static String        fwLastInstall;         // "v1.0.0 -> v1.1.0", from NVS
 
 static bool fwTimeValid() { return time(nullptr) > 1700000000; }   // TLS checks certificate dates
 
+// Progress of an install in NVS ("fwupd" / "prog"): survives a power cut, so a hang
+// during an install can still be traced after the controller was powered off and on.
+// Removed when the install finished, "failed: ..." when it failed.
+static String fwLastAttempt;   // read at the start: what the previous unfinished / failed install did
+static void fwProgress(const String& what)
+{
+    char b[160];
+    snprintf(b, sizeof(b), "%s (free heap %u KB, largest block %u KB, WiFi %d dBm, uptime %lu s)", what.c_str(),
+             (unsigned)(ESP.getFreeHeap() / 1024), (unsigned)(ESP.getMaxAllocHeap() / 1024), (int)WiFi.RSSI(), millis() / 1000);
+    Preferences p;
+    p.begin("fwupd", false);
+    p.putString("prog", b);
+    p.end();
+    LOGD("update", "progress: %s", b);
+}
+static void fwProgressClear() { Preferences p; p.begin("fwupd", false); p.remove("prog"); p.end(); }
+// HTTPS (mbedTLS) needs a good 40 KB, with a block of about 17 KB for its buffers
+static String fwMemoryCheck()
+{
+    uint32_t freeHeap = ESP.getFreeHeap(), block = ESP.getMaxAllocHeap();
+    if (freeHeap >= 45000 && block >= 20000) return "";
+    char b[140];
+    snprintf(b, sizeof(b), "not enough free memory for HTTPS (free %u KB, largest block %u KB; needs 45 / 20 KB) - restart the controller and try again",
+             (unsigned)(freeHeap / 1024), (unsigned)(block / 1024));
+    return b;
+}
+
 static void fwBeginHttps(HTTPClient& http, WiFiClientSecure& client, const String& url)
 {
     client.setCACertBundle(caBundle);
@@ -56,6 +83,8 @@ static void fwBeginHttps(HTTPClient& http, WiFiClientSecure& client, const Strin
 static String fwDoCheck()
 {
     if (!fwTimeValid()) return "no valid time yet (NTP), needed to check the HTTPS certificate";
+    String mem = fwMemoryCheck();
+    if (mem.length()) return mem;
     static const char* apiUrl = "https://api.github.com/repos/" FW_REPO "/releases/latest";
     LOGD("update", "GET %s (free heap %u bytes, largest block %u)", apiUrl, (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
     WiFiClientSecure client;
@@ -119,6 +148,9 @@ static void fwPauseOthers(bool pause)
 static String fwDoInstall()
 {
     if (!fwAssetUrl.length()) return "no firmware asset known, check first";
+    String mem = fwMemoryCheck();
+    if (mem.length()) return mem;
+    fwProgress(String("install ") + BUILD_VERSION + " -> " + fwLatest + ": connecting to GitHub");
     LOGD("update", "download %s", fwAssetUrl.c_str());
     WiFiClientSecure client;
     HTTPClient http;
@@ -136,6 +168,7 @@ static String fwDoInstall()
     if (len <= 0) { http.end(); return "download has no size"; }
     if (fwAssetSize && (size_t)len != fwAssetSize) { http.end(); return String("download size ") + len + " differs from the release (" + (unsigned)fwAssetSize + " bytes)"; }
     LOGI("update", "downloading %d KB into the free OTA partition (%u KB)", len / 1024, (unsigned)(ESP.getFreeSketchSpace() / 1024));
+    fwProgress(String("install ") + BUILD_VERSION + " -> " + fwLatest + ": downloading 0%");
     fwTotal = len; fwDone = 0;
     int lastPct = 0;
     fwPauseOthers(true);
@@ -157,7 +190,11 @@ static String fwDoInstall()
             fwDone += n;
             lastData = millis();
             int pct = (int)(fwDone * 100 / fwTotal);
-            if (pct / 10 > lastPct / 10) { LOGI("update", "%d%% (%u KB, %lu KB/s)", pct, (unsigned)(fwDone / 1024), (unsigned long)(fwDone / 1024 * 1000 / (millis() - t0 + 1))); lastPct = pct; }
+            if (pct / 10 > lastPct / 10) {
+                LOGI("update", "%d%% (%u KB, %lu KB/s, free heap %u KB)", pct, (unsigned)(fwDone / 1024), (unsigned long)(fwDone / 1024 * 1000 / (millis() - t0 + 1)), (unsigned)(ESP.getFreeHeap() / 1024));
+                lastPct = pct;
+                fwProgress(String("install ") + BUILD_VERSION + " -> " + fwLatest + ": downloading " + pct + "%");
+            }
         } else if (!http.connected() && !s->available()) {
             err = "connection closed during download"; break;
         } else if (millis() - lastData > 20000) {
@@ -202,6 +239,7 @@ static void fwTask(void* arg)
             p.begin("fwupd", false);
             p.putString("last", String(BUILD_VERSION) + " -> " + fwLatest);
             p.end();
+            fwProgressClear();
             fwState = FW_RESTARTING;
             LOGI("update", "installed, restarting");
             delay(1500);   // let a status poll see "restarting"
@@ -210,7 +248,7 @@ static void fwTask(void* arg)
     }
     if (err.length()) {
         fwError = err; fwState = FW_ERROR;
-        if (install) LOGE("update", "install failed: %s", err.c_str());
+        if (install) { LOGE("update", "install failed: %s", err.c_str()); fwProgress("failed: " + err); }
         else LOGW("update", "update check failed: %s", err.c_str());
     }
     else fwState = FW_IDLE;
@@ -238,7 +276,10 @@ void fwSetup()
     p.begin("fwupd", true);
     fwAutoCheck = p.getBool("auto", true);
     fwLastInstall = p.getString("last", "");
+    fwLastAttempt = p.getString("prog", "");
     p.end();
+    if (fwLastAttempt.length() && !fwLastAttempt.startsWith("failed"))
+        LOGW("update", "the previous GitHub install did not finish (controller restarted or powered off during it), last step: %s", fwLastAttempt.c_str());
 }
 
 // From loop(): the automatic check.
@@ -256,7 +297,7 @@ void fwLoop()
 
 void handleRouteFirmware()
 {
-    StaticJsonDocument<1024> json;
+    StaticJsonDocument<1536> json;
     int code = 200;
     if (wm.server->method() == HTTP_POST) {
         String action = wm.server->arg("action");
@@ -320,6 +361,10 @@ void handleRouteFirmware()
     }
     if (st == FW_ERROR && fwError.length()) json["lastError"] = fwError; else json["lastError"] = nullptr;
     if (fwLastInstall.length()) json["lastInstall"] = fwLastInstall; else json["lastInstall"] = nullptr;
+    // an install that did not finish or failed: its last step, with memory and WiFi at that time
+    if (fwLastAttempt.length()) json["lastAttempt"] = fwLastAttempt; else json["lastAttempt"] = nullptr;
+    json["freeHeap"] = ESP.getFreeHeap();
+    json["largestBlock"] = ESP.getMaxAllocHeap();
     String out; serializeJson(json, out);
     wm.server->send(code, "application/json", out);
 }

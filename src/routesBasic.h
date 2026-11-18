@@ -57,7 +57,7 @@ static void sendGzipped(const char* type, const char* start, const char* end)
     }
     wm.server->sendHeader("Content-Encoding", "gzip");
     wm.server->sendHeader("Cache-Control", "no-cache");
-    wm.server->send_P(200, type, start, end - start);
+    httpSendLarge(200, type, (const uint8_t*)start, end - start);
 }
 
 // Home screen install (web app manifest + icons, web/icons/). Public like the app.
@@ -67,7 +67,7 @@ EMBED(icon180, "web_icons_icon_180_png")
 static void sendEmbedded(const char* type, const uint8_t* start, const uint8_t* end)
 {
     wm.server->sendHeader("Cache-Control", "max-age=86400");
-    wm.server->send_P(200, type, (const char*)start, end - start);
+    httpSendLarge(200, type, start, end - start);
 }
 void handleRouteIconSvg() { sendEmbedded("image/svg+xml", iconSvgStart, iconSvgEnd); }
 void handleRouteIcon180() { sendEmbedded("image/png", icon180Start, icon180End); }

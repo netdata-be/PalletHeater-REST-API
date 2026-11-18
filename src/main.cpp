@@ -70,6 +70,8 @@ void setupTelnet()
 
 #include "liveDebug.h"
 
+#include "coreDump.h"   // core dump of the last crash, /api/coredump
+
 // Serialise all stove bus access: HTTP handlers run on the loop task while the
 // sensor task polls the stove from the other core. Without the lock both talk
 // on the bus at the same time and reads return garbage.
@@ -161,6 +163,7 @@ static void registerRoutes()
     wm.server->on("/api/busmon", authed(handleRouteBusmon));
     wm.server->on("/api/loglevel", authed(handleRouteLogLevel));
     wm.server->on("/api/diag/reset", authed(handleRouteDiagReset));
+    wm.server->on("/api/coredump", authed(handleRouteCoreDump));
     wm.server->on("/", HTTP_GET, crumbed(handleRouteWebApp));   // the web app is the start page
     wm.server->on("/device", crumbed(handleRouteIndex));          // small fallback page with links
     wm.server->on("/manifest.webmanifest", HTTP_GET, crumbed(handleRouteManifest));   // home screen install (public)
@@ -177,6 +180,7 @@ void setup()
 
     Serial.begin(115200);
     liveLogSetup();   // also capture ESP-IDF log output for /api/log; reset reason, log of the previous run
+    coreDumpReport(); // after a crash: task, PC and backtrace from the core dump
     // bus: a transaction that failed for good is a warning; retried attempts and the
     // frames of the telnet bus debug are debug
     Stove::writeHook = stoveWriteLogger;   // every write with its source (liveDebug.h)
@@ -221,7 +225,7 @@ void setup()
         WiFi.setSleep(false);
         LOGI("sys", "Bluetooth disabled (setting) - BLE not started");
     }
-    enableOTA();
+    enableOTA(apiKey);   // OTA password = API key
     if (spiffsMounted) {
         File configFile = SPIFFS.open("/config.txt", "r");
         if (configFile) {

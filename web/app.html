@@ -707,6 +707,7 @@ const I18N = {
     themeTitle:"Theme: {0} (click to change)", theme_auto:"automatic (follows the device)", theme_light:"light", theme_dark:"dark",
     apiKeyLbl:"API key", lastStart:"Last start", ctrlStarts:"Controller starts", ctrlStartsVal:"{0} ({1} after a crash)", wifiDrops:"Connection drops", wifiDropsVal:"{0} · last {1} ago: {2}",
     logLevels:"Log levels per module", logLevelSaved:"Log level {0} = {1}",
+    ghLastUnfinished:"The previous install did not finish; last step: {0}.", ghLastFailed:"The previous install failed: {0}.",
     updBadge:"Update", updBadgeTitle:"New firmware {0} available – show it under Device", helpFor:"Explanation",
     histWeekNote:"Hourly averages, last 7 days (burning = share of the hour the stove was heating), stored on the controller.", burnPct:"Burning", fumeMax:"Fume max.",
     liveTitle:"Live debugging", liveLog:"Firmware log", liveBus:"Stove bus", livePause:"Pause", liveResume:"Resume", liveClear:"Clear", liveDl:"Download",
@@ -870,6 +871,7 @@ pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low 
     themeTitle:"Thema: {0} (klik om te wijzigen)", theme_auto:"automatisch (volgt het toestel)", theme_light:"licht", theme_dark:"donker",
     apiKeyLbl:"API-key", lastStart:"Laatste start", ctrlStarts:"Starts controller", ctrlStartsVal:"{0} ({1} na een crash)", wifiDrops:"Verbrekingen", wifiDropsVal:"{0} · laatste {1} geleden: {2}",
     logLevels:"Logniveaus per module", logLevelSaved:"Logniveau {0} = {1}",
+    ghLastUnfinished:"De vorige installatie is niet afgerond; laatste stap: {0}.", ghLastFailed:"De vorige installatie is mislukt: {0}.",
     updBadge:"Update", updBadgeTitle:"Nieuwe firmware {0} beschikbaar – toon ze bij Toestel", helpFor:"Uitleg",
     histWeekNote:"Uurgemiddelden, laatste 7 dagen (brandt = deel van het uur dat de kachel verwarmde), opgeslagen op de controller.", burnPct:"Brandt", fumeMax:"Rookgas max.",
     liveTitle:"Live debugging", liveLog:"Firmware-log", liveBus:"Kachelbus", livePause:"Pauze", liveResume:"Hervat", liveClear:"Wissen", liveDl:"Download",
@@ -1432,6 +1434,8 @@ function renderFw() {
   else if (f.devBuild && f.install === "downgrade") txt = t("ghDevNewer", f.current, devWhat(f), f.latest);
   else if (f.devBuild) txt = t("ghDev", f.latest, f.current);
   else txt = t("ghUpToDate", f.latest);
+  // an earlier install that did not finish (restart / power cut during it) or failed
+  if (f.lastAttempt && !working) txt += " " + t(f.lastAttempt.startsWith("failed") ? "ghLastFailed" : "ghLastUnfinished", f.lastAttempt.replace(/^failed: /, ""));
   hint.textContent = txt;
   notes.hidden = !f.releaseUrl || working; if (f.releaseUrl) notes.href = f.releaseUrl;
   $("ghCheck").disabled = working;

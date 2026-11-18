@@ -297,7 +297,7 @@ String getMetrics() {
 }
 
 void handleMetrics() {
-  wm.server->send(200, "text/plain; version=0.0.4", getMetrics());
+  httpSendText(200, "text/plain; version=0.0.4", getMetrics());
 }
 
 void httpRouteMetrics() {

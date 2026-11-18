@@ -2615,18 +2615,7 @@
           "Device"
         ],
         "summary": "Firmware update over HTTP",
-        "description": "Streams a firmware image (multipart field `firmware`) to the OTA partition and restarts the controller on success. Needs the API key (also when it is not required for other routes) or the OTA password in `X-OTA-Password`.",
-        "parameters": [
-          {
-            "name": "X-OTA-Password",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "description": "OTA password from platformio.ini, alternative to the API key"
-          }
-        ],
+        "description": "Streams a firmware image (multipart field `firmware`) to the OTA partition and restarts the controller on success. Always needs the API key (X-API-Key or Authorization: Bearer), also when it is not required for other routes. The fixed OTA password (X-OTA-Password) of older firmware is gone.",
         "requestBody": {
           "required": true,
           "content": {
@@ -3798,6 +3787,88 @@
           },
           "400": {
             "description": "Invalid parameter"
+          }
+        }
+      }
+    },
+    "/api/coredump": {
+      "get": {
+        "tags": [
+          "Diagnostics"
+        ],
+        "summary": "Core dump of the last crash",
+        "description": "After a crash (panic, task watchdog) the ESP-IDF stores a core dump (64 KB partition). The summary is also logged at the next start. With download=true the raw dump: decode it with `esp-coredump info_corefile -t raw -c coredump.bin firmware.elf`, using firmware.elf of the same build (CI artifact openpelletbridge-elf-<version>). The backtrace alone: `xtensa-esp32-elf-addr2line -pfiaC -e firmware.elf <addresses>`.",
+        "parameters": [
+          {
+            "name": "download",
+            "in": "query",
+            "required": false,
+            "description": "true: the raw dump (application/octet-stream)",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Summary, or the raw dump with download=true",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "present": {
+                      "type": "boolean"
+                    },
+                    "size": {
+                      "type": "integer"
+                    },
+                    "task": {
+                      "type": "string",
+                      "description": "Task that crashed"
+                    },
+                    "pc": {
+                      "type": "string"
+                    },
+                    "cause": {
+                      "type": "integer",
+                      "description": "Xtensa exception cause"
+                    },
+                    "backtrace": {
+                      "type": "string",
+                      "description": "Program counters, space separated"
+                    },
+                    "thisBuild": {
+                      "type": "boolean",
+                      "description": "The dump is from the running firmware build"
+                    },
+                    "elfSha256": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No core dump stored (download)"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Diagnostics"
+        ],
+        "summary": "Erase the core dump",
+        "responses": {
+          "200": {
+            "description": "Erased"
           }
         }
       }
@@ -5016,6 +5087,19 @@
           "dirty": {
             "type": "boolean",
             "description": "Built with uncommitted changes"
+          },
+          "lastAttempt": {
+            "type": "string",
+            "nullable": true,
+            "description": "Last step of a GitHub install that did not finish (controller restarted or powered off during it) or failed (\"failed: ...\"), with free heap, largest block, WiFi signal and uptime at that moment. Kept in NVS, so it survives a power cut; removed when an install succeeds."
+          },
+          "freeHeap": {
+            "type": "integer",
+            "description": "Free heap now (bytes). HTTPS needs about 45 KB"
+          },
+          "largestBlock": {
+            "type": "integer",
+            "description": "Largest free heap block now (bytes). HTTPS needs about 20 KB"
           }
         }
       },

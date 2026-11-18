@@ -4,16 +4,18 @@ BLE OTA upload for OpenPelletBridge.
 
 Usage:
     pip install bleak
+    export OPB_API_KEY=<API key of the controller, GET /api/auth>
     python ble_ota.py .pio/build/esp32doit-devkit-v1-ble-ota/firmware.bin
 
 Protocol:
-    CTRL write 0x01 + uint32LE(size)  → NOTIFY 0x01 ready | 0xFF error
+    CTRL write 0x01 + uint32LE(size) + API key → NOTIFY 0x01 ready | 0xFF error (also a wrong key)
     DATA write <chunk>                → NOTIFY 0x50 <pct%> every 4 KB
     CTRL write 0x02                   → NOTIFY 0x02 success (device reboots) | 0xFF error
     CTRL write 0x03                   → abort
 """
 
 import asyncio
+import os
 import struct
 import sys
 from bleak import BleakClient, BleakScanner
@@ -26,6 +28,10 @@ CHUNK_SIZE   = 512
 
 
 async def ota_upload(firmware_path: str) -> None:
+    key = os.environ.get("OPB_API_KEY", "").strip()
+    if not key:
+        print("ERROR: set OPB_API_KEY to the API key of the controller (GET /api/auth)")
+        sys.exit(1)
     with open(firmware_path, "rb") as f:
         firmware = f.read()
     total = len(firmware)
@@ -68,7 +74,7 @@ async def ota_upload(firmware_path: str) -> None:
         await client.start_notify(CTRL_UUID, on_ctrl)
 
         # START
-        start_cmd = bytes([0x01]) + struct.pack("<I", total)
+        start_cmd = bytes([0x01]) + struct.pack("<I", total) + key.encode()
         await client.write_gatt_char(CTRL_UUID, start_cmd, response=True)
         try:
             await asyncio.wait_for(ready.wait(), timeout=8.0)

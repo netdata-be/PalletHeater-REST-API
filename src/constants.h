@@ -26,8 +26,9 @@
 // Task watchdog for the loop task (and IDLE0), in seconds. Not 5: one
 // WiFiClient::write() to a client that stops reading waits up to 10 x 1 s
 // (WIFI_CLIENT_MAX_WRITE_RETRY) without returning, which reset the controller
-// during /api/dump. Long handlers still feed it themselves.
-#define WDT_TIMEOUT 15
+// during /api/dump. Large answers now check the client first (httpSendLarge,
+// httpSendChunk), long handlers feed it themselves.
+#define WDT_TIMEOUT 10
 #endif
 
 const char* ntpServer = "nl.pool.ntp.org";
@@ -119,6 +120,44 @@ static bool httpClientWritable(uint32_t maxMs = 3000)
         if (r > 0 && FD_ISSET(fd, &set)) return true;
         esp_task_wdt_reset();
         if (millis() - t0 >= maxMs) return false;
+    }
+}
+
+// The client of the current request stopped taking data (reset at the start of every
+// request, auth.h): the rest of the answer is dropped instead of blocking the loop task.
+static bool httpStalled = false;
+static void httpStall()
+{
+    httpStalled = true;
+    LOGW("http", "%s: the client took no data for 3 s - answer stopped", wm.server->uri().c_str());
+    wm.server->client().stop();
+}
+// Part of a chunked answer (after setContentLength(CONTENT_LENGTH_UNKNOWN)); clears out
+static void httpSendChunk(String& out)
+{
+    if (!httpStalled && !httpClientWritable(3000)) httpStall();
+    if (!httpStalled && out.length()) wm.server->sendContent(out);
+    out = "";
+}
+static void httpEndChunks() { if (!httpStalled) wm.server->sendContent(""); }
+// A large body from flash (web app, spec, icons) in pieces, each after checking the
+// client takes data. Headers added before with sendHeader() are sent along.
+static void httpSendLarge(int code, const char* type, const uint8_t* data, size_t len);
+static void httpSendText(int code, const char* type, const String& s) { httpSendLarge(code, type, (const uint8_t*)s.c_str(), s.length()); }
+static void httpSendLarge(int code, const char* type, const uint8_t* data, size_t len)
+{
+    wm.server->setContentLength(len);
+    wm.server->send(code, type, "");
+    WiFiClient c = wm.server->client();
+    size_t done = 0;
+    while (done < len && !httpStalled) {
+        if (!httpClientWritable(3000)) { httpStall(); break; }
+        size_t n = len - done;
+        if (n > 1436) n = 1436;
+        size_t w = c.write(data + done, n);
+        if (!w) { c.stop(); break; }
+        done += w;
+        esp_task_wdt_reset();
     }
 }
 WiFiManagerParameter custom_hydro_mode("hydro", "hydro_mode", "0", 2);
