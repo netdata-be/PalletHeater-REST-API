@@ -413,6 +413,8 @@ static void test_pellet_tracker()
     t = pelletRun(p, t, 60, 0, 6.2f);
     TEST_ASSERT_EQUAL(0, p.low);
     TEST_ASSERT_EQUAL_FLOAT(15, p.cycleKg);
+    TEST_ASSERT_EQUAL(t - 20, p.lastRefillT);                       // clear from t-50, confirmed 30 s later
+    TEST_ASSERT_EQUAL_FLOAT(15, p.lastRefillKg);
     // burn 10 h at 6.2, then the next trip: 15 kg = units of the cycle
     double before = p.units;
     t = pelletRun(p, t, 36000, 0, 6.2f);
@@ -425,7 +427,7 @@ static void test_pellet_tracker()
     TEST_ASSERT_TRUE(p.cycles[0].units > (float)(before - p.cycleStart));
     TEST_ASSERT_EQUAL_FLOAT(0, (float)p.remainingKg());           // low: at the sensor level
     // refill with a hand-entered amount while low: 10 kg instead of the default
-    p.addKg(10);
+    p.addKg(10, t);
     t = pelletRun(p, t, 60, 0, 6.2f);
     TEST_ASSERT_EQUAL_FLOAT(10, p.cycleKg);
     TEST_ASSERT_FLOAT_WITHIN(0.2f, 10, (float)p.remainingKg());
@@ -436,7 +438,9 @@ static void test_pellet_tracker()
     TEST_ASSERT_FLOAT_WITHIN(0.1f, (float)(p.remainingKg() / rate), (float)p.hoursAt(6.2f));
     TEST_ASSERT_TRUE(p.hoursAt(0) < 0);                             // not burning
     // topping up early (by hand, not low) adds to the cycle
-    p.addKg(5);
+    p.addKg(5, t);
+    TEST_ASSERT_EQUAL(t, p.lastRefillT);
+    TEST_ASSERT_EQUAL_FLOAT(5, p.lastRefillKg);
     TEST_ASSERT_FLOAT_WITHIN(0.2f, 10, (float)p.remainingKg());
     // gaps without readings count as at most 30 s
     double u = p.units;

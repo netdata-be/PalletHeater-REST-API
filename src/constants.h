@@ -269,6 +269,10 @@ int cachedFumeFanRPM = 0;
 int cachedRemoteControlLastSeen = -1;
 int cachedWirelessSensor = -1;  // INSTELL WIRELESS: -1 unknown, 0 off, 1 on
 int cachedCurrentError = 0;     // RAM 0x33 as read, 0 = no active error
+// RAM 0x30: while RAM 0x33 shows an error, seconds until the stove acts on it (alarm /
+// switch-off). Verified 18/11/2026 with E1 (hopper lid open, stove working): 55 -> 19
+// at 1 per second, back to 55 when the lid was closed. Only read while 0x33 != 0.
+int cachedErrorCountdown = -1;
 // RAM 0x33 also shows short pre-warnings that are not real errors: e.g. E12 (fume
 // fan) for 1-5 s when the stove switches to and from brazier cleaning, while the
 // stove keeps running and nothing is stored in the error memory. An error only

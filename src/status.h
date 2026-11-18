@@ -64,6 +64,15 @@ void getStatus()
         ce["desc"]   = getErrorDesc(confirmedCurrentError);
         ce["source"] = "stove";
     }
+    // Error the stove reports right now (RAM 0x33, also before it counts as currentError)
+    // with the seconds until the stove acts on it (RAM 0x30), e.g. E1 hopper lid open
+    if (stoveState != UNKNOWN && cachedCurrentError > 0) {
+        JsonObject pe = json.createNestedObject("pendingError");
+        pe["id"]    = cachedCurrentError;
+        pe["error"] = getErrorCode(cachedCurrentError);
+        pe["desc"]  = getErrorDesc(cachedCurrentError);
+        if (cachedErrorCountdown >= 0) pe["secondsLeft"] = cachedErrorCountdown; else pe["secondsLeft"] = nullptr;
+    } else json["pendingError"] = nullptr;
 
     JsonObject obj_energysaving = json.createNestedObject("energySaving");
     KNOWN(slowOk, obj_energysaving["start"], energySavingStart);

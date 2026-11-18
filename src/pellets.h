@@ -109,6 +109,9 @@ void pelletsJson(JsonObject o, bool detail)
     } else { o["hoursLeftAverage"] = nullptr; o["alarmExpectedAt"] = nullptr; }
     if (k > 0) o["kgPerHour"] = cachedAugerSpeed > 0 ? serialized(String(k * cachedAugerSpeed * 3600.0, 2)) : serialized(String("0")); else o["kgPerHour"] = nullptr;
     o["refillKg"] = pellets.refillKg;
+    // last refill: detected when the low pellet alarm cleared, or entered by hand
+    if (pellets.lastRefillT) { o["lastRefillAt"] = pellets.lastRefillT; o["lastRefillKg"] = pellets.lastRefillKg; }
+    else { o["lastRefillAt"] = nullptr; o["lastRefillKg"] = nullptr; }
     if (!detail) return;
     o["kgSinceAlarm"] = pellets.cycleStart >= 0 ? serialized(String(pellets.cycleKg, 1)) : serialized(String("null"));
     o["gramsPerUnit"] = k > 0 ? serialized(String(k * 1000.0, 4)) : serialized(String("null"));
@@ -146,7 +149,7 @@ void handleRoutePellets()
             float v = wm.server->arg("add").toFloat();
             if (v <= 0 || v > 100) err = "add must be 0 - 100 kg";
             else {
-                pellets.addKg(v); pelletsDirty = true;
+                pellets.addKg(v, (uint32_t)time(nullptr)); pelletsDirty = true;
                 LOGI("stove", "pellets: %.1f kg added by hand (%s) by %s", v,
                      pellets.low ? "used for the refill when the sensor clears" : "topped up", wm.server->client().remoteIP().toString().c_str());
             }

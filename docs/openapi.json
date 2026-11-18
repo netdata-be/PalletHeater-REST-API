@@ -4624,6 +4624,36 @@
               "refillKg": {
                 "type": "number",
                 "description": "Amount of an automatically detected refill"
+              },
+              "lastRefillAt": {
+                "type": "integer",
+                "nullable": true,
+                "description": "Time of the last refill (Unix time): detected when the low pellet alarm cleared, or entered with add"
+              },
+              "lastRefillKg": {
+                "type": "number",
+                "nullable": true,
+                "description": "Amount of the last refill"
+              }
+            }
+          },
+          "pendingError": {
+            "type": "object",
+            "nullable": true,
+            "description": "Error the stove reports right now (RAM 0x33), also before it counts as currentError, with the seconds until the stove acts on it (RAM 0x30, 55 s for E1 hopper lid open). null without an error.",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "error": {
+                "type": "string"
+              },
+              "desc": {
+                "type": "string"
+              },
+              "secondsLeft": {
+                "type": "integer",
+                "nullable": true
               }
             }
           }
@@ -5090,6 +5120,16 @@
           "result": {
             "type": "string",
             "description": "Only on POST"
+          },
+          "lastRefillAt": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Time of the last refill (Unix time): detected when the low pellet alarm cleared, or entered with add"
+          },
+          "lastRefillKg": {
+            "type": "number",
+            "nullable": true,
+            "description": "Amount of the last refill"
           }
         }
       }

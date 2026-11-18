@@ -25,7 +25,7 @@ RAM (0x00)
 | 0x24       | 36         |           |        | Set to 3 – 7 on a key press and counts down to 0 within ~1 s after the last key event; 0x08 / 0x16 are cleared when it reaches 0. Looks like the key-release timeout of the radio link | 0 | 7 - 0 |
 | 0x08       | 8          | bits      | key    | Key currently pressed on the remote: 1 = ▼, 2 = ▲, 4 = ESC, 8 = OK (verified 17/11/2026 with /api/keywatch). ⏻ not tested (224 seen once on 16/11, meaning unknown). Stays set ~0.7 – 1.2 s, until 0x24 reaches 0 | 0 | |
 | 0x2E       | 46         |           | Sec    | Countdown since last contact Remote Control |                          |   0 - 240  |
-| 0x30       | 48         | x         | Sec    | Time till error code? becomse active        | 7                        |            |
+| 0x30       | 48         | x         | Sec    | While RAM 0x33 shows an error: seconds until the stove acts on it (alarm / switch-off). 55 for E1 (verified 18/11/2026) | 55 | 55 - 0 |
 | 0x31       | 49         | x         | sec    | Seconds countdown                           |                          |   0 -  59  |
 | 0x32       | 50         | x         | Min    | Countdown when to start brazer cleaning     | 45                       |  45 -   0  | 
 | 0x33       | 51         | bitmask   | error  | Errorcode in a bitmask? 32 = E1 ?           | 32                       |            |
@@ -405,6 +405,11 @@ Update 17/11/2026 16:38 – 16:40 (stove restarting by energy saving, state 2 pe
 # PELLET CONTACT (installer menu 41, parameter 197)
 
 Verified 17/11/2026 on the remote, stove in standby (state 7). Changing *CONTACT PELLET* from N.O. to N.C.: RAM 0x1A = 41 (menu), 0x18 = 197 while editing and 0 after confirming, 0x19 followed the value shown (0 = N.O., 1 = N.C.). The setting is stored in **EEPROM 0xC4** (0 = N.O., 1 = N.C.), in line with id − 1. A full EEPROM dump before, after and after setting it back showed no other change apart from the clock (0xF9 / 0xFA, hour and minute in BCD). The stove raised no error (no E19) with N.C.; it was set back to N.O. the same evening.
+
+# ERROR COUNTDOWN (RAM 0x30)
+
+Verified 18/11/2026 ~08:20, stove working (state 4), key watch on RAM 0x21, 0x33, 0x30, 0x2F, 0x31, 0x07, 0x2C, 0x2D. Opening the hopper lid: RAM 0x33 0 → 32 (E1), the remote beeps; one second later RAM 0x30 counts down from 55, one step per second (55 → 19 in 36 s). Lid closed after ~36 s: 0x33 → 0 and 0x30 back to 55 at once; the stove kept working and stored no error. So the stove gives about 55 s before it acts on E1 (switch-off / alarm, assumed at 0x30 = 0, not observed). Whether other errors use the same 55 s is not verified. RAM 0x31 counts 59 → 0 every minute (seconds) and 0x07 drops by 1 each time 0x31 wraps; 0x2F, 0x2C, 0x2D did not change.
+
 # DISPLAY – backlight (menu 12, parameter 79)
 
 Verified 16/11/2026: the screen "SET ACHTERGRONDVERLICHTING ON 10 s" is menu 12, parameter 79 (EEPROM 0x4E = 1). RAM 0x19 stays 1 while the value on the remote is changed (10 s → 9 s), so the backlight time is kept in the remote itself and is not visible over the stove bus. The screen "SET POWER ON 31 s" in the same menu also shows parameter 79 with 0x19 = 1: all DISPLAY screens look the same on the bus, so it cannot be told which one is open.

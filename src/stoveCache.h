@@ -338,6 +338,21 @@ void getFastStates()
     int rpm = getFumeFanRPM();
     if (rpm >= 0) cachedFumeFanRPM = rpm;
     readKeep(cachedCurrentError, ram, currentErrorAddr);
+    {
+        // countdown to the alarm while the stove reports an error (RAM 0x30)
+        static int prevErr = 0;
+        static uint32_t errSince = 0;
+        if (cachedCurrentError > 0) readKeep(cachedErrorCountdown, ram, 0x30);
+        else cachedErrorCountdown = -1;
+        if (cachedCurrentError > 0 && prevErr == 0) {
+            errSince = millis();
+            LOGW("stove", "stove reports %s (%s): it acts on it in %d s unless it clears (RAM 0x30)",
+                 pc::errorCode(cachedCurrentError), pc::errorDesc(cachedCurrentError), cachedErrorCountdown);
+        } else if (cachedCurrentError == 0 && prevErr > 0) {
+            LOGI("stove", "%s cleared after %lu s", pc::errorCode(prevErr), (unsigned long)((millis() - errSince) / 1000));
+        }
+        prevErr = cachedCurrentError;
+    }
     readKeep(cachedFlameActual, ram, flamePowerActualAddr);
     readKeep(cachedRoomFanControl, ram, roomFanControlAddr);
     readKeep(cachedRoomFanRunning, ram, roomFanRunningAddr);

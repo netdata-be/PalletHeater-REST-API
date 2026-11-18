@@ -534,6 +534,8 @@ struct PelletTracker {
     double   lowUnits = 0;        // units when the sensor went low
     uint32_t okSince = 0;         // sensor normal again since (while low)
     uint32_t lastT = 0;           // time of the last update
+    uint32_t lastRefillT = 0;     // time of the last refill (detected or entered), 0 = none
+    float    lastRefillKg = 0;    // its amount
     uint8_t  nCycles = 0;
     PelletCycle cycles[MAX_CYCLES] = {};
 
@@ -561,21 +563,24 @@ struct PelletTracker {
                 if (!okSince) okSince = t;
                 if (t - okSince >= REFILL_CONFIRM_S) {
                     low = 0; okSince = 0;
-                    cycleKg += pendingKg > 0 ? pendingKg : refillKg;
+                    float kg = pendingKg > 0 ? pendingKg : refillKg;
+                    cycleKg += kg;
                     pendingKg = 0;
+                    lastRefillT = t; lastRefillKg = kg;
                     ev = REFILL;
                 }
             }
         }
         return ev;
     }
-    // Pellets added by hand. While low: replaces the default amount of the refill
-    // that is detected when the sensor clears.
-    void addKg(float kg)
+    // Pellets added by hand at time t. While low: replaces the default amount of the
+    // refill that is detected when the sensor clears (its time is that of the detection).
+    void addKg(float kg, uint32_t t)
     {
         if (kg <= 0) return;
-        if (low) pendingKg = kg;
-        else cycleKg += kg;
+        if (low) { pendingKg = kg; return; }
+        cycleKg += kg;
+        lastRefillT = t; lastRefillKg = kg;
     }
     void resetCalibration() { nCycles = 0; }
 
