@@ -386,6 +386,67 @@ static pc::HourInput hourIn(uint32_t t, int room10, int state, int flameAct, int
     s.state = state; s.auger10 = auger10; s.fumeRpm = 1500;
     return s;
 }
+// Feed the tracker one reading per 10 s for `secs` seconds
+static uint32_t pelletRun(pc::PelletTracker& p, uint32_t t, uint32_t secs, int sensor, float auger)
+{
+    for (uint32_t i = 0; i < secs; i += 10) { t += 10; p.update(t, sensor, auger); }
+    return t;
+}
+static void test_pellet_tracker()
+{
+    pc::PelletTracker p;
+    uint32_t t = 1800000000;
+    p.update(t, 0, 6.2f);
+    TEST_ASSERT_EQUAL_FLOAT(-1, (float)p.remainingKg());          // no trip seen yet
+    // a short flicker of the sensor is no trip
+    t = pelletRun(p, t, 30, 5, 6.2f);
+    t = pelletRun(p, t, 30, 0, 6.2f);
+    TEST_ASSERT_EQUAL(0, p.low);
+    // first trip: starts the first cycle, nothing to calibrate yet
+    uint32_t tripAt = t;
+    t = pelletRun(p, t, 120, 5, 6.2f);
+    TEST_ASSERT_EQUAL(1, p.low);
+    TEST_ASSERT_EQUAL(0, p.nCycles);
+    TEST_ASSERT_TRUE(p.cycleStart > 0);
+    (void)tripAt;
+    // refill: sensor back to normal for 30 s -> 15 kg
+    t = pelletRun(p, t, 60, 0, 6.2f);
+    TEST_ASSERT_EQUAL(0, p.low);
+    TEST_ASSERT_EQUAL_FLOAT(15, p.cycleKg);
+    // burn 10 h at 6.2, then the next trip: 15 kg = units of the cycle
+    double before = p.units;
+    t = pelletRun(p, t, 36000, 0, 6.2f);
+    t = pelletRun(p, t, 70, 5, 6.2f);
+    TEST_ASSERT_EQUAL(1, p.nCycles);
+    TEST_ASSERT_EQUAL(1, p.low);
+    double k = p.kgPerUnit();
+    TEST_ASSERT_TRUE(k > 0);
+    // the cycle covers the 10 h plus the reserve burned before the refill
+    TEST_ASSERT_TRUE(p.cycles[0].units > (float)(before - p.cycleStart));
+    TEST_ASSERT_EQUAL_FLOAT(0, (float)p.remainingKg());           // low: at the sensor level
+    // refill with a hand-entered amount while low: 10 kg instead of the default
+    p.addKg(10);
+    t = pelletRun(p, t, 60, 0, 6.2f);
+    TEST_ASSERT_EQUAL_FLOAT(10, p.cycleKg);
+    TEST_ASSERT_FLOAT_WITHIN(0.2f, 10, (float)p.remainingKg());
+    // half of it burned: about 5 kg left; hours at 6.2 match the burn rate
+    double rate = k * 6.2 * 3600.0;                                 // kg per hour
+    t = pelletRun(p, t, (uint32_t)(5.0 / rate * 3600.0), 0, 6.2f);
+    TEST_ASSERT_FLOAT_WITHIN(0.2f, 5, (float)p.remainingKg());
+    TEST_ASSERT_FLOAT_WITHIN(0.1f, (float)(p.remainingKg() / rate), (float)p.hoursAt(6.2f));
+    TEST_ASSERT_TRUE(p.hoursAt(0) < 0);                             // not burning
+    // topping up early (by hand, not low) adds to the cycle
+    p.addKg(5);
+    TEST_ASSERT_FLOAT_WITHIN(0.2f, 10, (float)p.remainingKg());
+    // gaps without readings count as at most 30 s
+    double u = p.units;
+    p.update(t + 3600, 0, 6.2f);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 6.2f * 30, (float)(p.units - u));
+    p.resetCalibration();
+    TEST_ASSERT_EQUAL(0, p.nCycles);
+    TEST_ASSERT_EQUAL_FLOAT(-1, (float)p.remainingKg());
+}
+
 static void test_hour_acc()
 {
     pc::HourAcc a;
@@ -451,5 +512,6 @@ int main(int, char**)
     RUN_TEST(test_text_ring);
     RUN_TEST(test_ring);
     RUN_TEST(test_hour_acc);
+    RUN_TEST(test_pellet_tracker);
     return UNITY_END();
 }

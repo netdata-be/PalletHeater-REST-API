@@ -56,6 +56,8 @@ void setupTelnet()
 
 #include "history.h"
 
+#include "pellets.h"   // pellet consumption, time left until the low pellet alarm
+
 #include "events.h"
 
 #include "routesDevice.h"
@@ -146,6 +148,7 @@ static void registerRoutes()
     wm.server->on("/app", HTTP_GET, crumbed(handleRouteWebApp));   // also served on / (kept for old links)
     wm.server->on("/api/history", authed(handleRouteHistory));
     wm.server->on("/api/events", authed(handleRouteEvents));
+    wm.server->on("/api/pellets", authed(handleRoutePellets));
     wm.server->on("/api/auth", crumbed(handleRouteAuth));   // public: does its own check
     wm.server->on("/api/update", HTTP_POST, crumbed(handleUpdateDone), crumbed(handleUpdateUpload));   // does its own check
     wm.server->on("/api/telnet", authed(handleRouteTelnet));
@@ -257,6 +260,7 @@ void setup()
     eventsLoad();    // restore the stove state change log
     historyLoad();   // restore the persisted history (uses NTP time to drop samples older than 24 h)
     weekLoad();      // hourly averages of the last 7 days, completed from the 24 h history
+    pelletsLoad();   // pellet consumption calibration (NVS)
 
     if (isConnected() && telnetEnabled)
     {
@@ -318,6 +322,7 @@ void loop()
 
     crumb("history"); historyTick();
     crumb("events");  eventsTick();
+    crumb("pellets"); pelletsTick();
     crumb("MQTT");    mqttLoop();
     crumb("network"); netLoop();
     crumb("firmware update check"); fwLoop();

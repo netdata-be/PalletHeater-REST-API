@@ -3730,6 +3730,77 @@
           "Diagnostics"
         ]
       }
+    },
+    "/api/pellets": {
+      "get": {
+        "tags": [
+          "Status"
+        ],
+        "summary": "Pellets left until the low pellet alarm",
+        "description": "Estimate of the pellets and burning hours left until the low pellet alarm, and the calibration behind it. The first estimate comes after one refill at the alarm and the next alarm.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Pellets"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Status"
+        ],
+        "summary": "Enter a refill or change the pellet settings",
+        "parameters": [
+          {
+            "name": "add",
+            "in": "query",
+            "required": false,
+            "description": "Pellets added by hand (kg, 0 - 100): topped up without an alarm, or, while the alarm is on, the amount of the coming refill instead of refillKg",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "refillKg",
+            "in": "query",
+            "required": false,
+            "description": "Amount of an automatically detected refill (kg, 1 - 100, default 15)",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "resetCalibration",
+            "in": "query",
+            "required": false,
+            "description": "true: forget the measured cycles",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Pellets"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameter"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4508,6 +4579,53 @@
                 "description": "Starts after a crash, watchdog or brown-out"
               }
             }
+          },
+          "pellets": {
+            "type": "object",
+            "description": "Summary of /api/pellets",
+            "properties": {
+              "calibrated": {
+                "type": "boolean",
+                "description": "At least one full cycle (refill at the alarm, next alarm) was measured"
+              },
+              "cycles": {
+                "type": "integer",
+                "description": "Measured cycles used for the calibration (last 10)"
+              },
+              "low": {
+                "type": "boolean",
+                "description": "Between a low pellet alarm and the refill"
+              },
+              "remainingKg": {
+                "type": "number",
+                "description": "Pellets left above the level of the low pellet alarm (kg); null = not known yet",
+                "nullable": true
+              },
+              "hoursLeft": {
+                "type": "number",
+                "description": "Burning hours until the alarm at the current auger value; null while the auger does not feed or not known",
+                "nullable": true
+              },
+              "hoursLeftAverage": {
+                "type": "number",
+                "description": "Hours until the alarm at the average use of the last 7 days",
+                "nullable": true
+              },
+              "alarmExpectedAt": {
+                "type": "integer",
+                "description": "Expected time of the low pellet alarm at the average use (Unix time)",
+                "nullable": true
+              },
+              "kgPerHour": {
+                "type": "number",
+                "description": "Consumption at the current auger value",
+                "nullable": true
+              },
+              "refillKg": {
+                "type": "number",
+                "description": "Amount of an automatically detected refill"
+              }
+            }
           }
         }
       },
@@ -4868,6 +4986,110 @@
           "dirty": {
             "type": "boolean",
             "description": "Built with uncommitted changes"
+          }
+        }
+      },
+      "Pellets": {
+        "type": "object",
+        "description": "Pellet consumption, measured between low pellet alarms. The controller counts auger units (auger value RAM 0x0D x seconds). The level sensor (RAM 0xA4) trips at the same level each time, so between two trips exactly the pellets added in between were burned: kg per unit = kg added / units. A refill is detected when the sensor clears again after a trip (refillKg); topping up without an alarm is entered with add.",
+        "properties": {
+          "calibrated": {
+            "type": "boolean",
+            "description": "At least one full cycle (refill at the alarm, next alarm) was measured"
+          },
+          "cycles": {
+            "type": "integer",
+            "description": "Measured cycles used for the calibration (last 10)"
+          },
+          "low": {
+            "type": "boolean",
+            "description": "Between a low pellet alarm and the refill"
+          },
+          "remainingKg": {
+            "type": "number",
+            "description": "Pellets left above the level of the low pellet alarm (kg); null = not known yet",
+            "nullable": true
+          },
+          "hoursLeft": {
+            "type": "number",
+            "description": "Burning hours until the alarm at the current auger value; null while the auger does not feed or not known",
+            "nullable": true
+          },
+          "hoursLeftAverage": {
+            "type": "number",
+            "description": "Hours until the alarm at the average use of the last 7 days",
+            "nullable": true
+          },
+          "alarmExpectedAt": {
+            "type": "integer",
+            "description": "Expected time of the low pellet alarm at the average use (Unix time)",
+            "nullable": true
+          },
+          "kgPerHour": {
+            "type": "number",
+            "description": "Consumption at the current auger value",
+            "nullable": true
+          },
+          "refillKg": {
+            "type": "number",
+            "description": "Amount of an automatically detected refill"
+          },
+          "kgSinceAlarm": {
+            "type": "number",
+            "description": "kg added since the last alarm",
+            "nullable": true
+          },
+          "gramsPerUnit": {
+            "type": "number",
+            "nullable": true
+          },
+          "spread": {
+            "type": "number",
+            "description": "Relative standard deviation of the cycles (0.05 = 5 %), from 2 cycles",
+            "nullable": true
+          },
+          "averageAuger": {
+            "type": "number",
+            "description": "Average auger value over the hourly history of the last 7 days",
+            "nullable": true
+          },
+          "averageHours": {
+            "type": "integer",
+            "description": "Hours of history behind averageAuger"
+          },
+          "unitsSinceAlarm": {
+            "type": "number",
+            "nullable": true
+          },
+          "pendingKg": {
+            "type": "number",
+            "description": "Amount entered while low, used for the refill when the sensor clears",
+            "nullable": true
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "t": {
+                  "type": "integer",
+                  "description": "End of the cycle (Unix time)"
+                },
+                "kg": {
+                  "type": "number"
+                },
+                "units": {
+                  "type": "integer"
+                },
+                "gramsPerUnit": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "result": {
+            "type": "string",
+            "description": "Only on POST"
           }
         }
       }

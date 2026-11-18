@@ -628,6 +628,28 @@ curl "http://openpelletbridge.local/api/events?hours=24"
 
 Serial link events: `{"t": …, "type": "link", "up": false}` when the stove stopped answering on the serial bus, `"up": true` when it answered again (the chart draws them red / green). Brazier cleaning (state 5) is not logged as a state change: it is a short periodic step while working.
 
+### `/api/pellets`
+
+Pellets and burning hours left until the low pellet alarm. The controller counts the auger feed: the auger value (RAM 0x0D, fixed per flame power: 3.0 / 4.6 / 6.2 / 7.8) times the time, in "auger units". The level sensor (RAM 0xA4) trips at the same level in the hopper each time, so between two alarms exactly the pellets added in between were burned: kg per unit = kg added / units. The last 10 cycles are kept in NVS and averaged.
+
+- **Refill:** detected when the alarm clears again (sensor back to normal for 30 s after it was low for at least 1 min), with the standard amount `refillKg` (15 kg). E1 (hopper lid) is not used: it does not always occur.
+- **Topped up without an alarm, or another amount:** `POST /api/pellets?add=<kg>`, or *Refilled…* in the web app. While the alarm is on, `add` sets the amount of the coming refill instead of the standard one.
+- **First estimate:** after one refill at the alarm and the next alarm. Each cycle after that makes it more accurate (`spread`).
+
+| Method | Parameters |
+|---|---|
+| `GET` | – |
+| `POST` | `add` (kg, 0 – 100), `refillKg` (kg, 1 – 100), `resetCalibration=true` |
+
+```json
+{"calibrated": true, "cycles": 3, "low": false, "remainingKg": 6.2, "hoursLeft": 4.15, "hoursLeftAverage": 9.6,
+ "alarmExpectedAt": 1795037700, "kgPerHour": 1.49, "refillKg": 15, "kgSinceAlarm": 15.0, "gramsPerUnit": 0.0668,
+ "spread": 0.041, "averageAuger": 2.91, "averageHours": 168, "unitsSinceAlarm": 131740, "pendingKg": null,
+ "history": [{"t": 1794990000, "kg": 15, "units": 224300, "gramsPerUnit": 0.0669}]}
+```
+
+`hoursLeft` is the time at the current auger value (`null` while the auger does not feed); `hoursLeftAverage` and `alarmExpectedAt` use the average auger value of the hourly history of the last 7 days (from 6 hours of history). After the alarm the stove's own countdown takes over (`pelletReserve` in `/api/state`). `/api/state` has the same estimate under `pellets` (without the calibration detail); MQTT publishes `pellets_kg` and `pellets_hours` (at the average use).
+
 ### `/api/bluetooth`
 
 Bluetooth (BLE) can be switched off to give WiFi the radio to itself. The setting is stored in NVS and applied at the next boot: with BLE off, `setupBLE()` and `bleLoop()` are skipped, the BT controller memory is released and WiFi modem sleep is disabled. The iOS app then only works via WiFi.
@@ -965,7 +987,7 @@ pio test -e native
 
 ### Source layout
 
-`src/main.cpp` only holds `setup()`, `loop()` and the route table. The rest is split into headers that main.cpp includes in a fixed order (one translation unit, because [src/constants.h](src/constants.h) defines the globals): `stoveCache.h` (reading the stove, sensor task), `stoveControl.h` (writing settings), `registers.h` (register names, `/api/dump`, `/api/remote`), `stoveClock.h`, `routesBasic.h`, `routesTimers.h`, `routesControl.h`, `status.h` (`/api/state`), `history.h`, `events.h`, `routesDevice.h`, `mqtt.h`, `wifiInfo.h`, `fwUpdate.h` (GitHub update), `liveDebug.h` (`/api/log`, `/api/busmon`), plus `liveLog.h` (included first: copies `Serial` output into the live log) and the older `auth.h`, `bleUart.h`, `httpUpdate.h`, `keyWatch.h`, `metrics.h`, `telnetMenu.h`.
+`src/main.cpp` only holds `setup()`, `loop()` and the route table. The rest is split into headers that main.cpp includes in a fixed order (one translation unit, because [src/constants.h](src/constants.h) defines the globals): `stoveCache.h` (reading the stove, sensor task), `stoveControl.h` (writing settings), `registers.h` (register names, `/api/dump`, `/api/remote`), `stoveClock.h`, `routesBasic.h`, `routesTimers.h`, `routesControl.h`, `status.h` (`/api/state`), `history.h`, `pellets.h` (pellet consumption, `/api/pellets`), `events.h`, `routesDevice.h`, `mqtt.h`, `wifiInfo.h`, `fwUpdate.h` (GitHub update), `liveDebug.h` (`/api/log`, `/api/busmon`), plus `liveLog.h` (included first: copies `Serial` output into the live log) and the older `auth.h`, `bleUart.h`, `httpUpdate.h`, `keyWatch.h`, `metrics.h`, `telnetMenu.h`.
 
 ### Updating the API documentation
 

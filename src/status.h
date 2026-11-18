@@ -4,13 +4,15 @@
 // Split out of main.cpp; included there in the original order (single
 // translation unit: the globals live in constants.h).
 
+void pelletsJson(JsonObject o, bool detail);   // pellets.h
+
 void getStatus()
 {
     if (wm.server->method() == HTTP_GET)
     {
     //telnet.println("Get status called");
 
-    DynamicJsonDocument json(3072);   // grew with roomFan, pelletReserve, controller
+    DynamicJsonDocument json(3584);   // grew with roomFan, pelletReserve, controller, pellets
     json.clear();
     // Values never read from the stove since the start are null (not the firmware's
     // initial 0). Once read, the last known value stays; dataAge says how old it is.
@@ -104,6 +106,7 @@ void getStatus()
         // phase 2: RAM 0x91 counts half minutes until the stove switches off
         if (slowOk && cachedPelletShutdown >= 0) pr["shutdownMinutes"] = (cachedPelletShutdown + 1) / 2; else pr["shutdownMinutes"] = nullptr;
     }
+    pelletsJson(json.createNestedObject("pellets"), false);   // estimate until the low pellet alarm (pellets.h)
     KNOWN(slowOk, json["stoveBeepEnabled"], cachedBeepEnabled);
     KNOWN(slowOk, json["numberOfStarts"], cachedNumberOfStarts);
     KNOWN(slowOk, json["hoursSinceLastService"], cachedHoursSinceLastService);

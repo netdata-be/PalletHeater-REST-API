@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cctype>
+#include <cmath>
 
 namespace pc {
 
@@ -497,6 +498,133 @@ struct HourAcc {
         int best = 0; for (int i = 1; i < 12; i++) if (states[i] > states[best]) best = i;
         r.state = (int8_t)(best - 1);
         return r;
+    }
+};
+
+// ── Pellet consumption ───────────────────────────────────────────────────────
+// The level sensor (RAM 0xA4 = 5) always trips at the same height in the hopper.
+// Between two trips exactly the pellets added in between were burned. The auger
+// value (RAM 0x0D, fixed per flame power: 3.0 / 4.6 / 6.2 / 7.8) times the time
+// gives "auger units"; kg per unit = kg added / units between two trips.
+//   - a trip counts once the sensor stayed low for LOW_CONFIRM_S (it flickers when
+//     the level is right at the sensor); the cycle boundary is where it first went low
+//   - a refill is detected when the sensor is back to normal for REFILL_CONFIRM_S
+//     after a confirmed trip, with the default amount (refillKg); a refill without a
+//     trip (topped up early) can only be entered by hand (addKg)
+// Plain data (no pointers): stored as a blob in NVS.
+struct PelletCycle {
+    uint32_t t;        // end of the cycle (epoch s)
+    float    kg;       // pellets added during the cycle
+    float    units;    // auger units burned during the cycle
+};
+struct PelletTracker {
+    static const uint32_t LOW_CONFIRM_S = 60;
+    static const uint32_t REFILL_CONFIRM_S = 30;
+    static const int      MAX_CYCLES = 10;
+    static const uint32_t MAX_STEP_S = 30;   // longer gaps (no readings) are counted as 30 s
+
+    uint32_t version = 1;
+    double   units = 0;           // auger units counted since the start
+    double   cycleStart = -1;     // units at the last trip, < 0 = no trip seen yet
+    float    cycleKg = 0;         // kg added since that trip
+    float    refillKg = 15;       // amount of an automatically detected refill
+    float    pendingKg = 0;       // amount entered by hand while low, used for the refill that follows
+    uint8_t  low = 0;             // confirmed low (between a trip and the refill)
+    uint32_t lowSince = 0;        // sensor low since (epoch s), 0 = not low
+    double   lowUnits = 0;        // units when the sensor went low
+    uint32_t okSince = 0;         // sensor normal again since (while low)
+    uint32_t lastT = 0;           // time of the last update
+    uint8_t  nCycles = 0;
+    PelletCycle cycles[MAX_CYCLES] = {};
+
+    enum Event { NONE = 0, TRIP = 1, REFILL = 2 };
+
+    // One reading: time (epoch s), level sensor (RAM 0xA4) and auger value (RAM 0x0D).
+    // Returns what happened.
+    int update(uint32_t t, int sensor, float auger)
+    {
+        if (lastT && t > lastT && auger > 0) {
+            uint32_t dt = t - lastT;
+            units += (double)auger * (dt > MAX_STEP_S ? MAX_STEP_S : dt);
+        }
+        lastT = t;
+        int ev = NONE;
+        if (sensor == 5) {
+            okSince = 0;
+            if (!low) {
+                if (!lowSince) { lowSince = t; lowUnits = units; }
+                if (t - lowSince >= LOW_CONFIRM_S) { trip(t); ev = TRIP; }
+            }
+        } else if (sensor == 0) {
+            lowSince = 0;
+            if (low) {
+                if (!okSince) okSince = t;
+                if (t - okSince >= REFILL_CONFIRM_S) {
+                    low = 0; okSince = 0;
+                    cycleKg += pendingKg > 0 ? pendingKg : refillKg;
+                    pendingKg = 0;
+                    ev = REFILL;
+                }
+            }
+        }
+        return ev;
+    }
+    // Pellets added by hand. While low: replaces the default amount of the refill
+    // that is detected when the sensor clears.
+    void addKg(float kg)
+    {
+        if (kg <= 0) return;
+        if (low) pendingKg = kg;
+        else cycleKg += kg;
+    }
+    void resetCalibration() { nCycles = 0; }
+
+    // kg per auger unit from the stored cycles (total kg / total units), 0 = not known
+    double kgPerUnit() const
+    {
+        double kg = 0, u = 0;
+        for (int i = 0; i < nCycles; i++) { kg += cycles[i].kg; u += cycles[i].units; }
+        return u > 0 ? kg / u : 0;
+    }
+    // Spread of the cycles (relative standard deviation of kg / unit), 0 with < 2 cycles
+    double spread() const
+    {
+        if (nCycles < 2) return 0;
+        double m = 0;
+        for (int i = 0; i < nCycles; i++) m += cycles[i].kg / cycles[i].units;
+        m /= nCycles;
+        double v = 0;
+        for (int i = 0; i < nCycles; i++) { double d = cycles[i].kg / cycles[i].units - m; v += d * d; }
+        v /= (nCycles - 1);
+        return m > 0 ? sqrt(v) / m : 0;
+    }
+    // kg left above the sensor level; < 0 = not known (no trip seen or not calibrated)
+    double remainingKg() const
+    {
+        double k = kgPerUnit();
+        if (cycleStart < 0 || k <= 0) return -1;
+        if (low) return 0;
+        double r = cycleKg - k * (units - cycleStart);
+        return r < 0 ? 0 : r;
+    }
+    // hours until the sensor trips at the given auger value, < 0 = not known / not burning
+    double hoursAt(float auger) const
+    {
+        double r = remainingKg(), k = kgPerUnit();
+        if (r < 0 || k <= 0 || auger <= 0) return -1;
+        return r / (k * auger * 3600.0);
+    }
+
+private:
+    void trip(uint32_t t)
+    {
+        low = 1;
+        if (cycleStart >= 0 && cycleKg > 0 && lowUnits > cycleStart) {
+            if (nCycles == MAX_CYCLES) { memmove(cycles, cycles + 1, sizeof(cycles[0]) * (MAX_CYCLES - 1)); nCycles--; }
+            cycles[nCycles++] = { t, cycleKg, (float)(lowUnits - cycleStart) };
+        }
+        cycleStart = lowUnits;
+        cycleKg = 0;
     }
 };
 

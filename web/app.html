@@ -782,6 +782,7 @@ const I18N = {
     tTime:"Time", stateLines:"Stove state", histNothing:"Select at least one series above.",
     histNote:"One point every 2 minutes, last 24 hours, stored on the controller (kept across restarts). Temperatures in 0.5 °C steps. State lines are drawn at the exact moment of each change.",
     evtTitle:"State changes, errors and pellet reserve", pelSensor:"Reserve sensor (0xA4)", pelCounter:"Reserve counter (0x89)",
+pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low pellet alarm, the estimate follows at the next alarm", pelAtAlarm:"at the low pellet alarm level", pelKg:"≈ {0} kg until the alarm", pelAtNow:"{0} at the current power", pelAlarmAt:"alarm expected {0}", pelRefill:"Refilled…", pelRefillAsk:"How many kg of pellets did you add? (a refill at the alarm is also detected by itself, with the standard amount)", pelBadKg:"Enter a number of kg", pelRefillDone:"{0} kg added", pelCal:"Pellet use (measured)", pelCalVal:"{0} cycle(s) · {1} kg/h now · standard refill {2} kg", pelCalNone:"no full cycle yet · standard refill {0} kg", pelStd:"Standard…", pelStdAsk:"Standard amount of a refill at the low pellet alarm (kg):", pelStdDone:"Standard refill: {0} kg", h_pelLeft:"Estimate of the pellets left until the low pellet alarm (level sensor RAM 0xA4). The controller counts the auger feed (auger value × time). Between two alarms exactly the pellets you added were burned: that calibrates kg per auger step. A refill is detected when the alarm clears again, with the standard amount (15 kg, change it under Pellet use). Topped up without an alarm, or another amount? Use Refilled… so the count stays right. The first estimate comes after one refill at the alarm and the next alarm; more refills make it more accurate. The time at the current power is only shown while the auger feeds; the expected alarm time uses your average use of the last 7 days.",
     pelReserve:"Pellet reserve", pelReserveVal:"On · sensor {0} · counter {1}", h_pelReserve:"PELLET RESERVE (installer menu, EEPROM 0xC6). How the stove decides the reserve is being investigated: when the level sensor (RAM 0xA4) sees low pellets it becomes 5 and the counter (RAM 0x89) counts down from 20 to 0, about one step per minute (seen 17/11/2026: 20 steps in 19 min); at 1 or lower the alarm is assumed. The warning shows the minutes left while it counts down. Every change of both is recorded in the state change list.", evtError:"Error", evtErrOn:"{0} occurred", evtErrOff:"Error cleared", errSeen:"occurred {0}", errSeenUnknown:"time unknown (before the log started)", evtWhen:"Time", evtFrom:"From", evtTo:"To", evtDur:"Duration", evtNone:"No state changes recorded yet.", evtNow:"now",
     syncBrowser:"Set to browser time", browserSet:"Stove clock set to {0}", esStartOff:"OFF (no restart)", esNoRestart:"No automatic restart",
     wirelessLabel:"Wireless sensor (INSTELL WIRELESS)", on:"On", srcDerived:"Room temperature comes from",
@@ -944,6 +945,7 @@ const I18N = {
     tTime:"Tijd", stateLines:"Toestand kachel", histNothing:"Kies hierboven minstens één reeks.",
     histNote:"Eén punt per 2 minuten, laatste 24 uur, opgeslagen op de controller (blijft bewaard na een herstart). Temperaturen in stappen van 0,5 °C. Lijnen voor de toestand staan op het exacte moment van elke wissel.",
     evtTitle:"Toestandswissels, fouten en pelletreserve", pelSensor:"Reservesensor (0xA4)", pelCounter:"Reserveteller (0x89)",
+pelLeft:"Pellets in de bak", pelLearning:"wordt gemeten: vul bij bij het pellet-laag-alarm, de schatting volgt bij het volgende alarm", pelAtAlarm:"op het niveau van het pellet-laag-alarm", pelKg:"≈ {0} kg tot het alarm", pelAtNow:"{0} bij het huidige vermogen", pelAlarmAt:"alarm verwacht {0}", pelRefill:"Bijgevuld…", pelRefillAsk:"Hoeveel kg pellets heb je toegevoegd? (bijvullen bij het alarm wordt ook vanzelf herkend, met de standaardhoeveelheid)", pelBadKg:"Geef een aantal kg in", pelRefillDone:"{0} kg toegevoegd", pelCal:"Pelletverbruik (gemeten)", pelCalVal:"{0} cyclus/cycli · nu {1} kg/u · standaard bijvullen {2} kg", pelCalNone:"nog geen volledige cyclus · standaard bijvullen {0} kg", pelStd:"Standaard…", pelStdAsk:"Standaardhoeveelheid bij bijvullen na het pellet-laag-alarm (kg):", pelStdDone:"Standaard bijvullen: {0} kg", h_pelLeft:"Schatting van de pellets tot het pellet-laag-alarm (niveausensor RAM 0xA4). De controller telt de toevoer van de schroef (schroefwaarde × tijd). Tussen twee alarmen is precies verbrand wat je hebt bijgevuld: zo wordt het aantal kg per schroefstap geijkt. Bijvullen wordt herkend als het alarm weer uitgaat, met de standaardhoeveelheid (15 kg, aan te passen bij Pelletverbruik). Bijgevuld zonder alarm, of een andere hoeveelheid? Gebruik Bijgevuld…, zodat de telling klopt. De eerste schatting komt na één keer bijvullen bij het alarm en het volgende alarm; elke volgende keer maakt ze nauwkeuriger. De tijd bij het huidige vermogen staat er alleen terwijl de schroef voedt; het verwachte alarm gebruikt je gemiddelde verbruik van de laatste 7 dagen.",
     pelReserve:"Pelletreserve", pelReserveVal:"Aan · sensor {0} · teller {1}", h_pelReserve:"PELLET RESERVE (installateursmenu, EEPROM 0xC6). Hoe de kachel de reserve bepaalt, wordt nog onderzocht: als de niveausensor (RAM 0xA4) weinig pellets ziet, wordt hij 5 en telt de teller (RAM 0x89) af van 20 naar 0, ongeveer één stap per minuut (gezien 17/11/2026: 20 stappen in 19 min); bij 1 of lager wordt het alarm verondersteld. De waarschuwing toont de resterende minuten tijdens het aftellen. Elke wijziging van beide wordt bijgehouden in de lijst met toestandswissels.", evtError:"Fout", evtErrOn:"{0} opgetreden", evtErrOff:"Fout opgelost", errSeen:"opgetreden op {0}", errSeenUnknown:"tijdstip onbekend (vóór de start van het logboek)", evtWhen:"Tijdstip", evtFrom:"Van", evtTo:"Naar", evtDur:"Duur", evtNone:"Nog geen toestandswissels geregistreerd.", evtNow:"nu",
     syncBrowser:"Gelijkzetten met browsertijd", browserSet:"Kachelklok gezet op {0}", esStartOff:"OFF (geen herstart)", esNoRestart:"Geen automatische herstart",
     wirelessLabel:"Wireless sensor (INSTELL WIRELESS)", on:"Aan", srcDerived:"Kamertemperatuur komt van",
@@ -1125,6 +1127,38 @@ function fillDl(el, rows) {
 function withReset(value, onclick) {
   const sp = el("span", "", String(value)), b = el("button", "mini", t("reset"));
   b.type = "button"; b.onclick = onclick; sp.appendChild(b); return sp;
+}
+// Pellets left until the low pellet alarm (/api/state pellets, firmware pellets.h)
+function pelletsLeft(p) {
+  const sp = el("span", "");
+  let txt = "–";
+  if (p && !p.calibrated) txt = t("pelLearning");
+  else if (p && p.low) txt = t("pelAtAlarm");
+  else if (p && p.remainingKg != null) {
+    txt = t("pelKg", Number(p.remainingKg).toLocaleString(lang === "nl" ? "nl-BE" : "en-GB", { maximumFractionDigits: 1 }));
+    if (p.hoursLeft != null) txt += " · " + t("pelAtNow", fmtDur(Math.round(p.hoursLeft * 3600)));
+    if (p.alarmExpectedAt) {
+      const d = new Date(p.alarmExpectedAt * 1000);
+      txt += " · " + t("pelAlarmAt", d.toLocaleDateString(lang === "nl" ? "nl-BE" : "en-GB", { weekday: "short" }) + " " + fmtDate(d).slice(0, 5) + " " + fmtHM(d));
+    }
+  }
+  sp.appendChild(document.createTextNode(txt));
+  if (p) { const b = el("button", "mini", t("pelRefill")); b.type = "button"; b.onclick = () => pelletsAsk("add", t("pelRefillAsk"), p.refillKg || 15, "pelRefillDone"); sp.appendChild(b); }
+  return sp;
+}
+function pelletsCal(p) {
+  const sp = el("span", "");
+  if (!p) { sp.textContent = "–"; return sp; }
+  sp.appendChild(document.createTextNode(p.calibrated ? t("pelCalVal", p.cycles, p.kgPerHour ?? "–", p.refillKg) : t("pelCalNone", p.refillKg)));
+  const b = el("button", "mini", t("pelStd")); b.type = "button"; b.onclick = () => pelletsAsk("refillKg", t("pelStdAsk"), p.refillKg || 15, "pelStdDone"); sp.appendChild(b);
+  return sp;
+}
+async function pelletsAsk(param, question, def, doneKey) {
+  const v = prompt(question, def);
+  if (v === null) return;
+  const kg = parseFloat(String(v).replace(",", "."));
+  if (!(kg > 0 && kg <= 100)) { toast(t("pelBadKg"), true); return; }
+  try { await write(t(doneKey, kg), "POST", "/api/pellets", { [param]: kg }); } catch (_) {}
 }
 async function resetCounters(params, label) {
   if (!confirm(t("resetConfirm", label))) return;
@@ -2048,6 +2082,8 @@ function render(s) {
     [t("pelletLevel"), s.lowPalletAlarm == null ? "–" : s.pelletReserve && s.pelletReserve.shutdownMinutes != null ? pill(t("lowOff", s.pelletReserve.shutdownMinutes), "err")
       : s.lowPalletAlarm ? pill(t("low"), "err")
       : s.pelletReserve && s.pelletReserve.sensor === 5 && s.pelletReserve.minutesLeft > 0 ? pill(t("lowSoon", s.pelletReserve.minutesLeft), "warn") : pill(t("ok"), "ok")],
+    [withHelp(t("pelLeft"), "h_pelLeft"), pelletsLeft(s.pellets)],
+    [t("pelCal"), pelletsCal(s.pellets), true],
     [withHelp(t("pelReserve"), "h_pelReserve"), !s.pelletReserve ? "–" : (s.pelletReserve.enabled === false ? t("off")
       : t("pelReserveVal", s.pelletReserve.sensor ?? "–", s.pelletReserve.counter ?? "–")
         + (s.pelletReserve.shutdownMinutes != null ? " · " + t("pelOffIn", s.pelletReserve.shutdownMinutes)

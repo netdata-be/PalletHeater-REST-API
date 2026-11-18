@@ -160,6 +160,12 @@ static void mqttPublishStates(bool force)
     if (stoveState != UNKNOWN) mqttState("error_active",   onOff(confirmedCurrentError != 0), force);
     if (stoveState != UNKNOWN) mqttState("error",          confirmedCurrentError ? getErrorCode(confirmedCurrentError) + " " + getErrorDesc(confirmedCurrentError) : String("none"), force);
     mqttState("low_pellets",    onOff(cachedLowPallet != 0), force);
+    {
+        // estimate until the low pellet alarm (pellets.h); empty = not known yet
+        double rem = pellets.remainingKg(), h = pellets.hoursAt(pelletsAvgAuger());
+        mqttState("pellets_kg",    rem >= 0 ? String(rem, 1) : String(""), force);
+        mqttState("pellets_hours", h >= 0 ? String(h, 1) : String(""), force);
+    }
     mqttState("hours_service",  String(cachedHoursSinceLastService), force);
     mqttState("total_hours",    String(cachedTotalRuntime), force);
     mqttState("starts",         String(cachedNumberOfStarts), force);
@@ -241,6 +247,8 @@ static void mqttPublishDiscovery()
     mqttDiscoveryEntity("binary_sensor", "fan_running", "Ventilator draait", [](JsonObject& o) { o["device_class"] = "running"; }, false);
     mqttDiscoveryEntity("binary_sensor", "error_active", "Fout actief", [](JsonObject& o) { o["device_class"] = "problem"; }, false);
     mqttDiscoveryEntity("binary_sensor", "low_pellets", "Pellets bijna op", [](JsonObject& o) { o["device_class"] = "problem"; }, false);
+    mqttDiscoveryEntity(sensor, "pellets_kg", "Pellets tot alarm", [](JsonObject& o) { o["unit_of_measurement"] = "kg"; o["device_class"] = "weight"; o["state_class"] = "measurement"; }, false);
+    mqttDiscoveryEntity(sensor, "pellets_hours", "Branduren tot pelletalarm", [](JsonObject& o) { o["unit_of_measurement"] = "h"; o["device_class"] = "duration"; o["state_class"] = "measurement"; }, false);
 }
 
 // ── Commands ────────────────────────────────────────────────────────────────
