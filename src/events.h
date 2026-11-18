@@ -86,6 +86,9 @@ static void eventsLoad()
                 if (clearedAt && clearedAt - e.t < ERROR_CONFIRM_MS / 1000) { skipClear = true; dropped = true; continue; }
             }
             if (e.kind == EVT_ERROR && e.code == 0 && skipClear) { skipClear = false; continue; }
+            // the pellet reserve counter (RAM 0x89) is no longer logged: it changed every
+            // minute during the reserve and pushed the useful entries out
+            if (e.kind == EVT_PELLET && e.code == palletLevelAddr) { dropped = true; continue; }
             keep[n++] = e;
         }
         if (dropped) { evtHead = 0; evtCount = 0; for (int i = 0; i < n; i++) evtPush(keep[i]); }
@@ -203,12 +206,19 @@ static void eventsTick()
         evtLastState = s;
         evtStore(e);
     }
+    // pellet reserve: the level sensor (RAM 0xA4) goes to the event log; the countdown
+    // (RAM 0x89, about one step a minute during the reserve) only to the debug log
     const int pv[2] = { cachedPelletSensor, cachedPelletCounter };
     const uint8_t pa[2] = { palletSensorAddr, palletLevelAddr };
     for (int k = 0; k < 2; k++) {
         if (pv[k] < 0 || pv[k] > 127 || pv[k] == evtLastPellet[k]) continue;
+        if (k == 1) {
+            if (evtLastPellet[k] >= 0) LOGD("stove", "pellet reserve counter (RAM 0x89) %d -> %d", evtLastPellet[k], pv[k]);
+            evtLastPellet[k] = pv[k];
+            continue;
+        }
         if (evtLastPellet[k] >= 0)
-            LOGI("stove", "pellet reserve %s (RAM 0x%02X) %d -> %d", k == 0 ? "sensor" : "counter", pa[k], evtLastPellet[k], pv[k]);
+            LOGI("stove", "pellet reserve sensor (RAM 0x%02X) %d -> %d", pa[k], evtLastPellet[k], pv[k]);
         StateEvent e = { (uint32_t)t, EVT_PELLET, (int8_t)evtLastPellet[k], (int8_t)pv[k], pa[k] };
         evtLastPellet[k] = pv[k];
         evtStore(e);

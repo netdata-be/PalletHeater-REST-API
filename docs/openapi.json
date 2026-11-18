@@ -2325,7 +2325,7 @@
           "Status"
         ],
         "summary": "Log of stove state changes and errors",
-        "description": "Every change of the stove state and of the active error (both read ~1 s), with the exact time. The stove does not store when an error happened; this log is the only source for that. The last 200 entries are kept and persisted to SPIFFS. Recorded once NTP time is available. Oldest first. Errors are only logged once they last 30 s (3 minutes in the transitional states 1, 2, 3, 5, 6) or the stove is in an alarm state. Changes of the pellet reserve registers (RAM 0xA4, 0x89) are logged as type pellet.",
+        "description": "Every change of the stove state and of the active error (both read ~1 s), with the exact time. The stove does not store when an error happened; this log is the only source for that. The last 200 entries are kept and persisted to SPIFFS. Recorded once NTP time is available. Oldest first. Errors are only logged once they last 30 s (3 minutes in the transitional states 1, 2, 3, 5, 6) or the stove is in an alarm state. Changes of the pellet reserve sensor (RAM 0xA4) are logged as type pellet; the reserve countdown (RAM 0x89) is not logged (it changes every minute during the reserve; older firmware did, those entries are dropped at the next start).",
         "parameters": [
           {
             "name": "hours",
@@ -2388,7 +2388,7 @@
                               "0xA4",
                               "0x89"
                             ],
-                            "description": "pellet: RAM register that changed (0xA4 reserve sensor, 0x89 reserve counter); from/to are its old and new value"
+                            "description": "pellet: RAM register that changed (0xA4 reserve sensor; 0x89 only from older firmware); from/to are its old and new value"
                           }
                         }
                       }

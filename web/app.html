@@ -2937,6 +2937,7 @@ function renderEvents() {
   const head = el("tr"); [t("evtWhen"), t("evtFrom"), t("evtTo"), t("evtDur")].forEach(h => head.appendChild(el("th", "", h))); tbl.appendChild(head);
   const now = Math.floor(Date.now() / 1000), name = v => v === null || v === undefined ? "–" : (STATE_NAME[lang][v] ?? String(v));
   for (let i = events.length - 1; i >= 0; i--) {
+    if (events[i].type === "pellet" && events[i].register === "0x89") continue;   // reserve counter: logged by older firmware, too noisy
     const e = events[i], kind = e.type || "state", isErr = kind === "error", d = new Date(e.t * 1000), tr = el("tr");
     // duration until the next event of the same kind (pellet: same register)
     let next = null;
