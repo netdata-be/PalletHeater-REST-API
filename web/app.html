@@ -308,13 +308,23 @@ body:not(.debug) .d{display:none!important}
 .hyp td.v{white-space:nowrap;font-weight:650;font-variant-numeric:tabular-nums;text-align:right}
 .hyp td.o{color:var(--muted);min-width:180px}
 .hyp td.h{min-width:200px}
-@media (max-width:420px){main{padding:12px;gap:12px;grid-template-columns:1fr}.big-temps{gap:16px}.big-temps .v{font-size:24px}.bar{gap:8px}.conn span:last-child{max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+@media (max-width:420px){main{padding:12px;gap:12px;grid-template-columns:1fr}.big-temps{gap:16px}.big-temps .v{font-size:24px}.bar{gap:8px}.conn span:last-child{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 /* keyboard focus (accessibility) */
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .switch input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
 /* update badge in the header */
 .xbtn.upd{border-color:var(--accent);color:var(--accent);font-weight:650}
 @media (max-width:560px){#updBadge .v{display:none}}
+/* header: one row; on a phone two (title + connection on top, the buttons below), otherwise
+   the title ran under the buttons (iPhone, 20/11/2026) */
+.bar .brk{display:none}
+@media (max-width:560px){
+  .bar{flex-wrap:wrap;row-gap:8px}
+  .bar h1{order:0}
+  .bar .conn{order:1}
+  .bar .brk{display:block;order:2;flex-basis:100%;height:0}
+  .bar .xbtn{order:3}
+}
 /* live debugging */
 .livebar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:4px}
 .livebar input[type=text]{flex:1;min-width:160px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:7px 10px}
@@ -367,11 +377,12 @@ button.mini{padding:1px 8px;font-size:11px;font-weight:550;border-radius:7px;mar
   <h1>OpenPelletBridge <span class="ver" id="appVer"></span></h1>
   <button id="updBadge" class="xbtn upd" type="button" hidden></button>
   <button id="themeBtn" class="xbtn" type="button"></button>
-  <button id="consoleBtn" class="xbtn" type="button" hidden data-i="console"></button>
+  <button id="consoleBtn" class="xbtn" type="button" data-i="console"></button>
   <button id="expertBtn" class="xbtn" type="button" aria-pressed="false" data-i="expert"></button>
   <button id="debugBtn" class="xbtn" type="button" aria-pressed="false" data-i="debug"></button>
   <div class="conn" id="connStove"><span class="dot" id="dotStove"></span><span id="connStoveTxt">…</span></div>
   <div class="conn" id="connCtl"><span class="dot" id="dot"></span><span id="conn">…</span></div>
+  <span class="brk" aria-hidden="true"></span>
 </div></header>
 
 <main>
@@ -1627,7 +1638,7 @@ function renderConsoleBtn() {
   if (!liveReady) return;   // called from renderAlerts before the console block has run
   const noStove = !!state && state.stoveState && state.stoveState.stoveState === -1;
   const b = $("consoleBtn");
-  b.hidden = !(debug || noStove || dtOpen);
+  b.hidden = false;   // always available (was: only in debug mode or without a stove)
   b.classList.toggle("alert", noStove && !dtOpen);
   b.setAttribute("aria-pressed", dtOpen); b.title = t("consoleTitle");
 }
