@@ -325,6 +325,12 @@ body:not(.debug) .d{display:none!important}
   .bar .brk{display:block;order:2;flex-basis:100%;height:0}
   .bar .xbtn{order:3}
 }
+/* pellet estimate (debug) */
+.pdstage{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.pdchecks{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:6px;font-size:13px}
+.pdchecks li{display:flex;gap:8px;align-items:baseline}
+.pdchecks li .pill{flex:none;min-width:44px;text-align:center}
+.hyp td.f{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--muted)}
 /* live debugging */
 .livebar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:4px}
 .livebar input[type=text]{flex:1;min-width:160px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:7px 10px}
@@ -648,6 +654,24 @@ button.mini{padding:1px 8px;font-size:11px;font-weight:550;border-radius:7px;mar
     <div class="hypwrap"><table class="hyp" id="parTimerTable"></table></div>
     <p class="muted" style="font-size:12px;margin:8px 0 0" data-i="parNote"></p>
   </section>
+
+  <!-- Pellet estimate: everything the calculation is made of (debug only) -->
+  <section class="card wide d" id="pelDbgCard">
+    <h2><span><span data-i="pelDbgTitle"></span><span data-help="pelDbg"></span></span><span class="keybtns"><span class="muted" id="pelDbgAge" style="text-transform:none;letter-spacing:0;font-weight:400;align-self:center"></span><button id="pelDbgCopy" data-i="keyCopy"></button><button id="pelDbgReload" data-i="reload"></button></span></h2>
+    <div id="pelDbgStage" class="pdstage"></div>
+    <ul id="pelDbgChecks" class="pdchecks"></ul>
+    <div class="tsub" id="pelDbgCalcH"></div>
+    <div class="hypwrap"><table class="hyp" id="pelDbgCalc"></table></div>
+    <div class="tsub" id="pelDbgFlameH" style="margin-top:14px"></div>
+    <div class="hypwrap"><table class="hyp" id="pelDbgFlame"></table></div>
+    <div class="cols2" style="margin-top:14px">
+      <div><div class="tsub" id="pelDbgInH"></div><dl id="pelDbgIn"></dl><div class="tsub" id="pelDbgTrH" style="margin-top:14px"></div><dl id="pelDbgTr"></dl></div>
+      <div><div class="tsub" id="pelDbgLoopH"></div><dl id="pelDbgLoop"></dl><div class="tsub" id="pelDbgSaveH" style="margin-top:14px"></div><dl id="pelDbgSave"></dl></div>
+    </div>
+    <div class="tsub" id="pelDbgCycH" style="margin-top:14px"></div>
+    <div class="hypwrap"><table class="hyp" id="pelDbgCyc"></table></div>
+    <details class="tbl"><summary>JSON (GET /api/pellets)</summary><pre id="pelDbgJson" class="mono" style="white-space:pre-wrap;margin:8px 0 0"></pre></details>
+  </section>
 </main>
 
 <!-- Console: docked panel at the bottom (like the browser's developer tools) with the
@@ -725,6 +749,7 @@ const I18N = {
     mqttEdit:"Settings", mqttEnabled:"MQTT on", mqttUser:"User", mqttPass:"Password", mqttPrefix:"Topic prefix", mqttDisc:"Home Assistant discovery", mqttDiscPrefix:"Discovery prefix",
     mqttNone:"Not available (older firmware)", mqttOff:"Off", mqttConnected:"Connected to {0} – topics {1}/…", mqttDisconnected:"Not connected to {0}: {1}", mqttPassKeep:"unchanged", mqttSaved:"MQTT settings saved", cancel:"Cancel",
     h_mqtt:"Publishes the stove values to an MQTT broker and accepts commands. Values are plain text under <prefix>/state/… (e.g. room_temp = 21.5, power = ON), retained, on change and every 5 min. Commands go to <prefix>/set/…: power and energy_saving (ON / OFF or 1 / 0), mode (heat / off), setpoint (7 – 30), flame_power (1 – 4), fan_speed (off / 0 – 3), es_stop and es_start (0 – 3). <prefix>/status is online / offline. With Home Assistant discovery on, the stove appears in Home Assistant by itself (climate, switches, numbers, sensors). Other systems such as Loxone (through an MQTT gateway) or Node-RED use the same topics; discovery can stay off for them.",
+    pelDbgTitle:"Pellet estimate (debug)", h_pelDbg:"Everything the pellet estimate is made of, from GET /api/pellets (refreshed every 10 s while debug mode is on). The controller adds up 'auger units': the auger on-time per cycle (RAM 0x0D, at most 12 s) times the seconds it fed. The level sensor (RAM 0xA4) trips at the same height each time, so between two alarms exactly the kg refilled in between were burned: kg per unit = kg / units. Left = kg refilled since the last alarm − kg per unit × units since that alarm; hours = left / (kg per unit × auger value × 3600). The checks at the top flag what usually goes wrong: no alarm or refill seen yet, sensor values the counter ignores, more burned than refilled (wrong refill amount), gaps in the readings, cycles that disagree. 'Copy' puts the raw JSON on the clipboard for a bug report.",
     parTitle:"Parameters (EEPROM)", h_par:"Presets stored in the stove EEPROM, read live (GET /api/dump). 'Verified' = checked on this stove. The presets per power level are the values the stove uses at each flame power; the row of the current actual flame power is highlighted.",
     parPresets:"Presets per phase and power level", parPhases:"Start-up, cleaning and alarm (installer parameters Pr01 – Pr22 at EEPROM address Pr − 1, as in the Micronova L023 manual)", parCReg:"Register", parCManual:"In the manual", parCName:"Meaning", parCVal:"Value", parUser:"Settings (menu parameter id = EEPROM address + 1)", parCMenu:"Menu parameter", parTimers:"Timer programs (from /api/timers)", parCProg:"Program", parCOn:"On", parCOff:"Off", parCDays:"Days", parCSet:"Temp.", parCFlame:"Flame", parCFan:"Fan", parLevel:"Level", parAuger:"Auger value", parFume:"Fume fan target", parNow:"now",
     stOk:"verified",
@@ -895,6 +920,7 @@ pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low 
     mqttEdit:"Instellen", mqttEnabled:"MQTT aan", mqttUser:"Gebruiker", mqttPass:"Wachtwoord", mqttPrefix:"Topic-prefix", mqttDisc:"Home Assistant discovery", mqttDiscPrefix:"Discovery-prefix",
     mqttNone:"Niet beschikbaar (oudere firmware)", mqttOff:"Uit", mqttConnected:"Verbonden met {0} – topics {1}/…", mqttDisconnected:"Niet verbonden met {0}: {1}", mqttPassKeep:"ongewijzigd", mqttSaved:"MQTT-instellingen bewaard", cancel:"Annuleren",
     h_mqtt:"Publiceert de waarden van de kachel naar een MQTT-broker en aanvaardt commando's. Waarden staan als gewone tekst onder <prefix>/state/… (bv. room_temp = 21.5, power = ON), retained, bij elke wijziging en elke 5 min. Commando's gaan naar <prefix>/set/…: power en energy_saving (ON / OFF of 1 / 0), mode (heat / off), setpoint (7 – 30), flame_power (1 – 4), fan_speed (off / 0 – 3), es_stop en es_start (0 – 3). <prefix>/status is online / offline. Met Home Assistant discovery aan verschijnt de kachel vanzelf in Home Assistant (thermostaat, schakelaars, getallen, sensoren). Andere systemen zoals Loxone (via een MQTT-gateway) of Node-RED gebruiken dezelfde topics; discovery mag voor hen uit.",
+    pelDbgTitle:"Pelletschatting (debug)", h_pelDbg:"Alles waaruit de pelletschatting bestaat, uit GET /api/pellets (elke 10 s ververst zolang debug aan staat). De controller telt 'schroefeenheden' op: de aan-tijd van de schroef per cyclus (RAM 0x0D, hoogstens 12 s) maal het aantal seconden dat ze voedde. De niveausensor (RAM 0xA4) slaat telkens op dezelfde hoogte aan, dus tussen twee alarmen is precies de bijgevulde hoeveelheid verbrand: kg per eenheid = kg / eenheden. Over = kg bijgevuld sinds het laatste alarm − kg per eenheid × eenheden sinds dat alarm; uren = over / (kg per eenheid × schroefwaarde × 3600). De controles bovenaan tonen wat meestal misloopt: nog geen alarm of bijvulling gezien, sensorwaarden die de teller negeert, meer verbrand dan bijgevuld (verkeerde hoeveelheid), gaten in de metingen, cycli die niet overeenkomen. 'Kopieer' zet de ruwe JSON op het klembord voor een foutmelding.",
     parTitle:"Parameters (EEPROM)", h_par:"Presets in het EEPROM van de kachel, live gelezen (GET /api/dump). 'Bevestigd' = nagekeken op deze kachel. De presets per vermogen zijn de waarden die de kachel per vlamvermogen gebruikt; de rij van het huidige werkelijke vlamvermogen is gemarkeerd.",
     parPresets:"Presets per fase en vermogen", parPhases:"Opstart, reiniging en alarm (installateursparameters Pr01 – Pr22 op EEPROM-adres Pr − 1, zoals in de Micronova L023-handleiding)", parCReg:"Register", parCManual:"In de handleiding", parCName:"Betekenis", parCVal:"Waarde", parUser:"Instellingen (menuparameter-id = EEPROM-adres + 1)", parCMenu:"Menuparameter", parTimers:"Timerprogramma's (uit /api/timers)", parCProg:"Programma", parCOn:"Aan", parCOff:"Uit", parCDays:"Dagen", parCSet:"Temp.", parCFlame:"Vlam", parCFan:"Ventilator", parLevel:"Niveau", parAuger:"Schroefwaarde", parFume:"Doeltoerental rookgasventilator", parNow:"nu",
     stOk:"bevestigd",
@@ -3344,7 +3370,7 @@ $("expertBtn").onclick = () => {
 };
 $("debugBtn").onclick = () => {
   debug = !debug; try { localStorage.setItem("debug", debug ? "1" : "0"); } catch (_) {}
-  applyExpert(); renderHistory(); renderParams(); if (debug) loadParams(); renderConsoleBtn();
+  applyExpert(); renderHistory(); renderParams(); if (debug) { loadParams(); loadPelDbg(); } renderConsoleBtn();
 };
 
 // ---------- reachability ----------
@@ -3466,6 +3492,7 @@ function renderParams() {
   }
   tt.appendChild(tb4);
   $("parAge").textContent = parAt ? t("updated", new Date(parAt).toLocaleTimeString(lang === "nl" ? "nl-BE" : "en-GB")) : "";
+  renderPelDbg();
 }
 // EEPROM settings hardly change: read once when debug mode is turned on, and on "Reload".
 async function loadParams(force) {
@@ -3482,6 +3509,201 @@ async function loadParams(force) {
   renderParams();
 }
 $("parReload").onclick = () => loadParams(true);
+
+// ---------- pellet estimate (debug): GET /api/pellets with its "debug" object ----------
+// Shows every input and intermediate step of the estimate (firmware pellets.h, pelletcore
+// PelletTracker), so a wrong number can be traced back to its cause.
+let pelDbg = null, pelDbgAt = 0, pelDbgBusy = false;
+const AUGER_KNOWN = { 1: 3.0, 2: 4.6, 3: 6.2, 4: 7.8 };   // RAM 0x0D per flame power, seen on this stove
+async function loadPelDbg() {
+  if (!debug || offline || pelDbgBusy || document.hidden) return;
+  pelDbgBusy = true;
+  try { const { data } = await api("GET", "/api/pellets"); pelDbg = data; pelDbgAt = Date.now(); }
+  catch (e) { toast(t("failed", t("pelDbgTitle"), e.message), true); }
+  finally { pelDbgBusy = false; }
+  renderPelDbg();
+}
+setInterval(loadPelDbg, 10000);
+$("pelDbgReload").onclick = loadPelDbg;
+$("pelDbgCopy").onclick = async () => {
+  if (!pelDbg) return;
+  try { await navigator.clipboard.writeText(JSON.stringify(pelDbg, null, 2)); toast(L("JSON gekopieerd", "JSON copied")); }
+  catch (_) { $("pelDbgJson").closest("details").open = true; }
+};
+function renderPelDbg() {
+  if (!debug) return;
+  const p = pelDbg, D = p && p.debug;
+  const loc = lang === "nl" ? "nl-BE" : "en-GB";
+  const n = (v, d = 2) => v === null || v === undefined || isNaN(v) ? "–" : Number(v).toLocaleString(loc, { minimumFractionDigits: d, maximumFractionDigits: d });
+  const ts = e => e ? fmtDate(new Date(e * 1000)) + " " + fmtHM(new Date(e * 1000)) : "–";
+  const ago = s => s === null || s === undefined || s < 0 ? "–" : L(fmtDur(s) + " geleden", fmtDur(s) + " ago");
+  const hrs = h => h === null || h === undefined || !(h >= 0) ? "–" : fmtDur(Math.round(h * 3600));
+  $("pelDbgAge").textContent = pelDbgAt ? t("updated", new Date(pelDbgAt).toLocaleTimeString(loc)) : "";
+  $("pelDbgJson").textContent = p ? JSON.stringify(p, null, 2) : "–";
+  ["pelDbgStage", "pelDbgChecks", "pelDbgCalc", "pelDbgFlame", "pelDbgCyc"].forEach(id => $(id).innerHTML = "");
+  $("pelDbgCalcH").textContent = L("Berekening, stap voor stap", "Calculation, step by step");
+  $("pelDbgFlameH").textContent = L("Brandduur per vlamvermogen (met de huidige ijking)", "Burning time per flame power (with the current calibration)");
+  $("pelDbgInH").textContent = L("Invoer (live)", "Input (live)");
+  $("pelDbgTrH").textContent = L("Teller (opgeslagen in NVS)", "Counter (stored in NVS)");
+  $("pelDbgLoopH").textContent = L("Meetlus sinds de start van de controller", "Reading loop since the controller started");
+  $("pelDbgSaveH").textContent = L("Opslag", "Storage");
+  $("pelDbgCycH").textContent = L("IJkcycli (alarm → alarm)", "Calibration cycles (alarm → alarm)");
+  if (!D) {   // older firmware: no debug object
+    const li = el("li"); li.append(pill("–"), el("span", "", p ? L("Deze firmware geeft nog geen debug-gegevens (update de controller).", "This firmware has no debug data yet (update the controller).") : L("Nog niet geladen.", "Not loaded yet.")));
+    $("pelDbgChecks").appendChild(li); ["pelDbgIn", "pelDbgTr", "pelDbgLoop", "pelDbgSave"].forEach(id => fillDl($(id), [])); return;
+  }
+  const tr = D.tracker, inp = D.input, lp = D.loop, ca = D.calc, cs = D.constants, sv = D.save;
+  const k = ca.kgPerUnit, hist = p.history || [];
+  const started = tr.cycleStart >= 0, refilled = started && tr.cycleKg > 0;
+  // ---- stage of the calibration ----
+  const stages = [
+    [started, L("1 · eerste alarm gezien", "1 · first alarm seen")],
+    [refilled || hist.length > 0, L("2 · bijgevuld na een alarm", "2 · refilled after an alarm")],
+    [hist.length >= 1, L("3 · volgend alarm: eerste ijking", "3 · next alarm: first calibration")],
+    [hist.length >= 3, L("4 · ≥ 3 cycli: betrouwbaar", "4 · ≥ 3 cycles: reliable")],
+  ];
+  for (const [done, txt] of stages) $("pelDbgStage").appendChild(pill((done ? "✓ " : "") + txt, done ? "ok" : ""));
+  // ---- checks: what usually goes wrong ----
+  const checks = [];
+  const add = (lvl, txt) => checks.push([lvl, txt]);
+  if (lp.lastTickAgoS < 0 || lp.lastTickAgoS > 60)
+    add("err", L("De teller krijgt geen metingen (laatste: " + ago(lp.lastTickAgoS) + ")", "The counter gets no readings (last: " + ago(lp.lastTickAgoS) + ")") + (lp.lastSkip ? " – " + lp.lastSkip : "") + ".");
+  if (inp.sensorUse === "ignored")
+    add("warn", L("Niveausensor (0xA4) staat op " + inp.sensor + ": de teller kijkt alleen naar 5 (laag) en 0 (OK) en negeert deze waarde (geen alarm, geen bijvulling).", "Level sensor (0xA4) is " + inp.sensor + ": the counter only looks at 5 (low) and 0 (OK) and ignores this value (no alarm, no refill)."));
+  if (tr.lowSince && !tr.low)
+    add("info", L("Sensor laag sinds " + ago(D.now - tr.lowSince) + "; het alarm telt na " + cs.lowConfirmS + " s.", "Sensor low for " + ago(D.now - tr.lowSince) + "; the alarm counts after " + cs.lowConfirmS + " s."));
+  if (tr.okSince && tr.low)
+    add("info", L("Sensor weer OK sinds " + ago(D.now - tr.okSince) + "; bijvullen telt na " + cs.refillConfirmS + " s.", "Sensor OK again for " + ago(D.now - tr.okSince) + "; the refill counts after " + cs.refillConfirmS + " s."));
+  if (!started)
+    add("warn", L("Nog geen pellet-laag-alarm gezien: de teller weet niet hoeveel er in de bak zit. De schatting begint bij het eerste alarm.", "No low pellet alarm seen yet: the counter does not know how much is in the hopper. The estimate starts at the first alarm."));
+  else if (tr.low)
+    add("info", L("Op alarmniveau: wacht op bijvullen (" + (tr.pendingKg > 0 ? tr.pendingKg + " kg ingegeven" : "standaard " + tr.refillKg + " kg") + ").", "At the alarm level: waiting for a refill (" + (tr.pendingKg > 0 ? tr.pendingKg + " kg entered" : "standard " + tr.refillKg + " kg") + ")."));
+  else if (!refilled)
+    add("warn", L("Geen bijvulling geregistreerd sinds het laatste alarm: 'over' blijft 0. Gebruik Bijgevuld… als je bijvulde.", "No refill recorded since the last alarm: 'left' stays 0. Use Refilled… if you refilled."));
+  if (started && !p.calibrated && !tr.low)
+    add("info", L("Eerste ijkcyclus loopt: " + n(ca.unitsSinceAlarm, 0) + " eenheden (" + n(ca.motorHoursSinceAlarm) + " u schroefmotor) voor " + n(tr.cycleKg, 1) + " kg. Bij het volgende alarm volgt kg per eenheid.", "First calibration cycle running: " + n(ca.unitsSinceAlarm, 0) + " units (" + n(ca.motorHoursSinceAlarm) + " h auger motor) for " + n(tr.cycleKg, 1) + " kg. The next alarm gives kg per unit."));
+  if (ca.remainingUnclamped !== undefined && ca.remainingUnclamped < 0)
+    add("err", L("Meer verbrand dan bijgevuld (" + n(-ca.remainingUnclamped) + " kg te veel): de bijgevulde hoeveelheid klopt niet of de ijking is te hoog. De schatting staat op 0 tot het volgende alarm.", "More burned than refilled (" + n(-ca.remainingUnclamped) + " kg too much): the refilled amount is wrong or the calibration too high. The estimate stays 0 until the next alarm."));
+  if (p.overdue)
+    add("warn", L("Voorbij de schatting: volgens de teller is alles boven de sensor op, maar het alarm kwam nog niet. Er zit meer in per eenheid dan geijkt; bij het alarm wordt dat bijgestuurd.", "Past the estimate: the counter says everything above the sensor is used, but the alarm did not come yet. There is more per unit than calibrated; the alarm corrects it."));
+  const lastC = hist[hist.length - 1];
+  if (lastC && lastC.predKg !== null && lastC.predKg !== undefined) {
+    const pk = lastC.predKg, pct = lastC.kg ? Math.abs(pk) / lastC.kg * 100 : 0;
+    const txt = pk >= 0 ? L("Laatste alarm kwam " + n(pk) + " kg te vroeg (" + n(pct, 0) + " % van de cyclus)", "Last alarm came " + n(pk) + " kg early (" + n(pct, 0) + " % of the cycle)")
+                        : L("Laatste alarm kwam " + n(-pk) + " kg te laat (" + n(pct, 0) + " % van de cyclus)", "Last alarm came " + n(-pk) + " kg late (" + n(pct, 0) + " % of the cycle)");
+    add(pct > 15 ? "warn" : "ok", txt + L("; de ijking is daarmee bijgestuurd.", "; the calibration has been corrected with it."));
+  }
+  if (hist.length >= 2 && p.spread !== null) {
+    if (p.spread > 0.15) add("warn", L("Cycli wijken sterk af (spreiding " + n(p.spread * 100, 1) + " %): kijk in de tabel welke cyclus afwijkt (verkeerde hoeveelheid?).", "Cycles disagree (spread " + n(p.spread * 100, 1) + " %): see which cycle stands out in the table (wrong amount?)."));
+    else add("ok", L("Cycli stemmen overeen (spreiding " + n(p.spread * 100, 1) + " %).", "Cycles agree (spread " + n(p.spread * 100, 1) + " %)."));
+  }
+  if (lp.capped > 0)
+    add("warn", L(lp.capped + " gat(en) > " + cs.maxStepS + " s tussen metingen terwijl de schroef voedde; " + fmtDur(lp.cappedLostS) + " niet meegeteld (langste gat " + fmtDur(lp.maxDtS) + ").", lp.capped + " gap(s) > " + cs.maxStepS + " s between readings while the auger fed; " + fmtDur(lp.cappedLostS) + " not counted (longest gap " + fmtDur(lp.maxDtS) + ")."));
+  const sk = lp.skipped, skT = sk.clock + sk.link + sk.state + sk.sensor;
+  if (skT) add("info", L("Overgeslagen metingen: " + skT + " (klok " + sk.clock + ", geen antwoord " + sk.link + ", toestand onbekend " + sk.state + ", sensor " + sk.sensor + ").", "Skipped readings: " + skT + " (clock " + sk.clock + ", no answer " + sk.link + ", state unknown " + sk.state + ", sensor " + sk.sensor + ")."));
+  if (p.calibrated && !(inp.auger > 0))
+    add("info", L("De schroef voedt nu niet: geen 'uren bij het huidige vermogen'.", "The auger does not feed now: no 'hours at the current power'."));
+  if (p.calibrated && p.averageHours < 6)
+    add("warn", L("Minder dan 6 u geschiedenis: geen verwachte alarmtijd.", "Less than 6 h of history: no expected alarm time."));
+  if (!checks.some(c => c[0] === "err" || c[0] === "warn")) add("ok", L("Geen problemen gevonden.", "No problems found."));
+  const LV = { ok: "OK", info: "info", warn: L("let op", "check"), err: L("fout", "error") };
+  for (const [lvl, txt] of checks) { const li = el("li"); li.append(pill(LV[lvl], lvl === "info" ? "on" : lvl), el("span", "", txt)); $("pelDbgChecks").appendChild(li); }
+  // ---- calculation ----
+  const wOf = c => c.weight ?? 1;
+  const sumKg = hist.reduce((a, c) => a + wOf(c) * c.kg, 0), sumU = hist.reduce((a, c) => a + wOf(c) * c.units, 0);
+  const kgph = k && inp.augerCounted > 0 ? k * inp.augerCounted * 3600 : null;
+  const rows = [
+    [L("kg per eenheid", "kg per unit"), hist.length ? "Σ w·kg / Σ w·" + L("eenheden", "units") + " = " + n(sumKg, 2) + " / " + n(sumU, 0) + L(" (w: nieuwste 1, elke oudere × " + cs.recentWeight + ")", " (w: newest 1, each older × " + cs.recentWeight + ")") : L("nog geen cyclus", "no cycle yet"), k ? n(k * 1000, 4) + " g" : "–"],
+    [L("Eenheden sinds alarm", "Units since the alarm"), started ? n(tr.units, 0) + " − " + n(tr.cycleStart, 0) : "–", started ? n(ca.unitsSinceAlarm, 0) : "–"],
+    [L("Schroefmotor sinds alarm", "Auger motor since the alarm"), started ? L("eenheden", "units") + " / " + cs.augerCycleS + " / 3600" : "–", started ? n(ca.motorHoursSinceAlarm) + " " + L("u", "h") : "–"],
+    [L("Verbrand sinds alarm", "Burned since the alarm"), k && started ? n(k * 1000, 4) + " g × " + n(ca.unitsSinceAlarm, 0) : "–", ca.kgBurnedSinceAlarm !== undefined ? n(ca.kgBurnedSinceAlarm) + " kg" : "–"],
+    [L("Bijgevuld sinds alarm", "Refilled since the alarm"), started ? L("automatisch + ingegeven", "detected + entered") : "–", started ? n(tr.cycleKg, 1) + " kg" : "–"],
+    [L("Over tot het alarm", "Left until the alarm"), ca.remainingUnclamped !== undefined ? n(tr.cycleKg, 1) + " − " + n(ca.kgBurnedSinceAlarm) + " = " + n(ca.remainingUnclamped) + (ca.remainingUnclamped < 0 ? " → 0" : "") : "–", p.remainingKg !== null ? n(p.remainingKg, 1) + " kg" : "–"],
+    [L("Verbruik nu", "Use now"), k ? n(k * 1000, 4) + " g × " + n(inp.augerCounted, 1) + " s × 3600" + (inp.auger > cs.augerCycleS ? L(" (" + inp.auger + " begrensd op " + cs.augerCycleS + ")", " (" + inp.auger + " capped at " + cs.augerCycleS + ")") : "") : "–", kgph !== null ? n(kgph) + " kg/" + L("u", "h") : "–"],
+    [L("Uren bij huidig vermogen", "Hours at the current power"), p.remainingKg !== null && kgph ? n(p.remainingKg, 1) + " / " + n(kgph) : "–", hrs(p.hoursLeft)],
+    [L("Gemiddelde schroefwaarde 7 d", "Average auger value 7 d"), L(p.averageHours + " uurrecords (ook uren zonder branden)", p.averageHours + " hourly records (non-burning hours too)"), p.averageAuger !== null ? n(p.averageAuger) + " s (" + augerPct(p.averageAuger) + " %)" : "–"],
+    [L("Verbruik gemiddeld", "Average use"), k && p.averageAuger ? n(k * 1000, 4) + " g × " + n(p.averageAuger) + " s × 3600" : "–", ca.kgPerHourAverage !== undefined ? n(ca.kgPerHourAverage, 3) + " kg/" + L("u", "h") : "–"],
+    [L("Uren bij gemiddeld verbruik", "Hours at the average use"), p.remainingKg !== null && ca.kgPerHourAverage ? n(p.remainingKg, 1) + " / " + n(ca.kgPerHourAverage, 3) : "–", hrs(p.hoursLeftAverage)],
+    [L("Alarm verwacht", "Alarm expected"), L("nu + uren bij gemiddeld verbruik", "now + hours at the average use"), ts(p.alarmExpectedAt)],
+  ];
+  const ch = el("tr"); [L("Grootheid", "Quantity"), L("Formule met waarden", "Formula with values"), L("Resultaat", "Result")].forEach(h => ch.appendChild(el("th", "", h)));
+  const cth = el("thead"); cth.appendChild(ch); $("pelDbgCalc").appendChild(cth);
+  const ctb = el("tbody");
+  for (const [a, f, v] of rows) { const r = el("tr"); r.append(el("td", "", a), el("td", "f", f), el("td", "v", v)); ctb.appendChild(r); }
+  $("pelDbgCalc").appendChild(ctb);
+  // ---- per flame power ----
+  const fh = el("tr"); [L("Vlam", "Flame"), L("Schroefwaarde", "Auger value"), "kg/" + L("u", "h"), L("Tot het alarm", "Until the alarm"), L("Volle bijvulling", "Full refill") + " (" + n(tr.refillKg, 0) + " kg)"].forEach(h => fh.appendChild(el("th", "", h)));
+  const fth = el("thead"); fth.appendChild(fh); $("pelDbgFlame").appendChild(fth);
+  const ftb = el("tbody"), curF = state && state.flame ? state.flame.actual : null;
+  for (let f = 1; f <= 4; f++) {
+    const pv = parVals[0x04 + f], a = pv !== undefined && pv >= 0 ? pv / 10 : AUGER_KNOWN[f], src = pv !== undefined && pv >= 0 ? "EEPROM " + hx(0x04 + f) : L("gezien", "seen");
+    const kh = k ? k * a * 3600 : null;
+    const r = el("tr", f === curF ? "cur" : "");
+    r.append(el("td", "", L("Vlam ", "Flame ") + f + (f === curF ? " ← " + t("parNow") : "")),
+      el("td", "n", n(a, 1) + " s · " + augerPct(a) + " % (" + src + ")"),
+      el("td", "n", kh ? n(kh) : "–"),
+      el("td", "n", kh && p.remainingKg !== null ? hrs(p.remainingKg / kh) : "–"),
+      el("td", "n", kh ? hrs(tr.refillKg / kh) : "–"));
+    ftb.appendChild(r);
+  }
+  $("pelDbgFlame").appendChild(ftb);
+  // ---- input, counter, loop, storage ----
+  const sensTxt = { low: L("laag → telt als alarm", "low → counts as alarm"), ok: L("OK → telt als bijgevuld na alarm", "OK → counts as refilled after an alarm"), ignored: L("genegeerd door de teller", "ignored by the counter") }[inp.sensorUse];
+  fillDl($("pelDbgIn"), [
+    [L("Niveausensor (RAM 0xA4)", "Level sensor (RAM 0xA4)"), inp.sensor + " · " + sensTxt],
+    [L("Schroefwaarde (RAM 0x0D)", "Auger value (RAM 0x0D)"), n(inp.auger, 1) + " s · " + augerPct(inp.auger) + " %"],
+    [L("Meegeteld", "Counted"), n(inp.augerCounted, 1) + " s × dt"],
+    [L("Toestand kachel", "Stove state"), (STATE_NAME[lang] && STATE_NAME[lang][inp.stoveState]) ?? String(inp.stoveState)],
+    [L("Gegevens kachel", "Stove data"), inp.linkDown ? L("geen antwoord", "no answer") : ago(inp.dataAgeS)],
+  ]);
+  fillDl($("pelDbgTr"), [
+    [L("Eenheden totaal", "Units total"), n(tr.units, 0)],
+    [L("Eenheden bij laatste alarm", "Units at the last alarm"), started ? n(tr.cycleStart, 0) : L("geen alarm", "no alarm")],
+    [L("Bijgevuld sinds alarm", "Refilled since the alarm"), n(tr.cycleKg, 1) + " kg"],
+    [L("Op alarmniveau", "At the alarm level"), tr.low ? L("ja", "yes") : L("nee", "no")],
+    [L("Sensor laag sinds", "Sensor low since"), tr.lowSince ? ts(tr.lowSince) : "–"],
+    [L("Eenheden toen laag", "Units when low"), tr.lowSince || tr.low ? n(tr.lowUnits, 0) : "–"],
+    [L("Sensor weer OK sinds", "Sensor OK again since"), tr.okSince ? ts(tr.okSince) : "–"],
+    [L("Standaard bijvullen", "Standard refill"), n(tr.refillKg, 1) + " kg"],
+    [L("Ingegeven voor de volgende bijvulling", "Entered for the next refill"), tr.pendingKg > 0 ? n(tr.pendingKg, 1) + " kg" : "–"],
+    [L("Laatste bijvulling", "Last refill"), p.lastRefillAt ? ts(p.lastRefillAt) + " · " + n(p.lastRefillKg, 1) + " kg" : "–"],
+    [L("Cycli", "Cycles"), tr.nCycles + " / " + cs.maxCycles],
+    [L("Laatste meting", "Last reading"), ts(tr.lastT)],
+  ]);
+  fillDl($("pelDbgLoop"), [
+    [L("Gestart", "Started"), ts(lp.startT)],
+    [L("Metingen", "Readings"), lp.ticks.toLocaleString(loc)],
+    [L("Laatste meting", "Last reading"), ago(lp.lastTickAgoS)],
+    [L("Tijd tussen metingen", "Time between readings"), lp.lastDtS + " s · max " + fmtDur(lp.maxDtS)],
+    [L("Gaten > " + cs.maxStepS + " s", "Gaps > " + cs.maxStepS + " s"), lp.capped + (lp.capped ? " · " + fmtDur(lp.cappedLostS) + L(" niet geteld", " not counted") : "")],
+    [L("Schroef voedde", "Auger fed"), fmtDur(lp.feedS) + (lp.preloadS ? " · " + L("waarvan voorladen ", "of which pre-load ") + fmtDur(lp.preloadS) : "")],
+    [L("Eenheden sinds start", "Units since the start"), n(lp.unitsSinceStart, 0)],
+    [L("Overgeslagen", "Skipped"), skT ? skT + (lp.lastSkip ? " · " + L("laatst: ", "last: ") + lp.lastSkip + " (" + ago(lp.lastSkipAgoS) + ")" : "") : "0"],
+    [L("Laatste gebeurtenis", "Last event"), lp.lastEvent ? (lp.lastEvent === "trip" ? L("alarm", "alarm") : L("bijgevuld", "refill")) + " · " + ts(lp.lastEventT) : "–"],
+  ]);
+  fillDl($("pelDbgSave"), [
+    [L("Laatst opgeslagen", "Last saved"), ago(sv.agoS)],
+    [L("Nog niet opgeslagen", "Not saved yet"), n(sv.unsavedUnits, 0) + " " + L("eenheden", "units")],
+    [L("Grootte (NVS 'pellet')", "Size (NVS 'pellet')"), sv.bytes + " bytes · v" + tr.version],
+  ]);
+  // ---- cycles ----
+  const yh = el("tr"); ["#", L("Einde (alarm)", "End (alarm)"), L("Duur", "Duration"), "kg", L("Eenheden", "Units"), L("Schroefmotor", "Auger motor"), "g / " + L("eenheid", "unit"), L("Afwijking", "Deviation"), L("Gewicht", "Weight"), L("Voorspeld over bij alarm", "Predicted left at the alarm")].forEach(h => yh.appendChild(el("th", "", h)));
+  const yth = el("thead"); yth.appendChild(yh); $("pelDbgCyc").appendChild(yth);
+  const ytb = el("tbody");
+  if (!hist.length) { const r = el("tr"), td = el("td", "muted", L("Nog geen volledige cyclus: nodig zijn een alarm, bijvullen en het volgende alarm.", "No full cycle yet: it needs an alarm, a refill and the next alarm.")); td.colSpan = 10; r.appendChild(td); ytb.appendChild(r); }
+  const mean = hist.length ? hist.reduce((a, c) => a + c.kg / c.units, 0) / hist.length : 0;
+  hist.forEach((c, i) => {
+    const g = c.kg / c.units, dev = mean ? (g / mean - 1) * 100 : 0, r = el("tr");
+    r.append(el("td", "", String(i + 1)), el("td", "", ts(c.t)), el("td", "n", i ? fmtDur(c.t - hist[i - 1].t) : "–"),
+      el("td", "n", n(c.kg, 1)), el("td", "n", n(c.units, 0)), el("td", "n", n(c.units / cs.augerCycleS / 3600) + " " + L("u", "h")),
+      el("td", "n", n(g * 1000, 4)), el("td", "n", hist.length > 1 ? (dev >= 0 ? "+" : "") + n(dev, 1) + " %" : "–"),
+      el("td", "n", n(wOf(c), 2)),
+      el("td", "n", c.predKg === null || c.predKg === undefined ? L("geen schatting", "no estimate") : n(c.predKg) + " kg · " + (c.predKg >= 0 ? L("te vroeg", "early") : L("te laat", "late"))));
+    if (Math.abs(dev) > 15) r.style.color = "var(--warn)";
+    ytb.appendChild(r);
+  });
+  $("pelDbgCyc").appendChild(ytb);
+}
 
 // ---------- polling ----------
 let pollTimer = null, polling = false;
@@ -3507,7 +3729,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) { po
 
 applyStatic(); applyExpert(); renderTimers();
 // Read the remote first so the page starts in the right language
-pollRemote().finally(() => poll().then(() => { loadTimers(); loadHistory(); loadBt(); loadSecurity(); loadMqtt(); loadWifi(); loadFw(); loadParams(); }));
+pollRemote().finally(() => poll().then(() => { loadTimers(); loadHistory(); loadBt(); loadSecurity(); loadMqtt(); loadWifi(); loadFw(); loadParams(); loadPelDbg(); }));
 setInterval(() => { if (!document.hidden && !offline) { loadMqtt(); loadWifi(); if (!fwInfo || !["checking", "downloading", "restarting"].includes(fwInfo.state)) loadFw(); } }, 30000);
 </script>
 </body>

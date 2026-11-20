@@ -5403,6 +5403,11 @@
             "type": "number",
             "nullable": true,
             "description": "Amount of the last refill"
+          },
+          "debug": {
+            "type": "object",
+            "description": "GET /api/pellets only: every input and intermediate step of the estimate (input, tracker, constants, calc, loop, save), for troubleshooting. See docs/api.md.",
+            "additionalProperties": true
           }
         }
       }

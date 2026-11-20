@@ -549,8 +549,20 @@ Pellets and burning hours left until the low pellet alarm. The controller counts
 {"calibrated": true, "cycles": 3, "low": false, "overdue": false, "lastRefillAt": 1794990120, "lastRefillKg": 15, "remainingKg": 6.2, "hoursLeft": 4.15, "hoursLeftAverage": 9.6,
  "alarmExpectedAt": 1795037700, "kgPerHour": 1.49, "refillKg": 15, "kgSinceAlarm": 15.0, "gramsPerUnit": 0.0668,
  "spread": 0.041, "averageAuger": 2.91, "averageHours": 168, "unitsSinceAlarm": 131740, "pendingKg": null,
- "history": [{"t": 1794990000, "kg": 15, "units": 224300, "gramsPerUnit": 0.0669, "weight": 1.000, "predKg": -0.42}]}
+ "history": [{"t": 1794990000, "kg": 15, "units": 224300, "gramsPerUnit": 0.0669, "weight": 1.000, "predKg": -0.42}],
+ "debug": {"now": 1795000000, "input": {...}, "tracker": {...}, "constants": {...}, "calc": {...}, "loop": {...}, "save": {...}}}
 ```
+
+`debug` (only in `GET /api/pellets`) holds everything the estimate is made of, for troubleshooting (the web app shows it in the *Pellet estimate* tile in debug mode):
+
+| Key | Content |
+|---|---|
+| `input` | `sensor` (RAM 0xA4) and `sensorUse`: `low` (5, counts as the alarm), `ok` (0, counts as the refill after an alarm) or `ignored` (other values); `auger` (RAM 0x0D) and `augerCounted` (capped at 12); `stoveState`, `linkDown`, `dataAgeS` |
+| `tracker` | the stored counter (NVS `pellet`): `units`, `cycleStart` (units at the last alarm, < 0 = none yet), `cycleKg`, `low`, `lowSince` / `okSince` (confirmation running), `lowUnits`, `lastT`, `pendingKg`, `refillKg`, `nCycles`, `version` |
+| `constants` | `lowConfirmS` (60), `refillConfirmS` (30), `maxStepS` (30), `augerCycleS` (12), `maxCycles` (10), `recentWeight` (0.75) |
+| `calc` | `kgPerUnit`, `unitsSinceAlarm`, `motorHoursSinceAlarm` (units / 12 / 3600), `kgBurnedSinceAlarm`, `remainingUnclamped` (< 0 = more burned than refilled), `unitsPerHourNow`, `kgPerHourAverage` |
+| `loop` | since the controller started: `ticks`, `lastTickAgoS`, `lastDtS`, `maxDtS`, `capped` / `cappedLostS` (gaps over 30 s while the auger fed, and the seconds not counted), `feedS`, `preloadS`, `unitsSinceStart`, `skipped` (`clock`, `link`, `state`, `sensor`), `lastSkip`, `lastEvent` (`trip` / `refill`) and `lastEventT` |
+| `save` | `agoS` (last NVS write), `unsavedUnits`, `bytes` |
 
 `lastRefillAt` / `lastRefillKg`: time (Unix) and amount of the last refill, detected or entered with `add` (`null` before the first one). `hoursLeft` is the time at the current auger value (`null` while the auger does not feed); `hoursLeftAverage` and `alarmExpectedAt` use the average auger value of the hourly history of the last 7 days (from 6 hours of history). After the alarm the stove's own countdown takes over (`pelletReserve` in `/api/state`). `/api/state` has the same estimate under `pellets` (without the calibration detail); MQTT publishes `pellets_kg` and `pellets_hours` (at the average use).
 

@@ -17,6 +17,27 @@ static bool     pelletsDirty = false;
 static uint32_t pelletsSavedAt = 0;   // millis()
 static double   pelletsSavedUnits = -1;
 
+// Runtime diagnostics of the counter (not stored; /api/pellets "debug", web app debug tile):
+// how often the loop fed the tracker, why it skipped, and gaps that were capped at MAX_STEP_S
+struct PelletsDiag {
+    uint32_t ticks = 0;           // readings fed to the tracker since the start
+    uint32_t lastTickT = 0;       // epoch s of the last one
+    uint32_t lastDt = 0;          // seconds between the last two readings
+    uint32_t maxDt = 0;           // longest gap since the start
+    uint32_t capped = 0;          // gaps longer than MAX_STEP_S (counted as MAX_STEP_S)
+    uint32_t cappedLostS = 0;     // seconds not counted because of that
+    uint32_t feedS = 0;           // seconds with the auger feeding since the start
+    uint32_t preloadS = 0;        // of which with an auger value above the cycle (capped at 12 s)
+    uint32_t skipTime = 0, skipLink = 0, skipState = 0, skipSensor = 0;
+    const char* lastSkip = nullptr;
+    uint32_t lastSkipMs = 0;
+    double   unitsAtStart = -1;   // units when the controller started
+    uint32_t startT = 0;          // epoch s of the first reading
+    int      lastEvent = 0;       // 1 = trip, 2 = refill
+    uint32_t lastEventT = 0;
+};
+static PelletsDiag pelDiag;
+
 static void pelletsSave()
 {
     Preferences p;
@@ -76,8 +97,29 @@ void pelletsTick()
     if (lastFastStatesAt == seenFast) return;
     seenFast = lastFastStatesAt;
     time_t now = time(nullptr);
-    if (now <= 1700000000 || stove.linkDown || stoveState == UNKNOWN || cachedPelletSensor < 0) return;
+    const char* skip = now <= 1700000000 ? "clock not set" : stove.linkDown ? "no answer from the stove"
+                     : stoveState == UNKNOWN ? "stove state unknown" : cachedPelletSensor < 0 ? "level sensor not read" : nullptr;
+    if (skip) {
+        if (now <= 1700000000) pelDiag.skipTime++; else if (stove.linkDown) pelDiag.skipLink++;
+        else if (stoveState == UNKNOWN) pelDiag.skipState++; else pelDiag.skipSensor++;
+        pelDiag.lastSkip = skip; pelDiag.lastSkipMs = millis();
+        return;
+    }
+    if (pelDiag.unitsAtStart < 0) { pelDiag.unitsAtStart = pellets.units; pelDiag.startT = (uint32_t)now; }
+    if (pellets.lastT && (uint32_t)now > pellets.lastT) {
+        uint32_t dt = (uint32_t)now - pellets.lastT;
+        pelDiag.lastDt = dt;
+        if (dt > pelDiag.maxDt) pelDiag.maxDt = dt;
+        if (cachedAugerSpeed > 0) {
+            uint32_t c = dt > pc::PelletTracker::MAX_STEP_S ? pc::PelletTracker::MAX_STEP_S : dt;
+            pelDiag.feedS += c;
+            if (cachedAugerSpeed > pc::PelletTracker::AUGER_CYCLE_S) pelDiag.preloadS += c;
+            if (dt > pc::PelletTracker::MAX_STEP_S) { pelDiag.capped++; pelDiag.cappedLostS += dt - c; }
+        }
+    }
+    pelDiag.ticks++; pelDiag.lastTickT = (uint32_t)now;
     int ev = pellets.update((uint32_t)now, cachedPelletSensor, cachedAugerSpeed);
+    if (ev) { pelDiag.lastEvent = ev; pelDiag.lastEventT = (uint32_t)now; }
     if (ev == pc::PelletTracker::TRIP) {
         double k = pellets.kgPerUnit();
         if (pellets.nCycles && k > 0) {
@@ -131,6 +173,73 @@ void pelletsJson(JsonObject o, bool detail)
     o["averageHours"] = avgHours;
     o["unitsSinceAlarm"] = pellets.cycleStart >= 0 ? serialized(String(pellets.units - pellets.cycleStart, 0)) : serialized(String("null"));
     if (pellets.pendingKg > 0) o["pendingKg"] = pellets.pendingKg; else o["pendingKg"] = nullptr;
+    // everything the estimate is made of, to check the calculation (web app debug tile)
+    JsonObject d = o.createNestedObject("debug");
+    uint32_t nowT = now > 1700000000 ? (uint32_t)now : 0;
+    d["now"] = nowT;
+    JsonObject in = d.createNestedObject("input");
+    in["sensor"] = cachedPelletSensor;                              // RAM 0xA4
+    in["sensorUse"] = cachedPelletSensor == 5 ? "low" : cachedPelletSensor == 0 ? "ok" : "ignored";
+    in["auger"] = serialized(String(cachedAugerSpeed, 1));          // RAM 0x0D, s on-time per cycle
+    in["augerCounted"] = serialized(String(cachedAugerSpeed > pc::PelletTracker::AUGER_CYCLE_S ? pc::PelletTracker::AUGER_CYCLE_S : (cachedAugerSpeed > 0 ? cachedAugerSpeed : 0), 1));
+    in["stoveState"] = stoveState;
+    in["linkDown"] = stove.linkDown;
+    in["dataAgeS"] = lastFastStatesAt ? (millis() - lastFastStatesAt) / 1000 : -1;
+    JsonObject tr = d.createNestedObject("tracker");                 // stored in NVS "pellet"
+    tr["version"] = pellets.version;
+    tr["units"] = serialized(String(pellets.units, 1));
+    tr["cycleStart"] = serialized(String(pellets.cycleStart, 1));
+    tr["cycleKg"] = serialized(String(pellets.cycleKg, 2));
+    tr["low"] = pellets.low;
+    tr["lowSince"] = pellets.lowSince;
+    tr["lowUnits"] = serialized(String(pellets.lowUnits, 1));
+    tr["okSince"] = pellets.okSince;
+    tr["lastT"] = pellets.lastT;
+    tr["pendingKg"] = pellets.pendingKg;
+    tr["refillKg"] = pellets.refillKg;
+    tr["nCycles"] = pellets.nCycles;
+    JsonObject cs = d.createNestedObject("constants");
+    cs["lowConfirmS"] = pc::PelletTracker::LOW_CONFIRM_S;
+    cs["refillConfirmS"] = pc::PelletTracker::REFILL_CONFIRM_S;
+    cs["maxStepS"] = pc::PelletTracker::MAX_STEP_S;
+    cs["augerCycleS"] = pc::PelletTracker::AUGER_CYCLE_S;
+    cs["maxCycles"] = pc::PelletTracker::MAX_CYCLES;
+    cs["recentWeight"] = pc::PelletTracker::RECENT_WEIGHT;
+    JsonObject ca = d.createNestedObject("calc");
+    if (k > 0) ca["kgPerUnit"] = serialized(String(k, 9)); else ca["kgPerUnit"] = nullptr;
+    if (pellets.cycleStart >= 0) {
+        double used = pellets.units - pellets.cycleStart;
+        ca["unitsSinceAlarm"] = serialized(String(used, 1));
+        // running time of the auger motor: on-time / cycle x time = units / 12 s
+        ca["motorHoursSinceAlarm"] = serialized(String(used / pc::PelletTracker::AUGER_CYCLE_S / 3600.0, 2));
+        if (k > 0) {
+            ca["kgBurnedSinceAlarm"] = serialized(String(k * used, 2));
+            ca["remainingUnclamped"] = serialized(String(pellets.cycleKg - k * used, 2));   // < 0: more burned than added
+        }
+    }
+    ca["unitsPerHourNow"] = serialized(String((cachedAugerSpeed > pc::PelletTracker::AUGER_CYCLE_S ? pc::PelletTracker::AUGER_CYCLE_S : (cachedAugerSpeed > 0 ? cachedAugerSpeed : 0)) * 3600.0, 0));
+    if (k > 0 && avgHours) ca["kgPerHourAverage"] = serialized(String(k * avg * 3600.0, 3));
+    JsonObject lp = d.createNestedObject("loop");                    // since the controller started
+    lp["ticks"] = pelDiag.ticks;
+    lp["lastTickAgoS"] = pelDiag.lastTickT && nowT >= pelDiag.lastTickT ? (int32_t)(nowT - pelDiag.lastTickT) : -1;
+    lp["lastDtS"] = pelDiag.lastDt;
+    lp["maxDtS"] = pelDiag.maxDt;
+    lp["capped"] = pelDiag.capped;
+    lp["cappedLostS"] = pelDiag.cappedLostS;
+    lp["feedS"] = pelDiag.feedS;
+    lp["preloadS"] = pelDiag.preloadS;
+    lp["startT"] = pelDiag.startT;
+    if (pelDiag.unitsAtStart >= 0) lp["unitsSinceStart"] = serialized(String(pellets.units - pelDiag.unitsAtStart, 1)); else lp["unitsSinceStart"] = nullptr;
+    JsonObject sk = lp.createNestedObject("skipped");
+    sk["clock"] = pelDiag.skipTime; sk["link"] = pelDiag.skipLink; sk["state"] = pelDiag.skipState; sk["sensor"] = pelDiag.skipSensor;
+    if (pelDiag.lastSkip) { lp["lastSkip"] = pelDiag.lastSkip; lp["lastSkipAgoS"] = (millis() - pelDiag.lastSkipMs) / 1000; }
+    else { lp["lastSkip"] = nullptr; lp["lastSkipAgoS"] = nullptr; }
+    lp["lastEvent"] = pelDiag.lastEvent == pc::PelletTracker::TRIP ? "trip" : pelDiag.lastEvent == pc::PelletTracker::REFILL ? "refill" : nullptr;
+    lp["lastEventT"] = pelDiag.lastEventT;
+    JsonObject sv = d.createNestedObject("save");
+    sv["agoS"] = pelletsSavedAt ? (millis() - pelletsSavedAt) / 1000 : -1;
+    sv["unsavedUnits"] = serialized(String(pelletsSavedUnits >= 0 ? pellets.units - pelletsSavedUnits : 0, 1));
+    sv["bytes"] = (uint32_t)sizeof(pellets);
     JsonArray arr = o.createNestedArray("history");
     for (int i = 0; i < pellets.nCycles; i++) {
         JsonObject c = arr.createNestedObject();
@@ -175,7 +284,7 @@ void handleRoutePellets()
         if (pelletsDirty) pelletsSave();
         if (err.length()) code = 400;
     } else if (wm.server->method() != HTTP_GET) { wm.server->send(405); return; }
-    DynamicJsonDocument doc(2048);
+    DynamicJsonDocument doc(4096);   // the debug object and 10 cycles
     JsonObject o = doc.to<JsonObject>();
     if (err.length()) o["result"] = "failed - " + err;
     else if (wm.server->method() == HTTP_POST) o["result"] = "success";
