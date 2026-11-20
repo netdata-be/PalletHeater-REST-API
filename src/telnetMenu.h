@@ -15,6 +15,7 @@
 // Public: setupTelnet(), telnetStop(), telnetLoop() (main.cpp, routesDevice.h).
 #include "telnetServer.h"
 #include "telnetUi.h"
+#include "telnetChart.h"
 
 // ─────────────────────────────────────────────────────────────────────
 // Header and alerts
@@ -1140,30 +1141,32 @@ static const TmMenu TM_DEBUG = { "Debug", TM_DEBUG_ITEMS, 6, nullptr, 0 };
 static void tmMainOpen(int i)
 {
     switch (i) {
-    case 0: tmView(&TM_STATUS); break;
-    case 1: tmMenu(&TM_LIVE_MENU, TM_LIVE_N + 1); break;   // cursor on Start
-    case 2: tmMenu(&TM_CONTROL); break;
-    case 3: tmMenu(&TM_TIMERS); break;
-    case 4: tmMenu(&TM_PELLETS); break;
-    case 5: tmMenu(&TM_ERRORS); break;
-    case 6: tmMenu(&TM_NETWORK); break;
-    case 7: tmMenu(&TM_DEVICE); break;
-    case 8: tmMenu(&TM_DEBUG); break;
-    case 9: tmExit(); break;
+    case 0:  tmView(&TM_STATUS); break;
+    case 1:  tmView(&TM_CHART); break;
+    case 2:  tmMenu(&TM_LIVE_MENU, TM_LIVE_N + 1); break;   // cursor on Start
+    case 3:  tmMenu(&TM_CONTROL); break;
+    case 4:  tmMenu(&TM_TIMERS); break;
+    case 5:  tmMenu(&TM_PELLETS); break;
+    case 6:  tmMenu(&TM_ERRORS); break;
+    case 7:  tmMenu(&TM_NETWORK); break;
+    case 8:  tmMenu(&TM_DEVICE); break;
+    case 9:  tmMenu(&TM_DEBUG); break;
+    case 10: tmExit(); break;
     }
 }
 static void tmMainValue(int i, String& v)
 {
     switch (i) {
-    case 4: { double r = pellets.remainingKg(); if (r >= 0) v = "~" + String(r, 1) + " kg until the alarm"; break; }
-    case 5: if (confirmedCurrentError) v = pc::errorCode(confirmedCurrentError);
+    case 5: { double r = pellets.remainingKg(); if (r >= 0) v = "~" + String(r, 1) + " kg until the alarm"; break; }
+    case 6: if (confirmedCurrentError) v = pc::errorCode(confirmedCurrentError);
             else if (lastSlowStatesAt && pelletsEmptyOff()) v = "PELLETS";
             break;
-    case 7: if (fwAssetUrl.length() && pc::updateAvailable(BUILD_VERSION, fwLatest.c_str())) v = "update " + fwLatest + " available"; break;
+    case 8: if (fwAssetUrl.length() && pc::updateAvailable(BUILD_VERSION, fwLatest.c_str())) v = "update " + fwLatest + " available"; break;
     }
 }
 static const TmItem TM_MAIN_ITEMS[] = {
     { "Status",             tmMainValue, tmMainOpen, "Everything at a glance, refreshes by itself" },
+    { "Chart",              tmMainValue, tmMainOpen, "History as a line chart: temperatures, fumes, auger, flame, fume fan (3 h - 7 days)" },
     { "Live values",        tmMainValue, tmMainOpen, "Chosen values printed every 2 s (scrolls)" },
     { "Control",            tmMainValue, tmMainOpen, "Power, set point, flame, fan, energy saving, burn settings, clock" },
     { "Timers",             tmMainValue, tmMainOpen, "Week programs PR1 - PR6" },

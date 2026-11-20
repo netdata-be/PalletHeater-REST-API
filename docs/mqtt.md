@@ -74,6 +74,7 @@ Every screen starts with a status header: stove state, room temperature and set 
 | Menu | What it offers |
 |---|---|
 | Status | Everything at a glance, refreshes every 2 s: state, errors, temperatures, flame, room fan, fume fan, auger (s and %), energy saving, brazier cleaning, pellet estimate and reserve, remote control, stove clock, counters |
+| Chart | The history as a line chart in the terminal (Unicode braille dots and ANSI colours, needs a UTF-8 terminal of at least 80 × 24): `1`-`5` temperatures (room, set point, stove sensor), fumes, auger %, flame power and room fan level, fume fan rpm; `+` / `-` zoom (3 h, 6 h, 12 h, 24 h from the 2-minute samples, 7 days from the hourly averages), left / right move in time, `n` back to now, `v` a taller chart. Under the chart: a strip with the stove state, the pellet events (L low, R refilled) and errors (E), and per series now / min / max / average in the period. Refreshes every 10 s |
 | Live values | Chosen groups printed every 2 s (scrolls), e.g. to watch a start-up |
 | Control | Power (asks for confirmation; refused while the pellets are used up, as on the API), set point, flame power, room fan, energy saving stop / restart, combustion and pellet quality, beep, stove clock to NTP |
 | Timers | PR1 - PR6: enabled, on / off time, set point, flame, fan, days |

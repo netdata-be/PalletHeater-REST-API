@@ -104,6 +104,8 @@ struct TmView {
     void      (*render)();               // the text (view), or the next lines (stream)
     uint16_t    refreshMs;               // view: redraw interval; stream: tick interval
     bool        stream;                  // scrolling output, any key stops it
+    bool      (*key)(int k);             // own keys (true = handled, the view is redrawn); nullptr = none
+    const char* keys;                    // footer for a view with own keys
 };
 struct TmPick {
     char  title[48];
@@ -272,7 +274,7 @@ static void tmDrawView(const TmView* v)
 {
     tmTitle(v->title ? v->title : tmTextTitle);
     v->render();
-    tmFooter(v->refreshMs ? "any key: back   (refreshes by itself)" : "[r] refresh   any other key: back", nullptr);
+    tmFooter(v->keys ? v->keys : v->refreshMs ? "any key: back   (refreshes by itself)" : "[r] refresh   any other key: back", nullptr);
 }
 
 static void tmDraw()
@@ -392,6 +394,7 @@ static void tmKeyConfirm(int k)
 
 static void tmKeyView(const TmView* v, int k)
 {
+    if (v->key && v->key(k)) { tmDraw(); return; }
     if (!v->stream && (k == 'r' || k == 'R')) { tmDraw(); return; }
     if (v->stream) tp(A_RST "\r\n");
     tmPop();
