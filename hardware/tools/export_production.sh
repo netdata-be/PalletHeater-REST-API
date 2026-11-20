@@ -62,7 +62,7 @@ CPL_FIX = [
     (r"^SOT-23-5$", 180, (0.0, 0.0)),                 # U3, U7 (checked 18/11/2026)
     (r"^(SOT-23-6|TSOT-23-6)$", 270, (0.0, 0.0)),     # U1, U2 (checked 18/11/2026)
     (r"^SOT-363_SC-70-6$", 270, (0.0, 0.0)),          # (was U8 / U9 LM66100, checked 18/11/2026; no SC-70 left)
-    (r"^LED_WS2812B-2020", 180, (0.0, 0.0)),
+    (r"^LED_WS2812B-2020", 180, (0.0, 0.0)),          # LED1, LED2 (checked 20/11/2026 with JLCPCB's preview: DO / pin 1 top-left)
     # J1, GCT USB4105 (C3020560): the EasyEDA footprint JLCPCB uses has its origin 1.29 mm
     # further back than KiCad's (signal pads at y -2.37 vs -3.68, pegs -1.33 vs -2.605); without
     # this the part sat 1.29 mm towards the board edge in the preview (19/11/2026)
