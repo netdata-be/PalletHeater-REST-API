@@ -20,12 +20,14 @@ pio run -e esp32doit-devkit-v1-serial -t upload
 pio device monitor -e esp32doit-devkit-v1-serial
 ```
 
-The WiFi and Bluetooth uploads authenticate with the controller's **API key** (web app → *Device*, or `GET /api/auth`), taken from the environment:
+The WiFi and Bluetooth uploads authenticate with the controller's **API key** (web app → *Device*, or `GET /api/auth`), taken from the environment or, when it is not set there, from `.envrc` in the project folder (git-ignored, read by [scripts/api_key.py](../scripts/api_key.py); also works for the PlatformIO buttons in VS Code):
 
 ```bash
-export OPB_API_KEY=<key>
+echo 'OPB_API_KEY=<key>' > .envrc        # or: export OPB_API_KEY=<key>
 pio run -e esp32doit-devkit-v1-http -t upload
 ```
+
+Building works without the key; only an upload stops and says the key is missing.
 
 Partitions: `min_spiffs.csv` (4 MB flash): two OTA slots of 1.9 MB, 128 KB SPIFFS (history, events), 64 KB core dump. The firmware uses about 91 % of a slot; a larger slot is only possible by dropping the core dump or shrinking SPIFFS, and needs a USB flash (an OTA update cannot change the partition table).
 
