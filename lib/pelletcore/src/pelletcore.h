@@ -460,7 +460,7 @@ struct HourRecord {                           // stored on SPIFFS: keep the layo
     uint8_t  flame10, flameAct10, fan10, fanAct10;   // averages x10, 0xFF = unknown
     int8_t   state;                           // most frequent state
     uint8_t  n;                               // number of samples
-    int16_t  auger10;                         // rpm x10, -1 = unknown
+    int16_t  auger10;                         // auger on-time per cycle x10 (s), -1 = unknown
     uint16_t fumeRpm;                         // 0xFFFF = unknown
 };
 inline bool heatingState(int s) { return s >= 1 && s <= 5; }
@@ -508,8 +508,11 @@ struct HourAcc {
 // ── Pellet consumption ───────────────────────────────────────────────────────
 // The level sensor (RAM 0xA4 = 5) always trips at the same height in the hopper.
 // Between two trips exactly the pellets added in between were burned. The auger
-// value (RAM 0x0D, fixed per flame power: 3.0 / 4.6 / 6.2 / 7.8) times the time
-// gives "auger units"; kg per unit = kg added / units between two trips.
+// value (RAM 0x0D, fixed per flame power: 3.0 / 4.6 / 6.2 / 7.8) is the on-time in
+// seconds of the auger motor per cycle of about 12 s (measured 20/11/2026), so the
+// value times the time is proportional to the motor's running time: "auger units";
+// kg per unit = kg added / units between two trips. Values above the cycle (20.0 while
+// pre-loading at the start) mean the motor runs all the time: counted as the cycle.
 //   - a trip counts once the sensor stayed low for LOW_CONFIRM_S (it flickers when
 //     the level is right at the sensor); the cycle boundary is where it first went low
 //   - a refill is detected when the sensor is back to normal for REFILL_CONFIRM_S
@@ -526,6 +529,7 @@ struct PelletTracker {
     static const uint32_t REFILL_CONFIRM_S = 30;
     static const int      MAX_CYCLES = 10;
     static const uint32_t MAX_STEP_S = 30;   // longer gaps (no readings) are counted as 30 s
+    static constexpr float AUGER_CYCLE_S = 12.0f;   // auger cycle; a larger on-time = running all the time
 
     uint32_t version = 1;
     double   units = 0;           // auger units counted since the start
@@ -551,7 +555,8 @@ struct PelletTracker {
     {
         if (lastT && t > lastT && auger > 0) {
             uint32_t dt = t - lastT;
-            units += (double)auger * (dt > MAX_STEP_S ? MAX_STEP_S : dt);
+            float a = auger > AUGER_CYCLE_S ? AUGER_CYCLE_S : auger;   // pre-load: 20.0 = 12 s of 12 s
+            units += (double)a * (dt > MAX_STEP_S ? MAX_STEP_S : dt);
         }
         lastT = t;
         int ev = NONE;

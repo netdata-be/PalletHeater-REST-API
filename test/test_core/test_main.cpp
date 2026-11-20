@@ -396,6 +396,17 @@ static uint32_t pelletRun(pc::PelletTracker& p, uint32_t t, uint32_t secs, int s
     for (uint32_t i = 0; i < secs; i += 10) { t += 10; p.update(t, sensor, auger); }
     return t;
 }
+// The auger value is the on-time per ~12 s cycle: the pre-load value 20.0 counts as the
+// full cycle (the motor cannot run more than all the time)
+static void test_pellet_units_capped()
+{
+    pc::PelletTracker a, b, c;
+    uint32_t t = 1800000000;
+    for (int i = 0; i <= 12; i++) { a.update(t + i * 10, 0, 20.0f); b.update(t + i * 10, 0, 12.0f); c.update(t + i * 10, 0, 6.2f); }
+    TEST_ASSERT_EQUAL_FLOAT(12.0f * 120, (float)a.units);
+    TEST_ASSERT_EQUAL_FLOAT((float)b.units, (float)a.units);
+    TEST_ASSERT_EQUAL_FLOAT(6.2f * 120, (float)c.units);
+}
 static void test_pellet_tracker()
 {
     pc::PelletTracker p;
@@ -521,5 +532,6 @@ int main(int, char**)
     RUN_TEST(test_ring);
     RUN_TEST(test_hour_acc);
     RUN_TEST(test_pellet_tracker);
+    RUN_TEST(test_pellet_units_capped);
     return UNITY_END();
 }
