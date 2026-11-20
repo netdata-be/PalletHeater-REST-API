@@ -144,6 +144,7 @@ static LogModule logModules[] = {
     { "bus",     LOG_WARN, "stove bus: failed reads / writes" },
     { "update",  LOG_INFO, "firmware updates" },
     { "http",    LOG_INFO, "web server" },
+    { "https",   LOG_INFO, "HTTPS: certificate, TLS (debug: every connection)" },
     { "history", LOG_INFO, "history and event log" },
     { "ble",     LOG_INFO, "Bluetooth: connections and commands" },
 };

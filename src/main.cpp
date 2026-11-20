@@ -72,6 +72,8 @@ void setupTelnet()
 
 #include "coreDump.h"   // core dump of the last crash, /api/coredump
 
+#include "https.h"      // HTTPS on port 443 in front of the HTTP server, self-signed certificate
+
 // Serialise all stove bus access: HTTP handlers run on the loop task while the
 // sensor task polls the stove from the other core. Without the lock both talk
 // on the bus at the same time and reads return garbage.
@@ -96,7 +98,7 @@ static std::function<void()> withStoveLock(void (*fn)())
         {
             // writes done by this request are logged with where they came from
             char src[96];
-            snprintf(src, sizeof(src), "web/API %s (%s %s)", wm.server->client().remoteIP().toString().c_str(),
+            snprintf(src, sizeof(src), "web/API %s (%s %s)", clientIp().c_str(),
                      wm.server->method() == HTTP_GET ? "GET" : wm.server->method() == HTTP_POST ? "POST" : "other", wm.server->uri().c_str());
             CmdSource cs(src);
             fn();
@@ -147,7 +149,7 @@ static void registerRoutes()
     wm.server->on("/api/keywatch", authed(handleRouteKeyWatch));   // takes the stove lock itself, in the sensor task
     wm.server->on("/api", crumbed(handleRouteSwaggerUI));
     wm.server->on("/api-specs.json", crumbed(handleRouteSwaggerJSON));
-    wm.server->on("/app", HTTP_GET, crumbed(handleRouteWebApp));   // also served on / (kept for old links)
+    wm.server->on("/app", HTTP_GET, crumbed(httpsOr(handleRouteWebApp)));   // also served on / (kept for old links)
     wm.server->on("/api/history", authed(handleRouteHistory));
     wm.server->on("/api/events", authed(handleRouteEvents));
     wm.server->on("/api/pellets", authed(handleRoutePellets));
@@ -164,8 +166,9 @@ static void registerRoutes()
     wm.server->on("/api/loglevel", authed(handleRouteLogLevel));
     wm.server->on("/api/diag/reset", authed(handleRouteDiagReset));
     wm.server->on("/api/coredump", authed(handleRouteCoreDump));
-    wm.server->on("/", HTTP_GET, crumbed(handleRouteWebApp));   // the web app is the start page
-    wm.server->on("/device", crumbed(handleRouteIndex));          // small fallback page with links
+    wm.server->on("/api/https", authed(handleRouteHttps));
+    wm.server->on("/", HTTP_GET, crumbed(httpsOr(handleRouteWebApp)));   // the web app is the start page
+    wm.server->on("/device", crumbed(httpsOr(handleRouteIndex)));          // small fallback page with links
     wm.server->on("/manifest.webmanifest", HTTP_GET, crumbed(handleRouteManifest));   // home screen install (public)
     wm.server->on("/icon.svg", HTTP_GET, crumbed(handleRouteIconSvg));
     wm.server->on("/icon-180.png", HTTP_GET, crumbed(handleRouteIcon180));
@@ -221,11 +224,14 @@ void setup()
     } else {
         // BLE skipped completely: release the BT controller memory and let WiFi
         // use the radio without the BLE/WiFi coexistence modem sleep.
-        esp_bt_controller_mem_release(ESP_BT_MODE_BTDM);
+        // controller and host (Bluedroid, not used: the firmware has NimBLE) memory back to the
+        // heap; switching Bluetooth on again needs a restart anyway
+        esp_bt_mem_release(ESP_BT_MODE_BTDM);
         WiFi.setSleep(false);
         LOGI("sys", "Bluetooth disabled (setting) - BLE not started");
     }
     enableOTA(apiKey);   // OTA password = API key
+    httpsSetup();        // HTTPS task: waits for WiFi, makes the certificate the first time
     if (spiffsMounted) {
         File configFile = SPIFFS.open("/config.txt", "r");
         if (configFile) {

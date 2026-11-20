@@ -109,6 +109,9 @@ static bool httpClientWritable(uint32_t maxMs = 3000)
     WiFiClient c = wm.server->client();
     int fd = c.fd();
     if (fd < 0 || !c.connected()) return false;
+    // through HTTPS (https.h, a client on 127.0.0.1) the answer waits while it is encrypted
+    // and sent over WiFi; the HTTPS task has its own timeouts towards the real client
+    if (c.remoteIP() == IPAddress(127, 0, 0, 1) && maxMs < 10000) maxMs = 10000;
     uint32_t t0 = millis();
     for (;;) {
         fd_set set;
@@ -359,6 +362,10 @@ int cachedFlameActual = -1;     // RAM 0x34, -1 = not read yet
 // ("ble"/"enabled"); bleEnabled is the state of the running firmware.
 bool bleEnabled = true;
 volatile bool otaActive = false;   // set while an OTA firmware update is running (ota.h)
+// Only one TLS connection at a time fits in memory (~35 - 40 KB each): the HTTPS server
+// (https.h) and the GitHub update (fwUpdate.h) wait for each other with these two flags
+volatile bool httpsSessionActive = false;
+volatile bool httpsHoldsTls = false;   // the HTTPS server holds its reserved TLS buffers (~34 KB)
 // Telnet debug menu on port 23, stored in NVS ("telnet"/"enabled"), switchable at runtime
 bool telnetEnabled = true;
 

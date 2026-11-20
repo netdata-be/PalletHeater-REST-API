@@ -58,7 +58,7 @@ void handleRouteCoreDump()
     if (wm.server->method() == HTTP_DELETE) {
         esp_err_t e = esp_core_dump_image_erase();
         coreDumpText = "";
-        LOGI("sys", "core dump erased by %s", wm.server->client().remoteIP().toString().c_str());
+        LOGI("sys", "core dump erased by %s", clientIp().c_str());
         wm.server->send(e == ESP_OK ? 200 : 500, "application/json", e == ESP_OK ? "{\"result\":\"success\"}" : "{\"result\":\"failed - could not erase\"}");
         return;
     }

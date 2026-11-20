@@ -215,6 +215,10 @@ static void fwTask(void* arg)
     bool install = arg != nullptr;
     fwState = FW_CHECKING;
     fwError = "";
+    // one TLS connection at a time: let a running HTTPS session (often the request that
+    // started this check) finish first; HTTPS accepts no new one while fwBusy is set
+    // (it also hands back its reserved TLS buffers while fwBusy is set)
+    for (int i = 0; i < 100 && (httpsSessionActive || httpsHoldsTls); i++) vTaskDelay(pdMS_TO_TICKS(100));
     LOGI("update", "%s: checking GitHub (%s) for a newer release than %s", install ? "install" : "update check", FW_REPO, BUILD_VERSION);
     String err = fwDoCheck();
     if (!err.length()) {
@@ -285,7 +289,7 @@ void fwSetup()
 // From loop(): the automatic check.
 void fwLoop()
 {
-    if (!fwAutoCheck || fwBusy || otaActive || WiFi.status() != WL_CONNECTED || !fwTimeValid()) return;
+    if (!fwAutoCheck || fwBusy || otaActive || httpsSessionActive || WiFi.status() != WL_CONNECTED || !fwTimeValid()) return;
     static unsigned long lastTry = 0;
     unsigned long now = millis();
     unsigned long wait = fwCheckedAt ? FW_CHECK_EVERY_MS : (lastTry ? 60UL * 60UL * 1000UL : FW_FIRST_CHECK_MS);

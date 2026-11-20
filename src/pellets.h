@@ -143,7 +143,7 @@ void handleRoutePellets()
         if (wm.server->hasArg("refillKg")) {
             float v = wm.server->arg("refillKg").toFloat();
             if (v < 1 || v > 100) err = "refillKg must be 1 - 100";
-            else { pellets.refillKg = v; pelletsDirty = true; LOGI("stove", "pellets: refill amount set to %.1f kg by %s", v, wm.server->client().remoteIP().toString().c_str()); }
+            else { pellets.refillKg = v; pelletsDirty = true; LOGI("stove", "pellets: refill amount set to %.1f kg by %s", v, clientIp().c_str()); }
         }
         if (!err.length() && wm.server->hasArg("add")) {
             float v = wm.server->arg("add").toFloat();
@@ -151,12 +151,12 @@ void handleRoutePellets()
             else {
                 pellets.addKg(v, (uint32_t)time(nullptr)); pelletsDirty = true;
                 LOGI("stove", "pellets: %.1f kg added by hand (%s) by %s", v,
-                     pellets.low ? "used for the refill when the sensor clears" : "topped up", wm.server->client().remoteIP().toString().c_str());
+                     pellets.low ? "used for the refill when the sensor clears" : "topped up", clientIp().c_str());
             }
         }
         if (!err.length() && pc::parseOnOff(wm.server->arg("resetCalibration").c_str()) == 1) {
             pellets.resetCalibration(); pelletsDirty = true;
-            LOGI("stove", "pellets: calibration reset by %s", wm.server->client().remoteIP().toString().c_str());
+            LOGI("stove", "pellets: calibration reset by %s", clientIp().c_str());
         }
         if (pelletsDirty) pelletsSave();
         if (err.length()) code = 400;

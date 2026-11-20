@@ -3873,6 +3873,147 @@
           }
         }
       }
+    },
+    "/api/https": {
+      "get": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "HTTPS state and certificate (?cert=pem: the certificate as PEM)",
+        "parameters": [
+          {
+            "name": "cert",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pem"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "enabled": true,
+                  "redirect": true,
+                  "altNames": [],
+                  "listening": true,
+                  "port": 443,
+                  "url": "https://openpelletbridge.local/",
+                  "certificate": {
+                    "subject": "CN=openpelletbridge",
+                    "key": "ECDSA P-256",
+                    "sha256": "3F:A2:...",
+                    "validFrom": "2026-11-18T21:50:00Z",
+                    "validUntil": "2029-02-15T21:50:00Z",
+                    "san": [
+                      "openpelletbridge",
+                      "openpelletbridge.local",
+                      "192.168.50.222"
+                    ]
+                  },
+                  "stats": {
+                    "sessions": 12,
+                    "failedHandshakes": 1,
+                    "refusedLowMemory": 0,
+                    "lastHandshakeMs": 310,
+                    "maxHandshakeMs": 820
+                  },
+                  "problem": null
+                }
+              },
+              "application/x-x509-ca-cert": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "No certificate yet (cert=pem)"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "Switch HTTPS / the redirect on or off, set the extra certificate names, or make a new key and certificate",
+        "parameters": [
+          {
+            "name": "enabled",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "regenerate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            }
+          },
+          {
+            "name": "redirect",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "description": "Redirect the web app pages (/, /app, /device) from HTTP to HTTPS; the API stays on HTTP"
+          },
+          {
+            "name": "altNames",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Extra subjectAltNames, comma-separated (host names, *.wildcards, IPv4), max. 8; empty removes them"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "success",
+                  "enabled": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Neither enabled nor regenerate"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
     }
   },
   "components": {

@@ -45,7 +45,7 @@ Always reachable without key: `/` and `/app` (web app), `/device` (fallback page
 | `POST /api/auth?required=true` | Require the key (`false` makes it optional again). Needs the key while it is required. |
 | `POST /api/auth?rotate=true` | Generate a new key. |
 
-The web app (Device card) shows, copies and rotates the key and asks for it once when needed. The key is also printed on the serial console at boot. Plain HTTP is not encrypted: the key protects against other devices and web pages on the network, not against someone sniffing traffic. Telnet and BLE are not covered by the key; telnet can be switched off with [`/api/telnet`](#apitelnet).
+The web app (Device card) shows, copies and rotates the key and asks for it once when needed. The key is also printed on the serial console at boot. Plain HTTP is not encrypted: the key protects against other devices and web pages on the network, not against someone sniffing traffic. Use HTTPS (port 443) to keep the key off the wire. Telnet and BLE are not covered by the key; telnet can be switched off with [`/api/telnet`](#apitelnet).
 
 For Prometheus:
 
@@ -89,6 +89,7 @@ scrape_configs:
 | `GET` `POST` | [`/api/wifi`](#apiwifi) | WiFi status, network, hostname and DHCP / static IP |
 | `GET` | [`/api/wifi/scan`](#apiwifi) | WiFi networks in range |
 | `GET` `POST` | [`/api/telnet`](#apitelnet) | Enable / disable the telnet menu |
+| `GET` `POST` | [`/api/https`](#apihttps) | HTTPS on port 443: state, certificate, on / off, new key |
 | `GET` `POST` | [`/api/auth`](#authentication) | API key status, require, rotate |
 | `POST` | [`/api/update`](debugging.md#post-apiupdate) | Firmware update over HTTP |
 | `GET` `POST` | [`/api/firmware`](debugging.md#apifirmware) | Check GitHub for a new firmware release and install it |
@@ -619,6 +620,31 @@ Switches the telnet debug menu (port 23) on or off. Applied immediately, no rest
 curl -X POST "http://openpelletbridge.local/api/telnet?enabled=false"
 # {"result":"success","enabled":false}
 ```
+
+### `/api/https`
+
+HTTPS on port 443, next to HTTP on port 80. A task on the controller handles TLS and passes the requests on to the same web server, so every endpoint works over both. The certificate is **made on the controller**: its own ECDSA P-256 key (generated with the hardware random generator, kept in NVS, never sent anywhere; no seed in the public firmware), CN and subjectAltName = hostname, hostname.local and the IP address of the device, plus up to 8 extra names (`altNames`: host names, `*.` wildcards or IPv4 addresses), serverAuth, valid 820 days. It is re-issued with the same key when the hostname, the IP or the extra names change, or within 30 days of expiry. Self-signed: browsers warn once; compare the SHA-256 fingerprint, or install the certificate (`?cert=pem`) as trusted on your own devices.
+
+**Redirect** (`redirect`, default on): the web app pages (`/`, `/app`, `/device`) answer HTTP with a 307 to `https://`; the API (`/api/…`, `/metrics`, the firmware upload) stays on HTTP, for Home Assistant, Prometheus, scripts and PlatformIO, which do not follow a redirect to a self-signed certificate. No redirect while HTTPS is off or not ready.
+
+One TLS session at a time. Its two record buffers (~34 KB) are reserved once at start-up, while the heap is still in one piece, and reused for every connection; they are handed back only while the GitHub update runs (its own TLS connection) or while HTTPS is off. If they cannot be reserved, connections wait and `stats.refusedLowMemory` counts the attempts; HTTP keeps working. Key exchange X25519 (P-256 as fallback), certificate ECDSA P-256; session resumption keeps later connections of the same browser fast (~60 ms instead of ~1.5 s).
+
+```bash
+curl -k https://openpelletbridge.local/api/https          # -k: self-signed
+# {"enabled":true,"redirect":true,"altNames":[],"listening":true,"port":443,"url":"https://openpelletbridge.local/",
+#  "certificate":{"subject":"CN=openpelletbridge","key":"ECDSA P-256","sha256":"3F:A2:…",
+#   "validFrom":"2026-11-18T21:50:00Z","validUntil":"2029-02-15T21:50:00Z",
+#   "san":["openpelletbridge","openpelletbridge.local","192.168.50.222"]},
+#  "stats":{"sessions":12,"failedHandshakes":1,"refusedLowMemory":0,"lastHandshakeMs":1500,"maxHandshakeMs":1600,
+#   "minFreeHeapDuringSession":26480,"freeHeap":61204,"largestBlock":32756,"stackFreeMin":3100},"problem":null}
+curl -k -o openpelletbridge.crt "https://openpelletbridge.local/api/https?cert=pem"   # the certificate (PEM)
+curl -X POST "http://openpelletbridge.local/api/https?enabled=false"                    # switch off / on (immediately)
+curl -X POST "http://openpelletbridge.local/api/https?regenerate=true"                  # new key and certificate
+curl -X POST "http://openpelletbridge.local/api/https?redirect=false"                   # no redirect of the web app pages
+curl -X POST "http://openpelletbridge.local/api/https" --data-urlencode "altNames=pellet.thuis.lan,192.168.1.50"   # extra names (empty: none)
+```
+
+Log module `https` (set with `/api/loglevel`): certificate made / loaded / re-issued, listening, refused connections, slow handshakes; at debug level every connection (client, cipher suite, handshake time, bytes, why it ended).
 
 ### `GET /metrics`
 

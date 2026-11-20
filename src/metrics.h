@@ -63,7 +63,7 @@ static void httpAccessLog(HTTPMethod method, const String& uri)
         if (v.length() > 40) v = v.substring(0, 40) + "…";
         q += (q.length() ? "&" : "?") + k + "=" + v;
     }
-    LOGD("http", "%s %s%s from %s", mt, uri.c_str(), q.c_str(), wm.server->client().remoteIP().toString().c_str());
+    LOGD("http", "%s %s%s from %s", mt, uri.c_str(), q.c_str(), clientIp().c_str());
 }
 
 class HttpMetricsHandler : public RequestHandler {

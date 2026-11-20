@@ -17,6 +17,52 @@
 static String apiKey;
 static bool   apiKeyRequired = false;
 
+// HTTPS (https.h) passes each request on to this HTTP server over 127.0.0.1; it sets the
+// address of the TLS client here while it does, so logs show the real client
+volatile uint32_t httpsPeer = 0;
+static char httpsPeerText[48] = "";        // the TLS client as text (also IPv6), empty when none
+// The two relays in front of this server (https.h: TLS, http6.h: plain HTTP over IPv6) both
+// connect from 127.0.0.1; the local port of their connection tells which relay, and so which
+// real client, a request comes from
+struct ProxyPeer { volatile uint16_t port; bool tls; char text[48]; };
+static ProxyPeer proxyPeers[2];            // 0 = HTTPS, 1 = HTTP over IPv6
+static void proxyPeerSet(int slot, int lfd, bool tls, const char* who)
+{
+    struct sockaddr_in a = {}; socklen_t l = sizeof(a);
+    uint16_t port = lwip_getsockname(lfd, (struct sockaddr*)&a, &l) == 0 ? ntohs(a.sin_port) : 0;
+    proxyPeers[slot].tls = tls;
+    strlcpy(proxyPeers[slot].text, who, sizeof(proxyPeers[slot].text));
+    proxyPeers[slot].port = port;
+}
+static void proxyPeerClear(int slot) { proxyPeers[slot].port = 0; }
+static const ProxyPeer* proxyPeerOfRequest()   // the relay behind the current request, or nullptr
+{
+    WiFiClient c = wm.server->client();
+    if (c.remoteIP() != IPAddress(127, 0, 0, 1)) return nullptr;
+    uint16_t port = c.remotePort();
+    for (auto& p : proxyPeers) if (p.port && p.port == port) return &p;
+    return nullptr;
+}
+
+// JSON answer, serialized into a String of exactly the size it needs (replaces the old fixed
+// 9 KB global buffer, which took 9 KB of RAM all the time)
+template <typename Doc> static void sendJson(int code, const Doc& doc)
+{
+    String out;
+    out.reserve(measureJson(doc) + 1);
+    serializeJson(doc, out);
+    wm.server->send(code, "application/json", out);
+}
+static String clientIp()
+{
+    IPAddress ip = wm.server->client().remoteIP();
+    if (ip == IPAddress(127, 0, 0, 1)) {
+        const ProxyPeer* p = proxyPeerOfRequest();
+        if (p) return String(p->text) + (p->tls ? " (https)" : " (IPv6)");
+    }
+    return ip.toString();
+}
+
 static String generateApiKey()
 {
     char buf[33];
@@ -107,7 +153,7 @@ std::function<void()> authed(std::function<void()> fn)
         crumbRequest();
         if (!authOk()) {
             wm.server->sendHeader("WWW-Authenticate", "Bearer");
-            LOGW("http", "401 %s from %s: missing or invalid API key", wm.server->uri().c_str(), wm.server->client().remoteIP().toString().c_str());
+            LOGW("http", "401 %s from %s: missing or invalid API key", wm.server->uri().c_str(), clientIp().c_str());
             wm.server->send(401, "application/json", "{\"error\":\"Missing or invalid API key (X-API-Key header)\"}");
             return;
         }
@@ -131,7 +177,7 @@ void handleRouteAuth()
     if (wm.server->method() == HTTP_POST)
     {
         if (!authorised) {
-            LOGW("http", "401 %s from %s: missing or invalid API key", wm.server->uri().c_str(), wm.server->client().remoteIP().toString().c_str());
+            LOGW("http", "401 %s from %s: missing or invalid API key", wm.server->uri().c_str(), clientIp().c_str());
             wm.server->send(401, "application/json", "{\"error\":\"Missing or invalid API key (X-API-Key header)\"}");
             return;
         }
@@ -151,7 +197,7 @@ void handleRouteAuth()
             apiKey = generateApiKey();
             prefs.putString("key", apiKey);
             ArduinoOTA.setPassword(apiKey.c_str());   // the OTA password is the API key (ota.h)
-            LOGI("sys", "API key rotated by %s (also the OTA password)", wm.server->client().remoteIP().toString().c_str());
+            LOGI("sys", "API key rotated by %s (also the OTA password)", clientIp().c_str());
         }
         prefs.end();
     }

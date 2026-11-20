@@ -253,7 +253,7 @@ void handleRouteDiagReset()
     bool serial = pc::parseOnOff(wm.server->arg("serial").c_str()) == 1;
     bool crashes = pc::parseOnOff(wm.server->arg("crashes").c_str()) == 1;
     if (!serial && !crashes) { wm.server->send(400, "application/json", "{\"result\":\"failed - give serial=true and / or crashes=true\"}"); return; }
-    String who = wm.server->client().remoteIP().toString();
+    String who = clientIp();
     if (serial) {
         stove.readErrors = 0; stove.writeErrors = 0; stove.retries = 0; stove.skipped = 0; stove.transactions = 0;
         LOGI("sys", "serial counters reset by web/API %s", who.c_str());

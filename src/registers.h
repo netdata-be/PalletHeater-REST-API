@@ -286,7 +286,7 @@ void handleRouteDump()
     // task can read in between: a dump of 60 registers takes several seconds.
     int failedInRow = 0;
     char src[96];
-    snprintf(src, sizeof(src), "web/API %s (GET %s)", wm.server->client().remoteIP().toString().c_str(), wm.server->uri().c_str());
+    snprintf(src, sizeof(src), "web/API %s (GET %s)", clientIp().c_str(), wm.server->uri().c_str());
 
     // --- register param ---
     String regParam = wm.server->arg("register");

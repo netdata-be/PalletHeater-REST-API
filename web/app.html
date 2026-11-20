@@ -264,6 +264,11 @@ details.tbl th:first-child,details.tbl td:first-child{text-align:left}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;overflow-wrap:anywhere}
 .keybtns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 [hidden]{display:none!important}   /* class display rules must not override the hidden attribute */
+.altlist{width:100%;display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.altlist .alt{display:flex;gap:6px;align-items:center}
+.altlist input{flex:1;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 10px;font:inherit;color:inherit}
+.altlist input.bad{border-color:var(--err)}
+.altlist button{padding:5px 12px;font-size:13px}
 .mqform{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;padding:4px 0 12px;font-size:13px}
 .mqform label{display:flex;flex-direction:column;gap:3px;color:var(--muted)}
 .mqform label:has(input[type=checkbox]){flex-direction:row;align-items:center;justify-content:space-between;color:var(--text)}
@@ -529,6 +534,23 @@ button.mini{padding:1px 8px;font-size:11px;font-weight:550;border-radius:7px;mar
       <span class="lbl"><span data-i="apiKeyLbl"></span><span class="hint mono" id="keyVal">–</span></span>
       <span class="keybtns"><button id="keyShow" data-i="keyShow"></button><button id="keyCopy" data-i="keyCopy"></button><button id="keyRotate" data-i="keyRotate"></button></span>
     </div>
+    <div class="row">
+      <span class="lbl"><span>HTTPS</span><span data-help="https"></span><span class="hint" id="httpsHint">&nbsp;</span><span class="hint mono" id="httpsFp"></span></span>
+      <label class="switch"><input type="checkbox" id="httpsToggle"><span></span></label>
+    </div>
+    <div class="row" id="httpsRow" hidden>
+      <span class="lbl"><span data-i="httpsCert"></span><span class="hint" id="httpsValid"></span></span>
+      <span class="keybtns"><button id="httpsOpen" data-i="httpsOpen"></button><button id="httpsDl" data-i="httpsDl"></button><button id="httpsNew" data-i="httpsNew"></button></span>
+    </div>
+    <div class="row" id="httpsRedirRow" hidden>
+      <span class="lbl"><span data-i="httpsRedir"></span><span class="hint" data-i="httpsRedirHint"></span></span>
+      <label class="switch"><input type="checkbox" id="httpsRedirToggle"><span></span></label>
+    </div>
+    <div class="row" id="httpsAltRow" hidden style="flex-wrap:wrap">
+      <span class="lbl"><span data-i="httpsAlt"></span><span class="hint" data-i="httpsAltHint"></span></span>
+      <div id="httpsAltList" class="altlist"></div>
+      <div class="keybtns" style="width:100%;margin-top:6px"><button id="httpsAltAdd" title="+">+</button><button id="httpsAltSave" class="primary" data-i="httpsAltSaveBtn" hidden></button></div>
+    </div>
     <div class="row" id="ghRow" hidden>
       <span class="lbl"><span data-i="ghTitle"></span><span data-help="ghUpdate"></span><span class="hint" id="ghHint">&nbsp;</span><a class="hint" id="ghNotes" target="_blank" rel="noopener" data-i="ghNotes" hidden></a></span>
       <span class="keybtns"><button id="ghCheck" data-i="ghCheck"></button><button id="ghInstall" class="primary" hidden></button></span>
@@ -783,6 +805,14 @@ pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low 
     pqPlus:"{0}: for a small flame at maximum power, longer pellets or a lower consumption than specified",
     pqMin:"{0}: for a lot of ash in the brazier or a higher consumption than specified",
     telnetHint:"Debug menu on port 23, switches immediately", keyRequired:"API key required", keyShow:"Show", keyHide:"Hide", keyCopy:"Copy", keyRotate:"New key",
+    httpsOn:"On: https://{0} (port 443)", httpsOff:"Off: only HTTP (port 80)", httpsStarting:"Starting…", httpsCert:"Certificate", httpsValid:"self-signed, ECDSA P-256, valid until {0}",
+    httpsOpen:"Open over HTTPS", httpsDl:"Download", httpsNew:"New certificate", httpsFpLbl:"SHA-256 {0}",
+    httpsConfirmNew:"Make a new key and certificate? Browsers and devices that trust the current certificate warn again.", httpsMade:"New certificate is being made",
+    httpsEnabled:"HTTPS on", httpsDisabled:"HTTPS off",
+    httpsRedir:"Redirect HTTP to HTTPS", httpsRedirHint:"Web app pages only; the API stays reachable over HTTP (Home Assistant, scripts)", httpsRedirOn:"Redirect on", httpsRedirOff:"Redirect off",
+    httpsAlt:"Extra names in the certificate", httpsAltHint:"Next to the hostname, hostname.local and the IP address: other host names or IPv4 addresses you use (max. 8). The certificate is re-issued with the same key: the browser warns once more.",
+    httpsAltSaved:"Names saved, certificate re-issued", httpsAltBad:"Not a host name or IPv4 address", httpsAltMax:"At most 8 extra names", httpsAltSaveBtn:"Save names", httpsAltRemove:"Remove",
+    h_https:"Encrypted access over https:// on port 443, next to plain HTTP on port 80. The certificate is made on the controller itself (its own ECDSA P-256 key, which never leaves it) for the hostname, hostname.local and the IP address, and is renewed automatically with the same key when one of them changes. It is self-signed: the browser warns the first time. Check that the SHA-256 fingerprint the browser shows is the one here, then accept it; or download the certificate and install it as trusted on your own devices (then no warning). A TLS connection needs ~40 KB of memory: the controller serves one at a time, and refuses it when memory is low (HTTP keeps working).",
     keyOn:"Every API call needs the X-API-Key header", keyOff:"Optional: the API is open on your network", keyCopied:"API key copied", keyNew:"New API key generated",
     keyConfirmRotate:"Generate a new API key? Other clients (scripts, Home Assistant, Prometheus) then need the new key.",
     keyConfirmOn:"Require the API key? This browser stores the key. Other clients (scripts, Home Assistant, Prometheus, the iOS app over WiFi) then need the X-API-Key header.",
@@ -945,6 +975,14 @@ pelLeft:"Pellets in de bak", pelLearning:"wordt gemeten: vul bij bij het pellet-
     pqPlus:"{0}: voor een kleine vlam bij maximumvermogen, langere pellets of een lager verbruik dan vermeld",
     pqMin:"{0}: voor veel as in de brandkorf of een hoger verbruik dan vermeld",
     telnetHint:"Debugmenu op poort 23, schakelt meteen", keyRequired:"API-key verplicht", keyShow:"Toon", keyHide:"Verberg", keyCopy:"Kopieer", keyRotate:"Nieuwe key",
+    httpsOn:"Aan: https://{0} (poort 443)", httpsOff:"Uit: enkel HTTP (poort 80)", httpsStarting:"Start…", httpsCert:"Certificaat", httpsValid:"zelfondertekend, ECDSA P-256, geldig tot {0}",
+    httpsOpen:"Open via HTTPS", httpsDl:"Download", httpsNew:"Nieuw certificaat", httpsFpLbl:"SHA-256 {0}",
+    httpsConfirmNew:"Een nieuwe sleutel en een nieuw certificaat maken? Browsers en toestellen die het huidige certificaat vertrouwen, waarschuwen dan opnieuw.", httpsMade:"Nieuw certificaat wordt gemaakt",
+    httpsEnabled:"HTTPS aan", httpsDisabled:"HTTPS uit",
+    httpsRedir:"HTTP doorsturen naar HTTPS", httpsRedirHint:"Enkel de pagina's van de webapp; de API blijft via HTTP bereikbaar (Home Assistant, scripts)", httpsRedirOn:"Doorsturen aan", httpsRedirOff:"Doorsturen uit",
+    httpsAlt:"Extra namen in het certificaat", httpsAltHint:"Naast de hostnaam, hostnaam.local en het IP-adres: andere hostnamen of IPv4-adressen die je gebruikt (max. 8). Het certificaat wordt opnieuw uitgegeven met dezelfde sleutel: de browser waarschuwt nog één keer.",
+    httpsAltSaved:"Namen bewaard, certificaat opnieuw uitgegeven", httpsAltBad:"Geen hostnaam of IPv4-adres", httpsAltMax:"Maximaal 8 extra namen", httpsAltSaveBtn:"Namen bewaren", httpsAltRemove:"Verwijder",
+    h_https:"Versleutelde toegang via https:// op poort 443, naast gewone HTTP op poort 80. Het certificaat wordt op de controller zelf gemaakt (een eigen ECDSA P-256-sleutel die het toestel nooit verlaat) voor de hostnaam, hostnaam.local en het IP-adres, en automatisch vernieuwd met dezelfde sleutel als een van die drie verandert. Het is zelfondertekend: de browser waarschuwt de eerste keer. Kijk of de SHA-256-vingerafdruk die de browser toont dezelfde is als hier en aanvaard hem dan; of download het certificaat en installeer het als vertrouwd op je eigen toestellen (dan geen waarschuwing). Een TLS-verbinding vraagt ~40 KB geheugen: de controller bedient er één tegelijk en weigert ze als het geheugen krap is (HTTP blijft werken).",
     keyOn:"Elke API-aanroep heeft de header X-API-Key nodig", keyOff:"Optioneel: de API is open op je netwerk", keyCopied:"API-key gekopieerd", keyNew:"Nieuwe API-key aangemaakt",
     keyConfirmRotate:"Een nieuwe API-key aanmaken? Andere clients (scripts, Home Assistant, Prometheus) hebben dan de nieuwe key nodig.",
     keyConfirmOn:"De API-key verplicht maken? Deze browser bewaart de key. Andere clients (scripts, Home Assistant, Prometheus, de iOS-app via WiFi) hebben dan de header X-API-Key nodig.",
@@ -1044,7 +1082,21 @@ let reqRows = [];
 function reqText(r) {
   return fmtMs(r.wall).padEnd(13) + r.method.padEnd(7) + r.path.padEnd(40) + " " + (r.err ? "ERR " : String(r.status).padEnd(4)) + String(r.ms).padStart(6) + " ms" + (r.err ? "  " + r.err : "");
 }
+// Over HTTPS the controller serves one TLS session at a time (memory): at most 2 requests at
+// once, so the browser keeps 1 - 2 keep-alive connections instead of opening up to 6, each
+// waiting in the controller's queue for its own handshake. Plain HTTP is not limited.
+const API_MAX = location.protocol === "https:" ? 2 : 99;
+let apiActive = 0; const apiQueue = [];
+async function apiSlot() {
+  if (apiActive < API_MAX) { apiActive++; return; }
+  await new Promise(res => apiQueue.push(res));   // apiActive is handed over by apiDone()
+}
+function apiDone() { const next = apiQueue.shift(); if (next) next(); else apiActive--; }
 async function api(method, path, params, body) {
+  await apiSlot();
+  try { return await apiCall(method, path, params, body); } finally { apiDone(); }
+}
+async function apiCall(method, path, params, body) {
   const url = new URL(path, location.origin);
   if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 15000);
@@ -1177,7 +1229,7 @@ function helpBtn(key) {
     ev.stopPropagation();
     if (popOwner === b) { hidePop(); return; }
     hidePop();
-    pop.textContent = t(key); if (!["h_hyp", "h_par", "h_mqtt", "h_wifi", "h_ghUpdate"].includes(key)) pop.appendChild(el("span", "src", t("manualRef")));   // these texts are not from the manual
+    pop.textContent = t(key); if (!["h_par", "h_mqtt", "h_wifi", "h_ghUpdate", "h_https"].includes(key)) pop.appendChild(el("span", "src", t("manualRef")));   // these texts are not from the manual
     pop.style.display = "block";
     const r = b.getBoundingClientRect(), w = Math.min(340, window.innerWidth - 24);
     pop.style.maxWidth = w + "px";
@@ -1314,8 +1366,91 @@ function renderSecurity() {
 async function loadSecurity() {
   try { auth = (await api("GET", "/api/auth")).data; if (auth.key && auth.required) storeKey(auth.key); } catch (_) {}
   try { telnetState = (await api("GET", "/api/telnet")).data; } catch (_) {}
-  renderSecurity();
+  try { httpsState = (await api("GET", "/api/https")).data; } catch (_) {}
+  renderSecurity(); renderHttps();
 }
+// ---------- HTTPS (port 443, self-signed certificate made on the controller) ----------
+let httpsState = null;
+function renderHttps() {
+  const h = httpsState; if (!h) return;
+  const c = h.certificate;
+  $("httpsToggle").checked = !!h.enabled;
+  const host = c && c.san ? c.san[1] : (h.url || "").replace(/^https:\/\/|\/$/g, "");
+  $("httpsHint").textContent = !h.enabled ? t("httpsOff") : h.listening ? t("httpsOn", host) : (h.problem || t("httpsStarting"));
+  $("httpsFp").textContent = h.enabled && c ? t("httpsFpLbl", c.sha256) : "";
+  $("httpsRow").hidden = !(h.enabled && c);
+  $("httpsRedirRow").hidden = $("httpsAltRow").hidden = !h.enabled;
+  $("httpsRedirToggle").checked = !!h.redirect;
+  if (!altDirty) { altDraft = [...(h.altNames || [])]; renderAltList(); }
+  if (c) {
+    $("httpsValid").textContent = t("httpsValid", fmtDate(new Date(c.validUntil)));
+    $("httpsOpen").hidden = location.protocol === "https:";
+  }
+}
+// Extra names: an editable list (a field and a "−" per name, "+" adds an empty field);
+// the save button sends the whole list once something changed
+let altDraft = [], altDirty = false;
+function altValid(v) { return v.length <= 100 && ALT_OK.test(v); }
+function renderAltList(focusLast) {
+  const list = $("httpsAltList"); list.innerHTML = "";
+  altDraft.forEach((name, i) => {
+    const r = el("div", "alt");
+    const inp = el("input"); inp.value = name; inp.placeholder = "pellet.thuis.lan"; inp.maxLength = 100;
+    inp.autocapitalize = "off"; inp.spellcheck = false; inp.setAttribute("autocorrect", "off");
+    inp.classList.toggle("bad", !!name.trim() && !altValid(name.trim().toLowerCase()));
+    inp.oninput = () => { altDraft[i] = inp.value; altDirty = true; inp.classList.toggle("bad", !!inp.value.trim() && !altValid(inp.value.trim().toLowerCase())); $("httpsAltSave").hidden = false; };
+    inp.onkeydown = e => { if (e.key === "Enter") $("httpsAltSave").click(); };
+    const del = el("button", "", "−"); del.title = t("httpsAltRemove");
+    del.onclick = () => { altDraft.splice(i, 1); altDirty = true; renderAltList(); };
+    r.append(inp, del); list.appendChild(r);
+    if (focusLast && i === altDraft.length - 1) setTimeout(() => inp.focus(), 0);
+  });
+  $("httpsAltAdd").disabled = altDraft.length >= 8;
+  $("httpsAltSave").hidden = !altDirty;
+}
+const ALT_OK = /^(\*\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/i;
+$("httpsAltAdd").onclick = () => {
+  if (altDraft.length >= 8) { toast(t("httpsAltMax"), true); return; }
+  altDraft.push(""); altDirty = true; renderAltList(true);
+};
+$("httpsAltSave").onclick = async () => {
+  const names = [...new Set(altDraft.map(v => v.trim().toLowerCase()).filter(Boolean))];
+  const bad = names.find(v => !altValid(v));
+  if (bad) { toast(t("httpsAltBad") + ": " + bad, true); return; }
+  $("httpsAltSave").disabled = true;
+  try {
+    httpsState = await write(t("httpsAltSaved"), "POST", "/api/https", { altNames: names.join(",") });
+    altDirty = false; renderHttps();
+    // the certificate is re-issued by the HTTPS task: fetch the new fingerprint a moment later
+    setTimeout(async () => { try { httpsState = (await api("GET", "/api/https")).data; renderHttps(); } catch (_) {} }, 4000);
+  } catch (_) {}   // write() already showed the error
+  finally { $("httpsAltSave").disabled = false; }
+};
+$("httpsRedirToggle").onchange = async e => {
+  const on = e.target.checked;
+  try { httpsState = await write(t(on ? "httpsRedirOn" : "httpsRedirOff"), "POST", "/api/https", { redirect: on }); } catch (_) { e.target.checked = !on; }
+  renderHttps();
+};
+$("httpsToggle").onchange = async e => {
+  const on = e.target.checked;
+  try { httpsState = await write(t(on ? "httpsEnabled" : "httpsDisabled"), "POST", "/api/https", { enabled: on }); } catch (_) { e.target.checked = !on; }
+  renderHttps();
+};
+$("httpsOpen").onclick = () => { location.href = "https://" + location.hostname + "/"; };
+$("httpsNew").onclick = async () => {
+  if (!confirm(t("httpsConfirmNew"))) return;
+  try { await write(t("httpsMade"), "POST", "/api/https", { regenerate: true }); } catch (_) {}
+  setTimeout(async () => { try { httpsState = (await api("GET", "/api/https")).data; renderHttps(); } catch (_) {} }, 4000);
+};
+$("httpsDl").onclick = async () => {
+  try {
+    const r = await fetch("/api/https?cert=pem", { headers: storedKey() ? { "X-API-Key": storedKey() } : {} });
+    if (!r.ok) throw new Error(r.status);
+    const a = document.createElement("a"); a.href = URL.createObjectURL(await r.blob());
+    a.download = ((httpsState && httpsState.certificate && httpsState.certificate.san[0]) || "openpelletbridge") + ".crt"; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  } catch (e) { toast(t("failed", t("httpsDl"), e.message), true); }
+};
 $("telnetToggle").onchange = async e => {
   const on = e.target.checked;
   try { telnetState = await write(on ? t("telnetOn") : t("telnetOff"), "POST", "/api/telnet", { enabled: on }); } catch (_) { e.target.checked = !on; }
