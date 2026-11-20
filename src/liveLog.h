@@ -220,6 +220,7 @@ static void diagCycle(bool slow, uint32_t waitMs, uint32_t durMs)
 
 // WiFi drops (filled by the WiFi events in wifiInfo.h)
 static volatile uint32_t wifiDisconnects = 0;
+static uint32_t netwdRepairs = 0;   // network watchdog: reconnects + WiFi driver restarts since the start (wifiInfo.h)
 static volatile uint8_t  wifiLastReason = 0;
 static volatile uint32_t wifiLastDisconnectMs = 0;
 static volatile bool     wifiWasUp = false;

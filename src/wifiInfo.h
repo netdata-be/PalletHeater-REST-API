@@ -150,8 +150,111 @@ static void netSwitchLoop()
     }
 }
 
+// ── Network watchdog ──────────────────────────────────────────────────
+// 20/11/2026 the controller was unreachable all night (no ping, no mDNS) while the loop kept
+// running (history without gaps): only the network side was gone, and nothing repaired it.
+// Every minute: is WiFi connected and does the gateway answer a ping? (The ping only counts
+// once the gateway answered at least once: some do not answer ping.) When not, repair the
+// connection step by step - never a restart of the controller: when the network itself is
+// down, a restart cannot help and would only repeat (restart loop):
+//   1. after 2 min: reconnect (leave and join the network again, new DHCP lease)
+//   2. 3 min later: restart the WiFi driver (esp_wifi_stop / start) and join again
+//   3. then restart the driver again with a growing pause: 10, 20, 30, 30 ... min
+// Every step is logged with the heap (a full heap leaves the WiFi driver and lwIP without
+// buffers: incoming packets are dropped silently - then the log shows it).
+#include <ping/ping_sock.h>
+#define NETWD_CHECK_MS     60000UL
+#define NETWD_FIRST_MS    120000UL    // network down this long: first repair
+#define NETWD_DRIVER_MS   180000UL    // after the reconnect: restart the driver
+#define NETWD_MAX_PAUSE_MS 1800000UL  // longest pause between driver restarts
+static esp_ping_handle_t netwdPing = nullptr;
+static volatile uint32_t netwdPingOkAt = 0;    // millis() of the last answer from the gateway
+static volatile bool netwdPingEverOk = false;
+static uint32_t netwdDownAt = 0;               // since when the network is down (0 = fine)
+static uint32_t netwdCheckAt = 0;
+static uint32_t netwdNextAt = 0;               // next repair step (millis() since netwdDownAt)
+static uint8_t  netwdStep = 0;                 // repairs done in this outage
+
+static void netwdHeapText(char* out, size_t n)
+{
+    snprintf(out, n, "heap %u KB free, lowest %u KB, largest block %u KB",
+             (unsigned)(ESP.getFreeHeap() / 1024), (unsigned)(ESP.getMinFreeHeap() / 1024),
+             (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) / 1024));
+}
+
+static void netwdPingGateway()
+{
+    IPAddress gw = WiFi.gatewayIP();
+    if (!gw) return;
+    if (netwdPing) {   // gateway changed (other network / DHCP): new session
+        ip_addr_t cur; esp_ping_get_profile(netwdPing, ESP_PING_PROF_IPADDR, &cur, sizeof(cur));
+        if (cur.u_addr.ip4.addr != (uint32_t)gw) { esp_ping_delete_session(netwdPing); netwdPing = nullptr; }
+    }
+    if (!netwdPing) {
+        esp_ping_config_t cfg = ESP_PING_DEFAULT_CONFIG();
+        cfg.count = 3; cfg.interval_ms = 1000; cfg.timeout_ms = 1000;
+        cfg.task_stack_size = 2560;
+        cfg.target_addr.type = IPADDR_TYPE_V4;
+        cfg.target_addr.u_addr.ip4.addr = (uint32_t)gw;
+        esp_ping_callbacks_t cb = {};
+        cb.on_ping_success = [](esp_ping_handle_t, void*) { netwdPingOkAt = millis(); netwdPingEverOk = true; };
+        if (esp_ping_new_session(&cfg, &cb, &netwdPing) != ESP_OK) { netwdPing = nullptr; return; }
+    }
+    esp_ping_start(netwdPing);   // runs in the ping task; the answer arrives via the callback
+}
+
+static void netWatchdogLoop()
+{
+    if (!wifiConnected) { netwdDownAt = 0; return; }   // config portal / first connection: not ours
+    if (millis() - netwdCheckAt < NETWD_CHECK_MS) return;
+    netwdCheckAt = millis();
+    bool wifiUp = WiFi.status() == WL_CONNECTED;
+    // the ping of the previous check (3 tries) had a minute to answer
+    bool gwOk = !netwdPingEverOk || millis() - netwdPingOkAt < NETWD_CHECK_MS + 5000;
+    char h[80];
+    if (wifiUp && gwOk) {
+        if (netwdDownAt) {
+            netwdHeapText(h, sizeof(h));
+            LOGI("wifi", "network watchdog: network back after %lu s (%u repair step(s); %s)",
+                 (millis() - netwdDownAt) / 1000, netwdStep, h);
+        }
+        netwdDownAt = 0; netwdStep = 0;
+    } else {
+        const char* what = wifiUp ? "WiFi connected, gateway does not answer" : "WiFi not connected";
+        if (!netwdDownAt) {
+            netwdDownAt = millis(); netwdNextAt = NETWD_FIRST_MS; netwdStep = 0;
+            netwdHeapText(h, sizeof(h));
+            LOGW("wifi", "network watchdog: %s (%s, RSSI %d dBm)", what, h, (int)WiFi.RSSI());
+        } else if (millis() - netwdDownAt >= netwdNextAt) {
+            netwdHeapText(h, sizeof(h));
+            netwdStep++; netwdRepairs++;
+            uint32_t down = (millis() - netwdDownAt) / 1000;
+            if (netwdStep == 1) {
+                LOGW("wifi", "network watchdog: %s for %lu s - reconnecting (%s)", what, down, h);
+                WiFi.disconnect(false, false);   // keep the stored network
+                delay(100);
+                WiFi.reconnect();
+                netwdNextAt += NETWD_DRIVER_MS;
+            } else {
+                LOGW("wifi", "network watchdog: %s for %lu s - restarting the WiFi driver (repair %u; %s)", what, down, netwdStep, h);
+                esp_wifi_disconnect();
+                esp_wifi_stop();
+                delay(200);
+                esp_err_t e = esp_wifi_start();
+                if (e == ESP_OK) e = esp_wifi_connect();
+                if (e != ESP_OK) LOGE("wifi", "network watchdog: WiFi driver restart failed: %s", esp_err_to_name(e));
+                // pause before the next driver restart: 10, 20, 30, 30 ... min
+                uint32_t pause = 600000UL * (netwdStep - 1);
+                netwdNextAt += pause < NETWD_MAX_PAUSE_MS ? pause : NETWD_MAX_PAUSE_MS;
+            }
+        }
+    }
+    if (wifiUp) netwdPingGateway();
+}
+
 void netLoop()
 {
+    netWatchdogLoop();
     netSwitchLoop();
     if (!netPendingConfirm) return;
     if (netHttpSeen) {
@@ -269,6 +372,7 @@ void handleRouteWifi()
     if (netPendingConfirm) json["confirmSecondsLeft"] = (NET_CONFIRM_MS - (millis() - netPendingSince)) / 1000;
     if (netSwitch == NS_CONFIRM) json["confirmSecondsLeft"] = (NET_CONFIRM_MS - (millis() - netSwitchAt)) / 1000;
     if (netSwitchMsg.length()) json["lastChange"] = netSwitchMsg;
+    json["watchdogRepairs"] = netwdRepairs;   // network watchdog: reconnects + driver restarts
     json["disconnects"] = (uint32_t)wifiDisconnects;   // drops of a working connection since the start
     if (wifiLastDisconnectMs) {
         JsonObject ld = json.createNestedObject("lastDisconnect");
