@@ -54,6 +54,37 @@ The Home Assistant device carries the stove firmware as `hw_version` and the sto
 | Interface | Details |
 |---|---|
 | BLE | GATT server `OpenPelletBridge`, see [BLE_API.md](../BLE_API.md). Also supports firmware updates over BLE ([ble_ota.py](../ble_ota.py)). |
-| Telnet | Port 23, interactive menu for reading and writing values. |
+| Telnet | Port 23 (IPv4 and IPv6), interactive menu for reading and writing values, see [Telnet menu](#telnet-menu) below. |
 | ArduinoOTA | Hostname `Pelletheater`, port 3232, password protected. Slow; prefer [`/api/update`](debugging.md#post-apiupdate). |
 | mDNS | `openpelletbridge.local`, service `_http._tcp`. |
+
+## Telnet menu
+
+A text menu on port 23 for diagnostics and control without a browser:
+
+```bash
+telnet openpelletbridge.local        # or the IPv4 / IPv6 address
+telnet fe80::1234:5678:9abc:def0%en0 # link-local IPv6 (with the interface)
+```
+
+The controller listens on IPv4 and IPv6 (one dual-stack socket; if the network stack does not cover IPv4 with it, a second IPv4 socket is used, the log line `telnet running on port 23 (...)` says which). Use a real telnet client (macOS / Linux `telnet`, PuTTY in *Telnet* mode): the menu switches the client to character mode and echoes itself.
+
+Every screen starts with a status header: stove state, room temperature and set point, flame, fan, the pellet estimate and warning lines for an error (also the controller-side `PELLETS` and `LINK` errors), an error the stove reports before it counts (with its countdown), low pellets / pellet reserve and a running firmware update.
+
+| Menu | What it offers |
+|---|---|
+| Status | Everything at a glance, refreshes every 2 s: state, errors, temperatures, flame, room fan, fume fan, auger (s and %), energy saving, brazier cleaning, pellet estimate and reserve, remote control, stove clock, counters |
+| Live values | Chosen groups printed every 2 s (scrolls), e.g. to watch a start-up |
+| Control | Power (asks for confirmation; refused while the pellets are used up, as on the API), set point, flame power, room fan, energy saving stop / restart, combustion and pellet quality, beep, stove clock to NTP |
+| Timers | PR1 - PR6: enabled, on / off time, set point, flame, fan, days |
+| Pellets | Estimate until the low pellet alarm, calibration cycles, pellets added by hand, refill amount, reset calibration (the same data as [`/api/pellets`](api.md#apipellets)) |
+| Errors and history | Error memory (and clearing it), the event log, the last 3 hours of history |
+| Network | WiFi, IPv4 and IPv6 addresses, drops, network watchdog; hostname and IP settings (saved like in the web app, used after a restart, with the same 5 minute confirmation: opening the web app *or* a telnet session on the new address confirms it) |
+| Device | GitHub firmware update (check, install, automatic check), services (MQTT, HTTPS, HTTP over IPv6, Bluetooth, telnet), system (restarts, memory, bus counters), log levels per module, restart |
+| Debug | Firmware log (live), bus frame debug and its buffer, raw register read / write |
+
+Keys: arrows (or tab) to move, Enter / right to open, `1`-`9` and `a`-`h` to open an item directly, Esc / left / backspace / `q` to go back (`q` in the main menu exits), `r` to redraw, `?` for help. A value is chosen with the arrow keys and only written to the stove on Enter; power, clearing the error memory, raw writes, IP settings and restarts ask for confirmation (`y`). Every write is logged with the source `telnet menu (<client address>)`.
+
+One session at a time. Who connects while the menu is in use is told who uses it and can take that session over (`t`; the other client is told and disconnected) or leave; a third client gets a short message. A session without a key for 30 minutes is closed; a client that disappeared is found by TCP keepalive.
+
+Telnet is not encrypted and **not protected by the API key**. Switch it off in the web app (Device card) or with [`/api/telnet`](api.md#apitelnet) when the network is not trusted.

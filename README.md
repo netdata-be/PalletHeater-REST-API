@@ -10,7 +10,7 @@ ESP32 firmware that connects to the serial bus of a Micronova based pellet stove
 - an **HTTP REST API** ([docs/api.md](docs/api.md)),
 - a **BLE GATT service** (see [BLE_API.md](BLE_API.md)), used by the iOS app in [app/](app/),
 - **Prometheus metrics** on `/metrics`,
-- a **telnet** debug menu on port 23.
+- a **telnet** debug menu on port 23 (IPv4 and IPv6): status, control, timers, pellets, errors, network, firmware update, live log.
 
 The full OpenAPI 3 specification is in [docs/openapi.json](docs/openapi.json). The same file is embedded in the firmware and rendered with Swagger UI on `http://<device>/api`.
 

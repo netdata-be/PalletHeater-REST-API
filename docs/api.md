@@ -613,11 +613,11 @@ curl -X POST "http://openpelletbridge.local/api/wifi?mode=static&ip=192.168.50.3
 
 `GET /api/wifi/scan` lists the networks in range: `{"scanning":true}` while the scan runs (a few seconds, poll again), then `{"scanning":false,"networks":[{"ssid":"Home","rssi":-61,"quality":78,"channel":6,"secure":true}]}`, strongest first per network. `?refresh=true` starts a new scan.
 
-**Lock-out protection:** when the controller cannot connect to a new network within 25 s, or nobody reaches it there within 5 minutes, it restores the previous network and IP settings and restarts (`lastChange` tells what happened). After a restart with a new static address the controller waits up to 5 minutes for any HTTP request (opening the web app on the new address is enough). Without one it switches back to DHCP and restarts. `confirmSecondsLeft` shows the remaining time.
+**Lock-out protection:** when the controller cannot connect to a new network within 25 s, or nobody reaches it there within 5 minutes, it restores the previous network and IP settings and restarts (`lastChange` tells what happened). After a restart with a new static address the controller waits up to 5 minutes for any HTTP request (opening the web app on the new address is enough; a telnet session counts too). Without one it switches back to DHCP and restarts. `confirmSecondsLeft` shows the remaining time.
 
 ### `/api/telnet`
 
-Switches the telnet debug menu (port 23) on or off. Applied immediately, no restart, and stored in NVS.
+Switches the telnet debug menu (port 23, IPv4 and IPv6, see [Telnet menu](mqtt.md#telnet-menu)) on or off. Applied immediately, no restart, and stored in NVS. Switching it off closes an open session.
 
 ```bash
 curl -X POST "http://openpelletbridge.local/api/telnet?enabled=false"
