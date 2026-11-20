@@ -161,7 +161,7 @@ curl http://openpelletbridge.local/api/state
 | `pendingError` | The error the stove reports right now (RAM 0x33), also before it counts as `currentError`, with `secondsLeft`: seconds until the stove acts on it (RAM 0x30). E1 (hopper lid open) gives 55 s; closing the lid in time clears it. `null` without an error. The web app shows it as an alert with the countdown. |
 | `brazierCleaning` | `minutesLeft`: minutes to the next brazier cleaning (RAM 0x32), `null` when the stove is not working; `active`: `true` while the cleaning runs (state 5); `interval`: minutes between cleanings (EEPROM 0x02). |
 | `totalRuntime` | Total working hours. |
-| `augerSpeed` | Auger speed in rpm. |
+| `augerSpeed` | Auger on-time per cycle in seconds (RAM 0x0D / 10). Measured 20/11/2026 at flame power 3 (6.2) and 2 (4.6): the auger runs that many seconds and stands still the rest of a fixed ~12 s cycle (RAM 0xB2 follows the motor); 20.0 at the start = running continuously (pre-loading). The name is kept for compatibility; earlier docs called it rpm. |
 | `serialNumber` | Serial number of the stove: **MATR** on the nameplate (EEPROM 0xCD – 0xCF, read once). `null` until read. |
 | `RemoteControlLastSeen` | Seconds since the last contact with the remote control, `-1` when unknown. |
 | `previousErrors` | `false` when the error memory is empty, otherwise an object with the non-empty positions. See [`/api/errors`](#apierrors). |
@@ -493,7 +493,7 @@ curl "http://openpelletbridge.local/api/history?hours=6"
 }
 ```
 
-`t` is Unix time (UTC), temperatures in °C (0.5 °C resolution as reported by the stove), `state` is the stove state code, `fan` the room fan speed, `flame` the set and `flameActual` the actual flame power, `auger` the auger (feed screw) speed in rpm, `fumeFan` the fume fan speed in rpm, `fanActual` the speed the room fan really ran at (0 = stopped), `fanPower` the raw room fan power (RAM 0x0A: 0 off, 21/23/25 at speed 1/2/3) (`null` for samples recorded by older firmware). Each sample is an array in the order of `fields`. Changes shorter than the 2 minute interval are not captured in the samples; use [`/api/events`](#get-apievents) for exact state changes.
+`t` is Unix time (UTC), temperatures in °C (0.5 °C resolution as reported by the stove), `state` is the stove state code, `fan` the room fan speed, `flame` the set and `flameActual` the actual flame power, `auger` the auger (feed screw) on-time per cycle in seconds, `fumeFan` the fume fan speed in rpm, `fanActual` the speed the room fan really ran at (0 = stopped), `fanPower` the raw room fan power (RAM 0x0A: 0 off, 21/23/25 at speed 1/2/3) (`null` for samples recorded by older firmware). Each sample is an array in the order of `fields`. Changes shorter than the 2 minute interval are not captured in the samples; use [`/api/events`](#get-apievents) for exact state changes.
 
 **7 days (`hours` 25 – 168):** the 2-minute samples are also averaged per clock hour into 168 hourly records, kept in `/hist_week.bin` (one append per hour). After an update to firmware with this feature the week is filled from the 24 h history. The answer has `"interval": 3600` and the fields `t` (start of the hour), `room`, `stove`, `remote`, `fume`, `flame`, `flameActual`, `fan`, `fanActual`, `auger`, `fumeFan` (hourly averages), `setpoint` (last value), `fumeMax`, `state` (most frequent state), `burning` (% of the hour in a heating state 1 – 5) and `n` (samples in that hour). The hour in progress is included as the last record.
 

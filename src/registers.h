@@ -140,7 +140,7 @@ static String getRamValueTxt(byte addr, int val)
     switch (addr) {
         case 0x01: snprintf(buf, sizeof(buf), "%.1f °C (ambient temp)", val / 2.0f);          return buf;
         case 0x04: if (!val) return "0 (too cold for the room fan)"; snprintf(buf, sizeof(buf), "%d (hot enough for the room fan; follows the flame level)", val); return buf;
-        case 0x0D: snprintf(buf, sizeof(buf), "%.1f rpm (auger speed)", val / 10.0f);          return buf;
+        case 0x0D: snprintf(buf, sizeof(buf), "%.1f s (auger on-time per cycle)", val / 10.0f); return buf;
         case 0x18: { const char* p = getSelectedParameterName(val); return p ? p : ""; }
         case 0x19: snprintf(buf, sizeof(buf), "Menu edit value %d", val); return buf;
         case 0x08: {   // key pressed on the remote (verified 17/11/2026)
@@ -185,6 +185,7 @@ static String getRamValueTxt(byte addr, int val)
         case 0x50: snprintf(buf, sizeof(buf), "%d (unknown; stayed 0 during the pellet reserve countdown)", val); return buf;
         case 0x91: snprintf(buf, sizeof(buf), "%d (reserve phase 2: off in %d min)", val, (val + 1) / 2); return buf;
         case 0x89: snprintf(buf, sizeof(buf), "%d min until the pellet reserve alarm (counts down while RAM 0xA4 = 5, 20 = full)", val); return buf;
+        case 0xB2: snprintf(buf, sizeof(buf), "%d (auger motor: ~200 running, 0 stopped)", val); return buf;
         case 0xA4: snprintf(buf, sizeof(buf), "%d (level sensor: %s)", val, val == 5 ? "pellets low" : val == 0 ? "pellets OK" : val >= 1 && val <= 4 ? "between low and OK (seen briefly)" : "unknown value"); return buf;
         case 0xAC: snprintf(buf, sizeof(buf), "%d (copy of the level sensor 0xA4)", val); return buf;
         case 0xB7: snprintf(buf, sizeof(buf), "%d (hours since last service, low byte; copy of EEPROM 0xE7)", val); return buf;

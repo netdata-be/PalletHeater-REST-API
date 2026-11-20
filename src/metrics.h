@@ -229,7 +229,7 @@ String getMetrics() {
   setMetric(&p, "esp32_api_key_required",        "1 if the HTTP API requires an API key",  String(apiKeyRequired ? 1 : 0));
   setMetric(&p, "stove_room_fan_speed",          "Room fan speed (0-3)",                   String(roomFanSpeed));
   setMetric(&p, "stove_fume_fan_rpm",            "Fume fan RPM",                           String(cachedFumeFanRPM));
-  setMetric(&p, "stove_auger_speed",             "Auger speed (raw / 10)",                 String(cachedAugerSpeed));
+  setMetric(&p, "stove_auger_speed",             "Auger on-time per cycle in seconds (RAM 0x0D / 10; the cycle is about 12 s)",                 String(cachedAugerSpeed));
 
   // Energy saving
   setMetric(&p, "stove_energy_saving_start",     "Energy saving start offset in Celsius",  String(energySavingStart));

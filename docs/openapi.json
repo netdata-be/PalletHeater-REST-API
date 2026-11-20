@@ -4637,7 +4637,7 @@
           },
           "augerSpeed": {
             "type": "number",
-            "description": "rpm"
+            "description": "Auger on-time per cycle in seconds (RAM 0x0D / 10; fixed cycle of about 12 s). Named augerSpeed for compatibility."
           },
           "burn": {
             "$ref": "#/components/schemas/Burn"

@@ -2234,12 +2234,12 @@ function render(s) {
       : s.roomFan.running ? t("fanRunsPower", s.roomFan.actual ?? s.RoomFanSpeed, s.roomFan.drive ?? "?") : s.roomFan.hotEnough === false && s.RoomFanSpeed ? t("fanWaitHeat") : t("off")],
     [withHelp(t("fanPower"), "h_fanPower"), s.roomFan && s.roomFan.drive !== null && s.roomFan.drive !== undefined ? String(s.roomFan.drive) : "–", "d"],
     [t("fumeFan"), (s.fumeFanRPM ?? "–") + " rpm", true],
-    [t("auger"), (s.augerSpeed ?? "–") + " rpm", true],
+    [t("auger"), (s.augerSpeed ?? "–") + " s", true],   // on-time per 12 s cycle (RAM 0xB2 follows the motor, 20/11/2026)
     [withHelp(t("brazier"), "h_brazier"), brazierText(s.brazierCleaning), true],
     [t("pelletLevel"), s.lowPalletAlarm == null ? "–" : s.pelletReserve && s.pelletReserve.switchedOff ? pill(t("emptyOff"), "err")
       : s.pelletReserve && s.pelletReserve.shutdownMinutes != null ? pill(t("lowOff", s.pelletReserve.shutdownMinutes), "err")
       : s.lowPalletAlarm ? pill(t("low"), "err")
-      : s.pelletReserve && [4, 5].includes(s.pelletReserve.sensor) && s.pelletReserve.minutesLeft > 0 ? pill(t("lowSoon", s.pelletReserve.minutesLeft), "warn") : pill(t("ok"), "ok")],
+      : s.pelletReserve && (s.pelletReserve.sensor >= 1 && s.pelletReserve.sensor <= 5) && s.pelletReserve.minutesLeft > 0 ? pill(t("lowSoon", s.pelletReserve.minutesLeft), "warn") : pill(t("ok"), "ok")],
     [withHelp(t("pelLeft"), "h_pelLeft"), pelletsLeft(s.pellets)],
     [t("pelCal"), pelletsCal(s.pellets), true],
     [withHelp(t("pelReserve"), "h_pelReserve"), !s.pelletReserve ? "–" : (s.pelletReserve.enabled === false ? t("off")
@@ -2852,7 +2852,7 @@ const LANES = [
   { id: "flame", h: 64,  title: () => t("flamePower"), fixed: [0, 4], ticks: [0, 2, 4] },
   { id: "burn",  h: 56,  title: () => t("burnPct") + " (%)", fixed: [0, 100], ticks: [0, 50, 100] },
   { id: "fan",   h: 56,  title: () => t("tFan"),       fixed: [0, 3], ticks: [0, 3] },
-  { id: "auger", h: 70,  title: () => t("auger") + " (rpm)" },
+  { id: "auger", h: 70,  title: () => t("auger") + " (s)" },
   { id: "fumeFan", h: 70, title: () => t("fumeFan") + " (rpm)" },
   { id: "fanPower", h: 70, title: () => t("fanPower") + " (RAM 0x0A)" },
 ];
