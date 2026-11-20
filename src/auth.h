@@ -90,8 +90,9 @@ void authCollectHeaders()
 {
     // Content-Type: /api/update must only touch the upload for multipart requests (httpUpdate.h)
     // Accept-Encoding: the web app and spec are only served gzipped (routesBasic.h)
-    static const char* keys[] = { "X-API-Key", "Authorization", "Content-Type", "Accept-Encoding" };
-    wm.server->collectHeaders(keys, 4);
+    // If-None-Match: ETag of the web app, spec and icons (routesBasic.h): 304 instead of the file
+    static const char* keys[] = { "X-API-Key", "Authorization", "Content-Type", "Accept-Encoding", "If-None-Match" };
+    wm.server->collectHeaders(keys, 5);
 }
 
 static bool constantTimeEquals(const String& a, const String& b)

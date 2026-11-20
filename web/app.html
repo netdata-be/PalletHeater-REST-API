@@ -1061,6 +1061,7 @@ let theme = (() => { try { const v = localStorage.getItem("theme"); return v ===
 let liveReady = false;   // the live debug block is initialised (its variables are declared further down)
 let state = null, remote = null, timersData = null, hist = null, events = null, histHours = 24, offline = false;
 let busy = 0, spPending = null, spTimer = null;
+let loadedBuild = null;   // controller.built of the firmware this page came from
 let expert = (() => { try { return localStorage.getItem("expert") === "1"; } catch (_) { return false; } })();
 let debug = (() => { try { return localStorage.getItem("debug") === "1"; } catch (_) { return false; } })();
 
@@ -3226,6 +3227,11 @@ async function poll() {
   polling = true;
   try {
     const { data } = await api("GET", "/api/state");
+    // new firmware on the controller (another build): load the page again, so this tab does
+    // not keep running the old web app (a 304 when it did not change, see ETag in routesBasic.h)
+    const built = data.controller && data.controller.built;
+    if (built && loadedBuild && built !== loadedBuild && !busy) { location.reload(); return; }
+    if (built && !loadedBuild) loadedBuild = built;
     state = data; offline = false; render(data); applyReach();
     // the controller answered: its dot is green; the stove dot tells about the serial link
     setConn(true, t("updated", new Date().toLocaleTimeString(lang === "nl" ? "nl-BE" : "en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })));

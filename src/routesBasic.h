@@ -47,16 +47,36 @@ void handleRouteSwaggerUI() {
     wm.server->send(200, "text/html", swaggerUI);
 }
 
+// ETag of an embedded file: FNV-1a over its bytes, computed once (a few ms for the web app).
+// The browser asks again with If-None-Match and gets 304 without the file while it did not
+// change (a new firmware with another web app gives another tag).
+static bool httpNotModified(const uint8_t* start, const uint8_t* end, uint32_t& cache)
+{
+    if (!cache) {
+        uint32_t h = 2166136261u;
+        for (const uint8_t* p = start; p < end; p++) { h ^= *p; h *= 16777619u; }
+        cache = h ? h : 1;
+    }
+    char tag[16]; snprintf(tag, sizeof(tag), "\"%08x\"", (unsigned)cache);
+    wm.server->sendHeader("ETag", tag);
+    if (wm.server->header("If-None-Match").indexOf(tag) < 0) return false;
+    wm.server->send(304);
+    return true;
+}
+
 // The embedded files are gzipped (scripts/gzip_assets.py). Every browser accepts
 // that; a client that does not (plain curl) gets 406 with a hint.
-static void sendGzipped(const char* type, const char* start, const char* end)
+// no-cache: the browser always asks, but with the ETag the answer is a 304 of a few bytes
+static void sendGzipped(const char* type, const char* start, const char* end, uint32_t& etag)
 {
     if (wm.server->header("Accept-Encoding").indexOf("gzip") < 0) {
         wm.server->send(406, "text/plain", "Only available gzip-compressed: send Accept-Encoding: gzip (curl --compressed)");
         return;
     }
-    wm.server->sendHeader("Content-Encoding", "gzip");
     wm.server->sendHeader("Cache-Control", "no-cache");
+    wm.server->sendHeader("Vary", "Accept-Encoding");
+    if (httpNotModified((const uint8_t*)start, (const uint8_t*)end, etag)) return;
+    wm.server->sendHeader("Content-Encoding", "gzip");
     httpSendLarge(200, type, (const uint8_t*)start, end - start);
 }
 
@@ -64,13 +84,15 @@ static void sendGzipped(const char* type, const char* start, const char* end)
 #define EMBED(name, sym) extern const uint8_t name##Start[] asm("_binary_" sym "_start"); extern const uint8_t name##End[] asm("_binary_" sym "_end");
 EMBED(iconSvg, "web_icons_icon_svg")
 EMBED(icon180, "web_icons_icon_180_png")
-static void sendEmbedded(const char* type, const uint8_t* start, const uint8_t* end)
+static void sendEmbedded(const char* type, const uint8_t* start, const uint8_t* end, uint32_t& etag)
 {
     wm.server->sendHeader("Cache-Control", "max-age=86400");
+    if (httpNotModified(start, end, etag)) return;
     httpSendLarge(200, type, start, end - start);
 }
-void handleRouteIconSvg() { sendEmbedded("image/svg+xml", iconSvgStart, iconSvgEnd); }
-void handleRouteIcon180() { sendEmbedded("image/png", icon180Start, icon180End); }
+static uint32_t etagIconSvg = 0, etagIcon180 = 0, etagWebApp = 0, etagSpec = 0;
+void handleRouteIconSvg() { sendEmbedded("image/svg+xml", iconSvgStart, iconSvgEnd, etagIconSvg); }
+void handleRouteIcon180() { sendEmbedded("image/png", icon180Start, icon180End, etagIcon180); }
 void handleRouteManifest()
 {
     static const char manifest[] =
@@ -83,11 +105,11 @@ void handleRouteManifest()
 }
 
 void handleRouteWebApp() {
-    sendGzipped("text/html", webAppHTML, webAppHTMLEnd);
+    sendGzipped("text/html", webAppHTML, webAppHTMLEnd, etagWebApp);
 }
 
 void handleRouteSwaggerJSON() { 
-    sendGzipped("application/json", swaggerJSON, swaggerJSONEnd);
+    sendGzipped("application/json", swaggerJSON, swaggerJSONEnd, etagSpec);
 }
 
 void handleRouteTime()
