@@ -289,7 +289,7 @@ body:not(.debug) .d{display:none!important}
 .xbtn[aria-pressed=true]{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
 /* stove (or controller) unreachable: data is old, controls do nothing */
 .card.dim{opacity:.45;filter:grayscale(1);pointer-events:none;user-select:none;transition:opacity .2s}
-/* register hypotheses / parameters (debug) */
+/* parameter tables (debug) */
 .hypwrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
 .hyp{width:100%;border-collapse:collapse;font-size:13px}
 .hyp th,.hyp td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
@@ -603,16 +603,7 @@ button.mini{padding:1px 8px;font-size:11px;font-weight:550;border-radius:7px;mar
     <h2><span><span data-i="parTitle"></span><span data-help="par"></span></span><span class="keybtns"><span class="muted" id="parAge" style="text-transform:none;letter-spacing:0;font-weight:400;align-self:center"></span><button id="parReload" data-i="reload"></button></span></h2>
     <div class="tsub" data-i="parPresets"></div>
     <div class="hypwrap"><table class="hyp" id="parPresetTable"></table></div>
-    <div class="tsub" data-i="parSettings"></div>
-    <div class="hypwrap"><table class="hyp" id="parTable"></table></div>
     <p class="muted" style="font-size:12px;margin:8px 0 0" data-i="parNote"></p>
-  </section>
-
-  <!-- Register hypotheses (debug only) -->
-  <section class="card wide d" id="hypCard">
-    <h2><span><span data-i="hypTitle"></span><span data-help="hyp"></span></span><span class="muted" id="hypAge" style="text-transform:none;letter-spacing:0;font-weight:400"></span></h2>
-    <div class="hypwrap"><table class="hyp" id="hypTable"></table></div>
-    <p class="muted" style="font-size:12px;margin:8px 0 0" data-i="hypNote"></p>
   </section>
 </main>
 
@@ -691,15 +682,13 @@ const I18N = {
     mqttEdit:"Settings", mqttEnabled:"MQTT on", mqttUser:"User", mqttPass:"Password", mqttPrefix:"Topic prefix", mqttDisc:"Home Assistant discovery", mqttDiscPrefix:"Discovery prefix",
     mqttNone:"Not available (older firmware)", mqttOff:"Off", mqttConnected:"Connected to {0} – topics {1}/…", mqttDisconnected:"Not connected to {0}: {1}", mqttPassKeep:"unchanged", mqttSaved:"MQTT settings saved", cancel:"Cancel",
     h_mqtt:"Publishes the stove values to an MQTT broker and accepts commands. Values are plain text under <prefix>/state/… (e.g. room_temp = 21.5, power = ON), retained, on change and every 5 min. Commands go to <prefix>/set/…: power and energy_saving (ON / OFF or 1 / 0), mode (heat / off), setpoint (7 – 30), flame_power (1 – 4), fan_speed (off / 0 – 3), es_stop and es_start (0 – 3). <prefix>/status is online / offline. With Home Assistant discovery on, the stove appears in Home Assistant by itself (climate, switches, numbers, sensors). Other systems such as Loxone (through an MQTT gateway) or Node-RED use the same topics; discovery can stay off for them.",
-    parTitle:"Parameters (EEPROM)", h_par:"Settings and presets stored in the stove EEPROM, read live (GET /api/dump). 'Verified' = checked on this stove, 'documentation' = from the documentation or other Micronova maps but not checked here. The presets per power level are the values the stove uses at each flame power; the row of the current actual flame power is highlighted.",
-    parPresets:"Presets per power level", parSettings:"Settings and counters", parLevel:"Level", parAuger:"Auger value", parFume:"Fume fan target", parNow:"now",
-    parRaw:"Raw", parName:"Parameter", parMeaning:"Value", stOk:"verified", stDoc:"documentation",
-    parNote:"Read once when debug mode is turned on; 'Reload' reads them again (about 50 EEPROM reads, a few seconds). Fume fan rpm = (value + 25) × 10. The live fume fan target is RAM 0x36, 1 – 2 below the preset (possibly the combustion quality correction).",
+    parTitle:"Parameters (EEPROM)", h_par:"Presets stored in the stove EEPROM, read live (GET /api/dump). 'Verified' = checked on this stove. The presets per power level are the values the stove uses at each flame power; the row of the current actual flame power is highlighted.",
+    parPresets:"Presets per power level", parLevel:"Level", parAuger:"Auger value", parFume:"Fume fan target", parNow:"now",
+    stOk:"verified",
+    parNote:"Read once when debug mode is turned on; 'Reload' reads them again (16 EEPROM reads, a few seconds). Fume fan rpm = (value + 25) × 10. The live fume fan target is RAM 0x36, 1 – 2 below the preset (possibly the combustion quality correction).",
     expert:"Expert", expertTitle:"Show technical details: sensors, brazier cleaning, controller info, firmware upload, API links",
-    debug:"Debug", debugTitle:"Show research and diagnostics: raw RAM / EEPROM registers, parameter and hypothesis tables, serial errors, telnet", hypTitle:"Register hypotheses",
-    h_hyp:"What we think the stove registers mean that are not (fully) verified yet. 'Hypothesis' = there is a suspicion, 'unknown' = only observed. Live values come from the stove (GET /api/dump); several addresses are shown as v1 / v2. Full notes: docs/discovered-values.md.",
-    hypReg:"Register", hypLive:"Now", hypObs:"Observed", hypHyp:"Hypothesis", hypSt:"Status", stHyp:"hypothesis", stUnk:"unknown",
-    hypNote:"Live values are read from the stove every 30 s while debug mode is on. The observations come from dumps on 16 and 17/11/2026 (including a brazier cleaning at flame 3).",
+    debug:"Debug", debugTitle:"Show research and diagnostics: raw RAM / EEPROM registers, the parameter table, serial errors, telnet",
+    stHyp:"hypothesis", stUnk:"unknown",
     brazier:"Brazier cleaning", brazierIn:"in {0} min", brazierEvery:"in {0} min (every {1} min)", brazierNow:"in progress",
     h_brazier:"While burning the stove cleans the brazier at a fixed interval (EEPROM 0x02, in minutes): the fume fan speeds up and the stove briefly shows 'Brazier cleaning'. RAM 0x32 counts down the minutes to the next cleaning. Only shown while the stove is working.",
     fwUpdate:"Upload OpenPelletBridge firmware", fwHint:"Upload a firmware.bin (from .pio/build/…)", fwPick:"Choose file…", fwBadFile:"Choose the firmware .bin file",
@@ -855,15 +844,13 @@ pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low 
     mqttEdit:"Instellen", mqttEnabled:"MQTT aan", mqttUser:"Gebruiker", mqttPass:"Wachtwoord", mqttPrefix:"Topic-prefix", mqttDisc:"Home Assistant discovery", mqttDiscPrefix:"Discovery-prefix",
     mqttNone:"Niet beschikbaar (oudere firmware)", mqttOff:"Uit", mqttConnected:"Verbonden met {0} – topics {1}/…", mqttDisconnected:"Niet verbonden met {0}: {1}", mqttPassKeep:"ongewijzigd", mqttSaved:"MQTT-instellingen bewaard", cancel:"Annuleren",
     h_mqtt:"Publiceert de waarden van de kachel naar een MQTT-broker en aanvaardt commando's. Waarden staan als gewone tekst onder <prefix>/state/… (bv. room_temp = 21.5, power = ON), retained, bij elke wijziging en elke 5 min. Commando's gaan naar <prefix>/set/…: power en energy_saving (ON / OFF of 1 / 0), mode (heat / off), setpoint (7 – 30), flame_power (1 – 4), fan_speed (off / 0 – 3), es_stop en es_start (0 – 3). <prefix>/status is online / offline. Met Home Assistant discovery aan verschijnt de kachel vanzelf in Home Assistant (thermostaat, schakelaars, getallen, sensoren). Andere systemen zoals Loxone (via een MQTT-gateway) of Node-RED gebruiken dezelfde topics; discovery mag voor hen uit.",
-    parTitle:"Parameters (EEPROM)", h_par:"Instellingen en presets in het EEPROM van de kachel, live gelezen (GET /api/dump). 'Bevestigd' = nagekeken op deze kachel, 'documentatie' = uit de documentatie of andere Micronova-overzichten maar hier niet nagekeken. De presets per vermogen zijn de waarden die de kachel per vlamvermogen gebruikt; de rij van het huidige werkelijke vlamvermogen is gemarkeerd.",
-    parPresets:"Presets per vermogen", parSettings:"Instellingen en tellers", parLevel:"Niveau", parAuger:"Schroefwaarde", parFume:"Doeltoerental rookgasventilator", parNow:"nu",
-    parRaw:"Ruw", parName:"Parameter", parMeaning:"Waarde", stOk:"bevestigd", stDoc:"documentatie",
-    parNote:"Eén keer gelezen als debug aangezet wordt; 'Herladen' leest ze opnieuw (ongeveer 50 EEPROM-lezingen, enkele seconden). Toerental rookgasventilator = (waarde + 25) × 10. Het live doeltoerental is RAM 0x36, 1 – 2 lager dan de preset (mogelijk de correctie van de verbrandingskwaliteit).",
+    parTitle:"Parameters (EEPROM)", h_par:"Presets in het EEPROM van de kachel, live gelezen (GET /api/dump). 'Bevestigd' = nagekeken op deze kachel. De presets per vermogen zijn de waarden die de kachel per vlamvermogen gebruikt; de rij van het huidige werkelijke vlamvermogen is gemarkeerd.",
+    parPresets:"Presets per vermogen", parLevel:"Niveau", parAuger:"Schroefwaarde", parFume:"Doeltoerental rookgasventilator", parNow:"nu",
+    stOk:"bevestigd",
+    parNote:"Eén keer gelezen als debug aangezet wordt; 'Herladen' leest ze opnieuw (16 EEPROM-lezingen, enkele seconden). Toerental rookgasventilator = (waarde + 25) × 10. Het live doeltoerental is RAM 0x36, 1 – 2 lager dan de preset (mogelijk de correctie van de verbrandingskwaliteit).",
     expert:"Expert", expertTitle:"Toon technische details: sensoren, branderreiniging, controllerinfo, firmware-upload, API-links",
-    debug:"Debug", debugTitle:"Toon onderzoek en diagnose: ruwe RAM- / EEPROM-registers, tabellen met parameters en vermoedens, seriële fouten, telnet", hypTitle:"Vermoedens registers",
-    h_hyp:"Wat we denken dat de registers van de kachel betekenen, maar nog niet (volledig) bevestigd is. 'Vermoeden' = er is een vermoeden, 'onbekend' = enkel waargenomen. De live waarden komen van de kachel (GET /api/dump); meerdere adressen staan als w1 / w2. Volledige notities: docs/discovered-values.md.",
-    hypReg:"Register", hypLive:"Nu", hypObs:"Waargenomen", hypHyp:"Vermoeden", hypSt:"Status", stHyp:"vermoeden", stUnk:"onbekend",
-    hypNote:"De live waarden worden elke 30 s van de kachel gelezen zolang debug aan staat. De waarnemingen komen uit dumps van 16 en 17/11/2026 (o.a. een branderreiniging op vlam 3).",
+    debug:"Debug", debugTitle:"Toon onderzoek en diagnose: ruwe RAM- / EEPROM-registers, de parametertabel, seriële fouten, telnet",
+    stHyp:"vermoeden", stUnk:"onbekend",
     brazier:"Branderreiniging", brazierIn:"over {0} min", brazierEvery:"over {0} min (elke {1} min)", brazierNow:"bezig",
     h_brazier:"Tijdens het branden reinigt de kachel de brander op een vast interval (EEPROM 0x02, in minuten): de rookgasventilator draait harder en de kachel toont kort 'Brander reinigen'. RAM 0x32 telt de minuten af tot de volgende reiniging. Enkel zichtbaar terwijl de kachel brandt.",
     fwUpdate:"Upload OpenPelletBridge firmware", fwHint:"Upload een firmware.bin (uit .pio/build/…)", fwPick:"Kies bestand…", fwBadFile:"Kies het firmware-bestand (.bin)",
@@ -1024,7 +1011,7 @@ function langFromRemote(code) { return code === "NLD" ? "nl" : "en"; }
 function setLang(l) {
   if (LANG_OVERRIDE || l === lang) return;
   lang = l; try { localStorage.setItem("remoteLang", l); } catch (_) {}   // avoids a flash of the other language on the next load
-  applyStatic(); applyExpert(); if (state) render(state); renderTimers(); renderNext(); renderHistory(); renderEvents(); renderRemote(); renderAlerts(); renderHyp(); if (liveReady) renderLive(); renderParams();
+  applyStatic(); applyExpert(); if (state) render(state); renderTimers(); renderNext(); renderHistory(); renderEvents(); renderRemote(); renderAlerts(); if (liveReady) renderLive(); renderParams();
 }
 function t(key, ...a) { let s = (I18N[lang][key] ?? I18N.en[key] ?? key); a.forEach((v, i) => s = s.replace("{" + i + "}", v)); return s; }
 function errDesc(e) { return lang === "nl" && ERR_NL[e.id] ? ERR_NL[e.id] : e.desc; }
@@ -1527,7 +1514,15 @@ async function liveTick() {
       const d = (await api("GET", "/api/log", { since: logCur })).data;
       if (d.lost) logLines.push({ s: t("liveLost"), c: "lost" });
       const parts = (logPart + d.text).split("\n"); logPart = parts.pop();
-      for (const line of parts) logLines.push({ s: line, c: / E \[|^=====/.test(line) ? (line.startsWith("=====") ? "lost" : "err") : / W \[/.test(line) ? "warn" : /\b(error|fail|failed|timeout)\b/i.test(line) ? "err" : "" });
+      // Colour by the level of our own lines ("hh:mm:ss L [tag]"); the keyword guess only for
+      // lines without a level (library output), and never for counters like "0 failed"
+      const logClass = line => {
+        if (line.startsWith("=====")) return "lost";
+        const lvl = / ([IDWE]) \[/.exec(line);
+        if (lvl) return lvl[1] === "E" ? "err" : lvl[1] === "W" ? "warn" : "";
+        return /\b(error|fail|failed|timeout)\b/i.test(line.replace(/\b0 (errors?|fail(ed|ures?)?|timeouts?)\b/gi, "")) ? "err" : "";
+      };
+      for (const line of parts) logLines.push({ s: line, c: logClass(line) });
       if (logLines.length > LIVE_KEEP) logLines.splice(0, logLines.length - LIVE_KEEP);
       logCur = d.next; if (d.text.length >= 4000) again = 150;   // still catching up
     } else {
@@ -2998,7 +2993,7 @@ $("expertBtn").onclick = () => {
 };
 $("debugBtn").onclick = () => {
   debug = !debug; try { localStorage.setItem("debug", debug ? "1" : "0"); } catch (_) {}
-  applyExpert(); renderHistory(); renderHyp(); renderParams(); if (debug) { loadHyp(); loadParams(); } renderConsoleBtn();
+  applyExpert(); renderHistory(); renderParams(); if (debug) loadParams(); renderConsoleBtn();
 };
 
 // ---------- reachability ----------
@@ -3014,8 +3009,7 @@ function applyReach() {
 
 
 // ---------- known EEPROM parameters (debug) ----------
-// st: ok = verified on this stove, doc = from the documentation / other Micronova
-// maps, not verified here, h = hypothesis, u = unknown meaning.
+// st: ok = verified on this stove, h = hypothesis, u = unknown meaning.
 const rpmOf = v => (v + 25) * 10;   // fume fan encoding, same as RAM 0x36 / 0x37
 const PRESET_ROWS = [   // [label, auger addr, fume fan addr, 0x86-0x89 addr, flame level]
   [() => L("Ontsteking", "Ignition"), 0x04, 0x10, null, null],
@@ -3025,41 +3019,10 @@ const PRESET_ROWS = [   // [label, auger addr, fume fan addr, 0x86-0x89 addr, fl
   [() => L("Vlam 4", "Flame 4"), 0x08, 0x14, 0x89, 4],
   [() => L("Niveau 5 (ongebruikt)", "Level 5 (unused)"), 0x09, 0x15, null, null],
 ];
-const LANGS = ["", "ENG", "FRA", "DEU", "NLD", "POR", "SPA", "HRV", "DAN"];
-const bcd = v => v === undefined ? undefined : (v >> 4) * 10 + (v & 15);
-const PARAMS = [
-  { a: [0x7D], n: ["Gewenste temperatuur", "Set point"], f: v => v[0] + " °C", st: "ok" },
-  { a: [0x7F], n: ["Vlamvermogen", "Flame power"], f: v => String(v[0]), st: "ok" },
-  { a: [0x81], n: ["Ventilator (Multifuoco)", "Room fan (Multifuoco)"], f: v => v[0] ? L("stand ", "speed ") + v[0] : L("uit", "off"), st: "ok" },
-  { a: [0x90, 0x91], n: ["Energy saving stop / herstart", "Energy saving stop / restart"], f: v => "+" + v[0] + " °C / −" + v[1] + " °C", st: "ok" },
-  { a: [0x02], n: ["Interval branderreiniging", "Brazier cleaning interval"], f: v => v[0] + " min", st: "ok" },
-  { a: [0xC0], n: ["Verbrandingskwaliteit", "Combustion quality"], f: () => state && state.burn ? String(state.burn.combustionQuality) : "?", st: "ok" },
-  { a: [0xBC], n: ["Pelletkwaliteit", "Pellet quality"], f: () => state && state.burn ? String(state.burn.pelletQuality) : "?", st: "ok" },
-  { a: [0xC6], n: ["Pelletreserve (PELLET RESERVE)", "Pellet reserve (PELLET RESERVE)"], f: v => v[0] ? "ON" : "OFF", st: "ok" },
-  { a: [0x4B], n: ["Zoemer", "Beep"], f: v => v[0] ? L("aan", "on") : L("uit", "off"), st: "ok" },
-  { a: [0x4F], n: ["Taal afstandsbediening", "Remote language"], f: v => LANGS[v[0]] || "?", st: "ok" },
-  { a: [0x4E], n: ["DISPLAY (parameter 79)", "DISPLAY (parameter 79)"], f: v => String(v[0]), st: "u",
-    x: ["Altijd 1; de schermverlichting zit in de afstandsbediening zelf", "Always 1; the backlight is kept in the remote itself"] },
-  { a: [0x48], n: ["Externe thermostaat: werking", "External thermostat: mode"], f: v => v[0] ? "Stop" : L("Moduleren", "Modulate"), st: "doc" },
-  { a: [0x49], n: ["Externe thermostaat: contact", "External thermostat: contact"], f: v => v[0] ? "N.C." : "N.O.", st: "doc" },
-  { a: [0xC4], n: ["Pelletcontact", "Pellet contact"], f: v => v[0] ? "N.C." : "N.O.", st: "ok" },
-  { a: [0xC5], n: ["Onbekend (naast pelletkwaliteit)", "Unknown (next to pellet quality)"], f: v => String(v[0]), st: "u" },
-  { a: [0xE7], n: ["Uren sinds onderhoud", "Hours since service"], f: v => v[0] + " h", st: "ok" },
-  { a: [0xEA, 0xEB], n: ["Werkuren totaal", "Total working hours"], f: v => (v[0] | (v[1] << 8)) + " h", st: "ok" },
-  { a: [0xEC], n: ["Werkuren (?)", "Working hours (?)"], f: v => String(v[0]), st: "u" },
-  { a: [0xEE, 0xEF], n: ["Aantal starts", "Number of starts"], f: v => String(v[0] | (v[1] << 8)), st: "ok" },
-  { a: [0x8A, 0x8B, 0x8C, 0x8D, 0x8E, 0x8F], n: ["Firmware kachel", "Stove firmware"],
-    f: v => "FW-" + String.fromCharCode(v[0], v[1]) + "-" + pad(v[2]) + "-V-" + pad(v[3]) + "-" + pad(v[4]) + "-" + pad(v[5]), st: "ok" },
-  { a: [0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD], n: ["Klok (BCD)", "Clock (BCD)"],
-    f: v => pad(bcd(v[3])) + "/" + pad(bcd(v[4])) + "/20" + pad(bcd(v[5])) + " " + pad(bcd(v[1])) + ":" + pad(bcd(v[2])) + " (" + (DAY_SHORT[lang][bcd(v[0]) - 1] || "?") + ")", st: "ok",
-    x: ["Wordt geschreven bij het gelijkzetten; de lopende klok staat in RAM 0x7A – 0x80", "Written when the clock is set; the running clock is in RAM 0x7A – 0x80"] },
-  { a: [0xE0, 0xE1, 0xE2, 0xE3, 0xE4], n: ["Foutgeheugen 1 – 5", "Error memory 1 – 5"], f: v => v.map(x => x ? "E" + x : "–").join(" / "), st: "ok",
-    x: ["Ruwe foutcodes; zie het blok Foutgeheugen", "Raw error codes; see the Error memory card"] },
-];
 let parVals = {}, parAt = 0, parBusy = false;
 const hx = a => "0x" + a.toString(16).toUpperCase().padStart(2, "0");
 function stPill(st) {
-  const lbl = { ok: "stOk", doc: "stDoc", h: "stHyp", u: "stUnk" }[st];
+  const lbl = { ok: "stOk", h: "stHyp", u: "stUnk" }[st];
   return pill(t(lbl), st === "ok" ? "ok" : st === "h" ? "warn" : "");
 }
 function renderParams() {
@@ -3086,28 +3049,12 @@ function renderParams() {
   c1.appendChild(pill(t("stOk") + " " + L("vlam 1 – 3", "flame 1 – 3"), "ok")); c2.appendChild(stPill("h")); c3.appendChild(stPill("u"));
   st.append(stc, c1, c2, c3); tb.appendChild(st);
   pt.appendChild(tb);
-  // other settings
-  const ptab = $("parTable"); ptab.innerHTML = "";
-  const h2 = el("tr"); [t("hypReg"), t("parRaw"), t("parName"), t("parMeaning"), t("hypSt")].forEach(h => h2.appendChild(el("th", "", h)));
-  const th2 = el("thead"); th2.appendChild(h2); ptab.appendChild(th2);
-  const tb2 = el("tbody"), i = lang === "nl" ? 0 : 1;
-  for (const p of PARAMS) {
-    const v = p.a.map(get), have = v.every(x => x !== undefined);
-    const reg = p.a.length > 2 ? hx(p.a[0]) + " – " + hx(p.a[p.a.length - 1]) : p.a.map(hx).join(", ");
-    const tr = el("tr"), m = el("td", "h");
-    m.textContent = have ? p.f(v) : "–";
-    if (p.x) m.appendChild(el("div", "muted", p.x[i]));
-    const s = el("td"); s.appendChild(stPill(p.st));
-    tr.append(el("td", "r", "EEPROM " + reg), el("td", "v", have ? v.join(" / ") : "–"), el("td", "", p.n[i]), m, s);
-    tb2.appendChild(tr);
-  }
-  ptab.appendChild(tb2);
   $("parAge").textContent = parAt ? t("updated", new Date(parAt).toLocaleTimeString(lang === "nl" ? "nl-BE" : "en-GB")) : "";
 }
 // EEPROM settings hardly change: read once when debug mode is turned on, and on "Reload".
 async function loadParams(force) {
   if (!debug || offline || parBusy || (parAt && !force)) return;
-  const want = [...new Set([...PRESET_ROWS.flatMap(r => [r[1], r[2], r[3]]).filter(a => a !== null), ...PARAMS.flatMap(p => p.a)])];
+  const want = [...new Set(PRESET_ROWS.flatMap(r => [r[1], r[2], r[3]]).filter(a => a !== null))];
   parBusy = true; $("parReload").disabled = true;
   try {
     const r = await api("GET", "/api/dump", { register: "eeprom", address: want.map(hx).join(",") });
@@ -3119,137 +3066,6 @@ async function loadParams(force) {
   renderParams();
 }
 $("parReload").onclick = () => loadParams(true);
-
-// ---------- register hypotheses (debug) ----------
-// From docs/discovered-values.md. Not verified with a controlled change unless the
-// status says so. a: addresses read live (ram / eeprom), shown as "v1 / v2".
-const HYP = [
-  { r: "RAM 0x89", a: [["ram", 0x89]], st: "h",
-    o: ["20 met volle bak. 17/11 19:41:47 ging de niveausensor RAM 0xA4 van 0 → 5 en telde 0x89 af van 20 → 0 in 19 min (ongeveer 1 per minuut), 0 bereikt om 20:00:49; de kachel bleef branden. Eerdere korte dips 20 → 19 → 20: de sensor zag even weinig pellets",
-        "20 with a full hopper. 17/11 19:41:47 the level sensor RAM 0xA4 went 0 → 5 and 0x89 counted down 20 → 0 in 19 min (about 1 per minute), reached 0 at 20:00:49; the stove kept working. Earlier short dips 20 → 19 → 20: the sensor briefly saw low pellets"],
-    h: ["Bevestigd: minuten tot het pelletreserve-alarm, telt af zolang 0xA4 = 5. Wat de kachel bij 0 doet (bericht op de afstandsbediening, uitschakelen na een tijd) is nog niet gezien",
-        "Confirmed: minutes until the pellet reserve alarm, counts down while 0xA4 = 5. What the stove does at 0 (message on the remote, shutting down after a while) is not seen yet"] },
-  { r: "RAM 0xA4", a: [["ram", 0xA4]], st: "h",
-    o: ["Altijd 0, ook tijdens de dips van 0x89", "Always 0, also during the 0x89 dips"],
-    h: ["Pelletsensor (5 = actief); mogelijk niet het juiste register", "Pellet sensor (5 = active); possibly not the right register"] },
-  { r: "RAM 0x2F", a: [["ram", 0x2F]], st: "h",
-    o: ["10 tijdens branden, 20 uit. Tijdens de branderreiniging (17/11 09:28) 25 → 18 → 11 → 3, ~1 per seconde; de reiniging duurt 24 – 26 s",
-        "10 while working, 20 off. During brazier cleaning (17/11 09:28) 25 → 18 → 11 → 3, ~1 per second; the cleaning lasts 24 – 26 s"],
-    h: ["Aftelling in seconden van de huidige fase (o.a. de branderreiniging)", "Countdown in seconds of the current phase (e.g. brazier cleaning)"] },
-  { r: "RAM 0x07", a: [["ram", 0x07]], st: "h",
-    o: ["Telt 4 → 1, één stap per minuut, enkel tijdens branden. Sprong van 1 naar 4 bij de start van de branderreiniging (17/11)",
-        "Counts 4 → 1, one step per minute, only while working. Jumped from 1 to 4 when brazier cleaning started (17/11)"],
-    h: ["Minutenteller van een cyclus van 4 min die herstart bij de branderreiniging; wat de cyclus doet is onbekend", "Minute counter of a 4-minute cycle that restarts at brazier cleaning; what the cycle does is unknown"] },
-  { r: "RAM 0x36", a: [["ram", 0x36], ["ram", 0x37]], st: "h",
-    o: ["Volgt 0x37 (gemeten toerental) op 1 na: 134 / 154 / 178 bij vlam 1 / 2 / 3, 238 tijdens branderreiniging, 0 uit",
-        "Follows 0x37 (measured speed) within 1: 134 / 154 / 178 at flame 1 / 2 / 3, 238 during brazier cleaning, 0 off"],
-    h: ["Doeltoerental rookgasventilator (zelfde codering als 0x37)", "Fume fan target speed (same encoding as 0x37)"] },
-  { r: "RAM 0xD3", a: [["ram", 0xD3]], st: "h",
-    o: ["1 / 2 / 3 bij werkelijk vlamvermogen 1 / 2 / 3; ook 1 als de ventilator stilstaat in stand-by",
-        "1 / 2 / 3 at actual flame power 1 / 2 / 3; also 1 when the fan has stopped in standby"],
-    h: ["Volgt het werkelijke vlamvermogen (minimum 1), niet de ventilator", "Follows the actual flame power (minimum 1), not the fan"] },
-  { r: "RAM 0x04", a: [["ram", 0x04]], st: "h",
-    o: ["0 als de kachel koud is, 1 / 2 / 3 bij vlam 1 / 2 / 3 terwijl de ventilator draait", "0 when the stove is cold, 1 / 2 / 3 at flame 1 / 2 / 3 while the fan runs"],
-    h: ["Rij in de ventilatortabel (vlamniveau); 0 = te koud voor de ventilator. De firmware gebruikt ≠ 0 als 'warm genoeg'", "Row in the fan table (flame level); 0 = too cold for the fan. The firmware uses ≠ 0 as 'hot enough'"] },
-  { r: "RAM 0x0E", a: [["ram", 0x0E]], st: "h",
-    o: ["1 uit, 2 bij vlam 2, 3 bij vlam 3", "1 off, 2 at flame 2, 3 at flame 3"], h: ["Nog een kopie van het vermogensniveau (minimum 1)", "Another copy of the power level (minimum 1)"] },
-  { r: "RAM 0xA1", a: [["ram", 0xA1]], st: "u",
-    o: ["0 uit, 214 bij vlam 2, 238 bij vlam 3", "0 off, 214 at flame 2, 238 at flame 3"], h: ["Hangt af van het vermogen; betekenis onbekend", "Depends on the power; meaning unknown"] },
-  { r: "RAM 0x09, 0x43", a: [["ram", 0x09], ["ram", 0x43]], st: "u",
-    o: ["10 tijdens branden, 0 in stand-by. Tijdens de branderreiniging 10 → 3 / 2 → 0 en daarna terug 10",
-        "10 while working, 0 in standby. During brazier cleaning 10 → 3 / 2 → 0, then back to 10"],
-    h: ["Volgen de brandfase (vallen weg tijdens reiniging en stand-by)", "Follow the burning phase (drop during cleaning and standby)"] },
-  { r: "RAM 0x0B, 0x4E, 0x12", a: [["ram", 0x0B], ["ram", 0x4E], ["ram", 0x12]], st: "u",
-    o: ["0x0B / 0x4E: 0 uit, ~105 tijdens branden. Alle drie zakken ~3 tijdens de branderreiniging (105 → 102, 0x12 104 → 101)",
-        "0x0B / 0x4E: 0 off, ~105 while working. All three drop ~3 during brazier cleaning (105 → 102, 0x12 104 → 101)"],
-    h: ["Hangen samen; betekenis onbekend", "Linked; meaning unknown"] },
-  { r: "RAM 0x39", a: [["ram", 0x39]], st: "u",
-    o: ["16 tijdens branden, 80 in stand-by", "16 while working, 80 in standby"], h: ["Verandert met de fase; onbekend", "Changes with the phase; unknown"] },
-  { r: "RAM 0x32", a: [["ram", 0x32]], st: "h",
-    o: ["Minuten tot de branderreiniging (bevestigd). Tijdens de reiniging zelf 3 (17/11) of 0 (16/11), daarna 45",
-        "Minutes to brazier cleaning (confirmed). During the cleaning itself 3 (17/11) or 0 (16/11), then 45"],
-    h: ["Waarde tijdens de reiniging zelf onduidelijk", "Value during the cleaning itself unclear"] },
-  { r: "RAM 0x6D, 0x79", a: [["ram", 0x6D], ["ram", 0x79]], st: "u",
-    o: ["Altijd 20. Bleven 20 toen de gewenste temperatuur van 20 naar 21 ging (17/11, kachel uit)", "Always 20. Stayed 20 when the set point went from 20 to 21 (17/11, stove off)"],
-    h: ["Geen kopie van de gewenste temperatuur (weerlegd); betekenis onbekend. De gewenste temperatuur staat enkel in EEPROM 0x7D", "Not a copy of the set point (refuted); meaning unknown. The set point is only in EEPROM 0x7D"] },
-  { r: "RAM 0xA7", a: [["ram", 0xA7]], st: "h",
-    o: ["0 uit; ≈ 117 − 1,5 × 0x0A (74 bij vermogen 27)", "0 off; ≈ 117 − 1.5 × 0x0A (74 at power 27)"], h: ["Tweede sturing kamerventilator, mogelijk een triac-vertraging", "Second room fan drive, possibly a triac delay"] },
-  { r: "RAM 0xAF", a: [["ram", 0xAF]], st: "h",
-    o: ["47 – 48 uit (koud), 68 – 75 na 1 – 2 u branden op vlam 2, 92 – 93 op vlam 3 (17/11)", "47 – 48 off (cold), 68 – 75 after 1 – 2 h at flame 2, 92 – 93 at flame 3 (17/11)"],
-    h: ["Temperatuur in de kachel / van de elektronica in x/2 (23,5 → 46 °C)?", "Temperature inside the stove / of the electronics in x/2 (23.5 → 46 °C)?"] },
-  { r: "RAM 0x96, 0x9E, 0x83, 0x38", a: [["ram", 0x96], ["ram", 0x9E], ["ram", 0x83], ["ram", 0x38]], st: "h",
-    o: ["Schommelen tussen metingen (0x38 24 – 30, 0x96 41 – 48), ongeveer gelijk aan of uit; 0x83 meestal 200 met korte dips",
-        "Move between reads (0x38 24 – 30, 0x96 41 – 48), about the same on or off; 0x83 mostly 200 with short dips"],
-    h: ["Ruwe analoge (ADC) metingen", "Raw analog (ADC) readings"] },
-  { r: "RAM 0x08, 0x16, 0x24", a: [["ram", 0x08], ["ram", 0x16], ["ram", 0x24]], st: "h",
-    o: ["Bevestigd (17/11): 0x08 = ingedrukte toets, 1 = ▼, 2 = ▲, 4 = ESC, 8 = OK; 0x16 telt de toetsstappen (ook bij ingedrukt houden); 0x24 telt ~1 s af na de laatste toets. ⏻ niet getest",
-        "Confirmed (17/11): 0x08 = pressed key, 1 = ▼, 2 = ▲, 4 = ESC, 8 = OK; 0x16 counts key steps (also while held); 0x24 counts down ~1 s after the last key. ⏻ not tested"],
-    h: ["0x08 zelf schrijven werkt niet als toets (getest 17/11: de kachel maakt er 224 of 16 van, er opent niets). Vermoedelijk lopen de menu's in de afstandsbediening zelf en melden deze registers de toets enkel aan de kachel",
-        "Writing 0x08 does not act as a key (tested 17/11: the stove turns it into 224 or 16, nothing opens). The menus probably run in the remote itself; these registers only report the key to the stove"] },
-  { r: "RAM 0x14, 0x22, 0x3A, 0xC7", a: [["ram", 0x14], ["ram", 0x22], ["ram", 0x3A], ["ram", 0xC7]], st: "u",
-    o: ["Uit 1 / 1 / 2 / 2; branden 16/11 0 / 51 / 0 / 0; branden 17/11 1 / 1 / 3 / 2", "Off 1 / 1 / 2 / 2; working 16/11 0 / 51 / 0 / 0; working 17/11 1 / 1 / 3 / 2"],
-    h: ["Volgen aan/uit niet (eerder gedacht); betekenis onbekend", "Do not follow on/off (as thought before); meaning unknown"] },
-  { r: "RAM 0xC6, 0xC8", a: [["ram", 0xC6], ["ram", 0xC8]], st: "u",
-    o: ["75 / 89 uit en tijdens branden op 17/11; 143 / 147 tijdens branden op 16/11", "75 / 89 off and while working on 17/11; 143 / 147 while working on 16/11"],
-    h: ["Volgen aan/uit niet; betekenis onbekend", "Do not follow on/off; meaning unknown"] },
-  { r: "RAM 0x1F, 0x20, 0xB7", a: [["ram", 0x1F], ["ram", 0x20], ["ram", 0xB7]], st: "u",
-    o: ["Branden 158 / 0 / 230 – 236, uit 144 / 8 / 234", "Working 158 / 0 / 230 – 236, off 144 / 8 / 234"], h: ["Onbekend", "Unknown"] },
-  { r: "RAM 0xFA", a: [["ram", 0xFA]], st: "u",
-    o: ["32 (spatie) tijdens branden, 69 ('E') uit; de rest van 0xE0 – 0xFF blijft 32", "32 (space) while working, 69 ('E') off; the rest of 0xE0 – 0xFF stays 32"], h: ["Onbekend; geen tekstbuffer van het display", "Unknown; not a display text buffer"] },
-  { r: "RAM 0x13, 0x4B", a: [["ram", 0x13], ["ram", 0x4B]], st: "h",
-    o: ["Lopen continu: 0x13 tot 120, 0x4B ~5 per seconde", "Run continuously: 0x13 wraps at 120, 0x4B ~5 per second"], h: ["Vrijlopende tellers", "Free-running counters"] },
-  { r: "RAM 0x61 – 0x64", a: [["ram", 0x61], ["ram", 0x62], ["ram", 0x63], ["ram", 0x64]], st: "h",
-    o: ["80 / 95 / 110 / 120 = EEPROM 0x86 – 0x89", "80 / 95 / 110 / 120 = EEPROM 0x86 – 0x89"], h: ["RAM-kopie van een parameter per vermogensniveau", "RAM copy of a per-power-level parameter"] },
-  { r: "EEPROM 0x10 – 0x15", a: [["eeprom", 0x10], ["eeprom", 0x11], ["eeprom", 0x12], ["eeprom", 0x13], ["eeprom", 0x14]], st: "h",
-    o: ["0x11 / 0x12 / 0x13 = 135 / 155 / 180, RAM 0x36 = 134 / 154 / 178 bij vlam 1 / 2 / 3; 0x10 = 165, 0x14 = 0x15 = 205",
-        "0x11 / 0x12 / 0x13 = 135 / 155 / 180, RAM 0x36 = 134 / 154 / 178 at flame 1 / 2 / 3; 0x10 = 165, 0x14 = 0x15 = 205"],
-    h: ["Doeltoerental rookgasventilator per vermogensniveau (0x10 ontsteking?, 0x11 – 0x14 vlam 1 – 4). RAM ligt 1 – 2 lager, mogelijk door verbrandingskwaliteit −1",
-        "Fume fan target speed per power level (0x10 ignition?, 0x11 – 0x14 flame 1 – 4). RAM is 1 – 2 lower, possibly from combustion quality −1"] },
-  { r: "EEPROM 0x0A – 0x0F", a: [["eeprom", 0x0A], ["eeprom", 0x0B], ["eeprom", 0x0C], ["eeprom", 0x0D], ["eeprom", 0x0E], ["eeprom", 0x0F]], st: "u",
-    o: ["55 / 25 / 17 / 155 / 35 / 150", "55 / 25 / 17 / 155 / 35 / 150"], h: ["Onbekend; ligt tussen de tabellen voor schroef en rookgasventilator", "Unknown; sits between the auger and fume fan tables"] },
-  { r: "EEPROM 0x92 – 0xB9", a: [], st: "h",
-    o: ["Rijen van 5 waarden, de 5e gelijk aan de 4e", "Rows of 5 values, the 5th equal to the 4th"], h: ["Installateurstabel per vermogensniveau", "Installer table per power level"] },
-  { r: "EEPROM 0xC5", a: [["eeprom", 0xC5]], st: "u", o: ["137", "137"], h: ["Onbekend (naast pelletkwaliteit 0xBC)", "Unknown (next to pellet quality 0xBC)"] },
-  { r: "STAAT KACHEL", a: [], st: "u",
-    o: ["TERM EXT, DATA BANK, SENSOR 1, ID SENSOR 1", "TERM EXT, DATA BANK, SENSOR 1, ID SENSOR 1"], h: ["Registers nog niet gevonden", "Registers not found yet"] },
-];
-let hypVals = { ram: {}, eeprom: {} }, hypAt = 0, hypTimer = null;
-function renderHyp() {
-  const tb = $("hypTable"); if (!debug) return;
-  tb.innerHTML = "";
-  const i = lang === "nl" ? 0 : 1, hr = el("tr");
-  for (const k of ["hypReg", "hypLive", "hypObs", "hypHyp", "hypSt"]) hr.appendChild(el("th", "", t(k)));
-  const thead = el("thead"); thead.appendChild(hr); tb.appendChild(thead);
-  const body = el("tbody");
-  for (const h of HYP) {
-    const tr = el("tr"), live = h.a.map(([reg, a]) => hypVals[reg][a] ?? "–").join(" / ");
-    tr.append(el("td", "r", h.r), el("td", "v", h.a.length ? live : ""), el("td", "o", h.o[i]), el("td", "h", h.h[i]));
-    const st = el("td"); st.appendChild(pill(t(h.st === "h" ? "stHyp" : "stUnk"), h.st === "h" ? "warn" : "")); tr.appendChild(st);
-    body.appendChild(tr);
-  }
-  tb.appendChild(body);
-  $("hypAge").textContent = hypAt ? t("updated", new Date(hypAt).toLocaleTimeString(lang === "nl" ? "nl-BE" : "en-GB")) : "";
-}
-// Live values: one dump call per register type, every 30 s while debug mode is on.
-// EEPROM values hardly change, so they are read once per page load.
-async function loadHyp() {
-  clearTimeout(hypTimer);
-  if (debug && !document.hidden && !offline && busy === 0) {
-    const want = reg => [...new Set(HYP.flatMap(h => h.a.filter(x => x[0] === reg).map(x => x[1])))];
-    const read = async reg => {
-      const r = await api("GET", "/api/dump", { register: reg, address: want(reg).map(a => "0x" + a.toString(16).toUpperCase().padStart(2, "0")).join(",") });
-      const blk = r.data ? Object.values(r.data)[0] || {} : {};
-      for (const v of Object.values(blk)) hypVals[reg][v.Address_int] = v.Value_int;
-    };
-    try {
-      await read("ram");
-      if (!Object.keys(hypVals.eeprom).length) await read("eeprom");
-      hypAt = Date.now();
-    } catch (_) {}
-    renderHyp();
-  }
-  hypTimer = setTimeout(loadHyp, 30000);
-}
 
 // ---------- polling ----------
 let pollTimer = null, polling = false;
@@ -3266,11 +3082,11 @@ async function poll() {
   } catch (e) { offline = true; setConn(false, t("offline")); renderStoveConn(null); renderAlerts(); applyReach(); }
   finally { polling = false; pollTimer = setTimeout(poll, POLL_MS); }
 }
-document.addEventListener("visibilitychange", () => { if (!document.hidden) { poll(); pollRemote(); loadHyp(); } });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { poll(); pollRemote(); } });
 
 applyStatic(); applyExpert(); renderTimers();
 // Read the remote first so the page starts in the right language
-pollRemote().finally(() => poll().then(() => { loadTimers(); loadHistory(); loadBt(); loadSecurity(); loadMqtt(); loadWifi(); loadFw(); loadHyp(); loadParams(); }));
+pollRemote().finally(() => poll().then(() => { loadTimers(); loadHistory(); loadBt(); loadSecurity(); loadMqtt(); loadWifi(); loadFw(); loadParams(); }));
 setInterval(() => { if (!document.hidden && !offline) { loadMqtt(); loadWifi(); if (!fwInfo || !["checking", "downloading", "restarting"].includes(fwInfo.state)) loadFw(); } }, 30000);
 </script>
 </body>

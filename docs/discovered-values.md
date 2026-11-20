@@ -519,3 +519,13 @@ The GRF remote talks to the stove board over radio; that traffic is not on the s
 | RAM 0x24 = 7, then 0x08 = 2 (60 ms later) | 0x08 = 16, 0x16 = 1, 0x24 = 2 → 0; all 0 two seconds later | None: no set point screen, stove state unchanged |
 
 The stove accepts the writes and counts a key event (0x16 = 1), but rewrites 0x08 to another value (224 / 16, meaning unknown) and nothing happens on the remote (checked on the remote itself: no screen change, no beep). Hypothesis: the menus run in the remote itself (it also keeps the display settings, see DISPLAY above); 0x08 / 0x16 / 0x24 only report the key to the stove, so writing them cannot drive the remote. Emulating keys this way does not work; a virtual remote would need the radio link. Settings are better written directly (set point, flame, fan, ... as the API does).
+
+### Observation 19/11/2026 21:40 (working, set flame 3, modulating at actual flame 1, room 20 °C = set point)
+
+Read-only RAM dump, compared with the hypotheses:
+
+- **Supported:** 0x36 = 134 / 0x37 = 135 (fume fan target vs measured, flame 1); 0xD3 = 0x04 = 0x0E = 1 (actual power level); 0xA7 = 104 with 0x0A = 9 (117 − 1.5 × 9 = 103.5); 0x32 = 16 = minutes to brazier cleaning; 0x09 = 0x43 = 10, 0x0B = 0x4E = 106, 0x12 = 104, 0x39 = 16, 0x2F = 10 (working values as before); 0x61 – 0x64 = 80 / 95 / 110 / 120.
+- **RAM 0x91 = 62** with a full hopper: the start value of the pellet reserve countdown, 62 half minutes = 31 min, which matches the switch-off ~30 min after 0x89 reached 0 (17/11). **RAM 0x30 = 55** without an error: the start value of the E1 countdown.
+- **RAM 0xA1 = 239** at set flame 3 / actual 1: follows the set flame power, not the actual one.
+- **Not as expected:** 0x96 = 72 (before 41 – 48: the "raw ADC, same on or off" idea is doubtful); 0x1F / 0x20 / 0xB7 = 142 / 8 / 2 while working (before 158 / 0 / 230 – 236 working, 144 / 8 / 234 off: the on / off difference does not hold); 0xC6 = 211 (75 and 143 before: a counter); 0x14 / 0x22 / 0x3A / 0xC7 = 1 / 1 / 1 / 0.
+- RAM 0xA4 = 0 and 0x89 = 20: enough pellets (both confirmed on 17/11).
