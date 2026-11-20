@@ -1,0 +1,54 @@
+** Drc report for openpelletbridge.kicad_pcb **
+** Created on 2026-11-19T12:15:55 **
+** Report includes: Errors, Warnings, Exclusions **
+
+** Found 9 DRC violations **
+[silk_edge_clearance]: Silkscreen clipped by board edge
+    Rule: board setup constraints silk; warning
+    @(101.0000 mm, 100.0000 mm): Segment on Edge.Cuts
+    @(111.9250 mm, 99.2000 mm): Segment of U4 on F.Silkscreen
+[silk_edge_clearance]: Silkscreen clipped by board edge
+    Rule: board setup constraints silk; warning
+    @(101.0000 mm, 100.0000 mm): Segment on Edge.Cuts
+    @(112.2000 mm, 120.1500 mm): Segment of U4 on F.Silkscreen
+[silk_edge_clearance]: Silkscreen clipped by board edge
+    Rule: board setup constraints silk; warning
+    @(101.0000 mm, 100.0000 mm): Segment on Edge.Cuts
+    @(127.8000 mm, 99.4500 mm): Segment of U4 on F.Silkscreen
+[silk_overlap]: Silkscreen clearance
+    Rule: board setup constraints silk; warning
+    @(133.5000 mm, 121.2500 mm): Segment of LED2 on F.Silkscreen
+    @(133.5000 mm, 118.9500 mm): Segment of LED1 on F.Silkscreen
+[silk_overlap]: Silkscreen clearance
+    Rule: board setup constraints silk; warning
+    @(133.5000 mm, 121.2500 mm): Segment of LED2 on F.Silkscreen
+    @(130.3000 mm, 121.2500 mm): Segment of LED1 on F.Silkscreen
+[silk_overlap]: Silkscreen clearance
+    Rule: board setup constraints silk; warning
+    @(133.5000 mm, 121.2500 mm): Segment of LED2 on F.Silkscreen
+    @(133.5000 mm, 118.9500 mm): Segment of LED1 on F.Silkscreen
+[silk_overlap]: Silkscreen clearance
+    Rule: board setup constraints silk; warning
+    @(133.8000 mm, 118.9500 mm): Segment of LED2 on F.Silkscreen
+    @(133.5000 mm, 118.9500 mm): Segment of LED1 on F.Silkscreen
+[silk_overlap]: Silkscreen clearance
+    Rule: board setup constraints silk; warning
+    @(133.5000 mm, 121.2500 mm): Segment of LED2 on F.Silkscreen
+    @(130.3000 mm, 121.2500 mm): Segment of LED1 on F.Silkscreen
+[silk_over_copper]: Silkscreen clipped by solder mask
+    Local override; warning
+    @(120.7600 mm, 130.0000 mm): Footprint text of BZ1 (-)
+    @(122.3000 mm, 130.3500 mm): Pad 2 [/BZ_K] of BZ1 on F.Cu
+
+** Found 0 unconnected pads **
+
+** Found 0 Footprint errors **
+
+** Ignored checks **
+    - Footprint has no courtyard defined
+    - Track endpoint not centered on via
+    - Tuning profile track geometries
+    - Footprint doesn't match symbol's footprint filters
+    - Footprint component type doesn't match footprint pads
+
+** End of Report **

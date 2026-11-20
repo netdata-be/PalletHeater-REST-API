@@ -24,6 +24,7 @@ The full OpenAPI 3 specification is in [docs/openapi.json](docs/openapi.json). T
 | [docs/debugging.md](docs/debugging.md) | Serial link, live debugging, restart reason, core dump, firmware updates |
 | [docs/development.md](docs/development.md) | Building and uploading, partitions, CI and releases, unit tests, source layout |
 | [docs/discovered-values.md](docs/discovered-values.md) | What is known about the stove registers |
+| [hardware/README.md](hardware/README.md) | Controller board (draft): schematic, BOM, design choices |
 | [docs/openapi.json](docs/openapi.json) | OpenAPI 3 specification |
 
 ## Hardware
