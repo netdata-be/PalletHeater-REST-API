@@ -12,7 +12,7 @@ void getStatus()
     {
     //telnet.println("Get status called");
 
-    DynamicJsonDocument json(3584);   // grew with roomFan, pelletReserve, controller, pellets
+    DynamicJsonDocument json(4096);   // grew with roomFan, pelletReserve, controller, pellets, PELLETS error (3584 overflowed 20/11/2026)
     json.clear();
     // Values never read from the stove since the start are null (not the firmware's
     // initial 0). Once read, the last known value stays; dataAge says how old it is.
@@ -203,6 +203,12 @@ void getStatus()
     obj_ctrl["crashCount"]  = diagCrashes;          // starts after a crash, watchdog or brown-out
 
 #undef KNOWN
+    if (json.capacity() == 0) {   // the 4 KB document could not be allocated (fragmented heap)
+        static uint32_t lastLog = 0;
+        if (!lastLog || millis() - lastLog > 60000) { lastLog = millis(); LOGW("http", "getStatus: not enough memory (largest block %u bytes)", (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)); }
+        wm.server->send(503, "application/json", "{\"error\":\"not enough memory, try again\"}");
+        return;
+    }
     if (json.overflowed()) LOGE("http", "getStatus: JSON document too small");
     String out;
     out.reserve(measureJson(json) + 1);
