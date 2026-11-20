@@ -4635,6 +4635,11 @@
             "nullable": true,
             "description": "Serial number of the stove (MATR on the nameplate), EEPROM 0xCD - 0xCF; null until read"
           },
+          "augerPercent": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Share of the time the auger runs, 0 - 100 % (augerSpeed / 12 s cycle, 100 while pre-loading)"
+          },
           "augerSpeed": {
             "type": "number",
             "description": "Auger on-time per cycle in seconds (RAM 0x0D / 10; fixed cycle of about 12 s). Named augerSpeed for compatibility."

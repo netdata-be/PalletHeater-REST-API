@@ -20,7 +20,7 @@ Values are plain text (no JSON), retained, under `<prefix>/state/<name>` (prefix
 | `flame_power`, `flame_actual` | Set and actual flame power, 1 – 4 |
 | `fan_speed`, `fan_running`, `fan_power` | Room fan speed 0 – 3, `ON` / `OFF`, raw power (RAM 0x0A) |
 | `energy_saving`, `es_stop`, `es_start` | `ON` / `OFF`, stop above and restart below the set point in °C (0 – 3) |
-| `fume_fan_rpm`, `auger` | Fume fan rpm, auger on-time per cycle (s) |
+| `fume_fan_rpm`, `auger`, `auger_percent` | Fume fan rpm, auger on-time per cycle (s), share of the time the auger runs (0 – 100 %) |
 | `brazier_minutes` | Minutes to the next brazier cleaning (empty when the stove is not working) |
 | `error_active`, `error` | `ON` / `OFF`, the active error (`E9 Ignition …`) or `none` |
 | `low_pellets` | `ON` / `OFF` |

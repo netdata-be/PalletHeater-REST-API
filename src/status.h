@@ -132,7 +132,8 @@ void getStatus()
     KNOWN(slowOk, json["totalRuntime"], cachedTotalRuntime);
     KNOWN(slowOk, json["firmwareVersion"], cachedFirmwareVersion);
     if (cachedSerialNumber >= 0) json["serialNumber"] = cachedSerialNumber; else json["serialNumber"] = nullptr;   // MATR, EEPROM 0xCD - 0xCF
-    if (slowOk) json["augerSpeed"] = serialized(String(cachedAugerSpeed, 1)); else json["augerSpeed"] = nullptr;
+    if (slowOk) json["augerSpeed"] = serialized(String(cachedAugerSpeed, 1)); else json["augerSpeed"] = nullptr;   // on-time per cycle (s)
+    if (slowOk) json["augerPercent"] = pc::augerPercent(cachedAugerSpeed); else json["augerPercent"] = nullptr;    // share of the time it runs
     JsonObject obj_burn = json.createNestedObject("burn");
     const char* cqLabel = getCombustionQualityLabel(cachedCombustionQuality);
     const char* pqLabel = getPelletQualityLabel(cachedPelletQuality);

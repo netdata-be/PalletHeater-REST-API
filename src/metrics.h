@@ -230,6 +230,7 @@ String getMetrics() {
   setMetric(&p, "stove_room_fan_speed",          "Room fan speed (0-3)",                   String(roomFanSpeed));
   setMetric(&p, "stove_fume_fan_rpm",            "Fume fan RPM",                           String(cachedFumeFanRPM));
   setMetric(&p, "stove_auger_speed",             "Auger on-time per cycle in seconds (RAM 0x0D / 10; the cycle is about 12 s)",                 String(cachedAugerSpeed));
+  setMetric(&p, "stove_auger_percent",           "Share of the time the auger runs, 0 - 100 (on-time / 12 s cycle)",                          String(pc::augerPercent(cachedAugerSpeed)));
 
   // Energy saving
   setMetric(&p, "stove_energy_saving_start",     "Energy saving start offset in Celsius",  String(energySavingStart));

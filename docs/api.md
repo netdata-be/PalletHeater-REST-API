@@ -161,6 +161,7 @@ curl http://openpelletbridge.local/api/state
 | `pendingError` | The error the stove reports right now (RAM 0x33), also before it counts as `currentError`, with `secondsLeft`: seconds until the stove acts on it (RAM 0x30). E1 (hopper lid open) gives 55 s; closing the lid in time clears it. `null` without an error. The web app shows it as an alert with the countdown. |
 | `brazierCleaning` | `minutesLeft`: minutes to the next brazier cleaning (RAM 0x32), `null` when the stove is not working; `active`: `true` while the cleaning runs (state 5); `interval`: minutes between cleanings (EEPROM 0x02). |
 | `totalRuntime` | Total working hours. |
+| `augerPercent` | Share of the time the auger runs, 0 – 100 %: `augerSpeed` / 12 s (100 while pre-loading). |
 | `augerSpeed` | Auger on-time per cycle in seconds (RAM 0x0D / 10). Measured 20/11/2026 at flame power 3 (6.2) and 2 (4.6): the auger runs that many seconds and stands still the rest of a fixed ~12 s cycle (RAM 0xB2 follows the motor); 20.0 at the start = running continuously (pre-loading). The name is kept for compatibility; earlier docs called it rpm. |
 | `serialNumber` | Serial number of the stove: **MATR** on the nameplate (EEPROM 0xCD – 0xCF, read once). `null` until read. |
 | `RemoteControlLastSeen` | Seconds since the last contact with the remote control, `-1` when unknown. |
@@ -656,7 +657,7 @@ Prometheus text format. Contains:
 - WiFi: connected, RSSI, channel, TX power
 - HTTP: request counters per method and per endpoint
 - Serial bus: read/write errors after retries, number of retries
-- Stove: state, temperatures, wireless sensor setting (`stove_wireless_sensor_enabled`), flame power, fan speed, fume fan rpm, auger speed, energy saving, low pellet alarm, remote last seen, timers, stove/NTP time delta, firmware version, serial number (`stove_serial_number_info{serial="…"} 1`)
+- Stove: state, temperatures, wireless sensor setting (`stove_wireless_sensor_enabled`), flame power, fan speed, fume fan rpm, auger on-time (`stove_auger_speed`, s) and share of the time it runs (`stove_auger_percent`, %), energy saving, low pellet alarm, remote last seen, timers, stove/NTP time delta, firmware version, serial number (`stove_serial_number_info{serial="…"} 1`)
 
 Example scrape config:
 

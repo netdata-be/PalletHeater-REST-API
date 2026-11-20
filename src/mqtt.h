@@ -155,7 +155,8 @@ static void mqttPublishStates(bool force)
     mqttState("es_stop",        String(energySavingStop), force);
     mqttState("es_start",       String(-energySavingStart), force);   // degrees below the set point, 0 = no restart
     mqttState("fume_fan_rpm",   String(cachedFumeFanRPM), force);
-    mqttState("auger",          String(cachedAugerSpeed, 1), force);
+    mqttState("auger",          String(cachedAugerSpeed, 1), force);                 // on-time per ~12 s cycle (s)
+    mqttState("auger_percent",  String(pc::augerPercent(cachedAugerSpeed)), force);  // share of the time it runs
     mqttState("brazier_minutes", stoveState == 4 && cachedBrazierCountdown >= 0 ? String(cachedBrazierCountdown) : String(""), force);
     if (stoveState != UNKNOWN) {
         bool empty = !confirmedCurrentError && pelletsEmptyOff();   // the controller's own error (stoveCache.h)
@@ -242,7 +243,8 @@ static void mqttPublishDiscovery()
     mqttDiscoveryEntity(sensor, "fume_temp", "Rookgastemperatuur", temp, false);
     mqttDiscoveryEntity(sensor, "flame_actual", "Werkelijk vlamvermogen", [](JsonObject& o) { o["state_class"] = "measurement"; }, false);
     mqttDiscoveryEntity(sensor, "fume_fan_rpm", "Rookgasventilator", [](JsonObject& o) { o["unit_of_measurement"] = "rpm"; o["state_class"] = "measurement"; }, false);
-    mqttDiscoveryEntity(sensor, "auger", "Schroef", [](JsonObject& o) { o["state_class"] = "measurement"; o["entity_category"] = "diagnostic"; }, false);
+    mqttDiscoveryEntity(sensor, "auger", "Schroef aan-tijd", [](JsonObject& o) { o["unit_of_measurement"] = "s"; o["state_class"] = "measurement"; o["entity_category"] = "diagnostic"; }, false);
+    mqttDiscoveryEntity(sensor, "auger_percent", "Schroef", [](JsonObject& o) { o["unit_of_measurement"] = "%"; o["state_class"] = "measurement"; }, false);
     mqttDiscoveryEntity(sensor, "brazier_minutes", "Branderreiniging over", [](JsonObject& o) { o["unit_of_measurement"] = "min"; o["device_class"] = "duration"; }, false);
     mqttDiscoveryEntity(sensor, "error", "Foutmelding", nullptr, false);
     mqttDiscoveryEntity(sensor, "hours_service", "Uren sinds onderhoud", [](JsonObject& o) { o["unit_of_measurement"] = "h"; o["device_class"] = "duration"; o["entity_category"] = "diagnostic"; }, false);

@@ -464,6 +464,9 @@ struct HourRecord {                           // stored on SPIFFS: keep the layo
     uint16_t fumeRpm;                         // 0xFFFF = unknown
 };
 inline bool heatingState(int s) { return s >= 1 && s <= 5; }
+// Auger value (RAM 0x0D / 10 = on-time in seconds per cycle of ~12 s, measured 20/11/2026) as
+// the share of the time the auger runs, 0 - 100 % (20.0 while pre-loading = running all the time)
+inline int augerPercent(float onTime) { if (onTime <= 0) return 0; int p = (int)(onTime / 12.0f * 100.0f + 0.5f); return p > 100 ? 100 : p; }
 struct HourAcc {
     uint32_t hour = 0; int n = 0;
     long room = 0, stove = 0, remote = 0, fume = 0, flame = 0, fan = 0;

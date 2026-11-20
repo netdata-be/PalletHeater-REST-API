@@ -2277,7 +2277,8 @@ function render(s) {
       : s.roomFan.running ? t("fanRunsPower", s.roomFan.actual ?? s.RoomFanSpeed, s.roomFan.drive ?? "?") : s.roomFan.hotEnough === false && s.RoomFanSpeed ? t("fanWaitHeat") : t("off")],
     [withHelp(t("fanPower"), "h_fanPower"), s.roomFan && s.roomFan.drive !== null && s.roomFan.drive !== undefined ? String(s.roomFan.drive) : "–", "d"],
     [t("fumeFan"), (s.fumeFanRPM ?? "–") + " rpm", true],
-    [t("auger"), (s.augerSpeed ?? "–") + " s", true],   // on-time per 12 s cycle (RAM 0xB2 follows the motor, 20/11/2026)
+    // share of the time the auger runs (on-time per ~12 s cycle, RAM 0xB2 follows the motor, 20/11/2026)
+    [t("auger"), s.augerSpeed == null ? "–" : augerPct(s.augerSpeed) + " % (" + Number(s.augerSpeed).toFixed(1) + " s / 12 s)", true],
     [withHelp(t("brazier"), "h_brazier"), brazierText(s.brazierCleaning), true],
     [t("pelletLevel"), s.lowPalletAlarm == null ? "–" : s.pelletReserve && s.pelletReserve.switchedOff ? pill(t("emptyOff"), "err")
       : s.pelletReserve && s.pelletReserve.shutdownMinutes != null ? pill(t("lowOff", s.pelletReserve.shutdownMinutes), "err")
@@ -2882,7 +2883,8 @@ const SERIES = [
     derive: col => { const fp = col("fanPower"), fs = col("fan"); return col("fanActual").map((v, i) => v === null && fp[i] > 0 ? fs[i] : v); } },
   { key: "fan",      field: "fan",      lane: "fan",   color: "--s6", label: () => t("fanSet"),      unit: "", step: true, dash: true, def: true },
   { key: "fume",     field: "fume",     lane: "fume",  color: "--s7", label: () => t("fumeTemp"),    unit: "°", def: false },
-  { key: "auger",    field: "auger",    lane: "auger", color: "--s8", label: () => t("auger"),       unit: "", dec: 1, def: false },
+  { key: "auger",    field: "auger",    lane: "auger", color: "--s8", label: () => t("auger"),       unit: "%", def: false,
+    derive: col => col("auger").map(v => v === null ? null : augerPct(v)) },
   // 8 palette slots are taken: the fume fan reuses the fume hue (same exhaust system), dashed, in its own lane
   { key: "fanPower", field: "fanPower", lane: "fanPower", color: "--s6", label: () => t("fanPower"), unit: "", step: true, def: false, x: "d" },   // raw register: debug only
   { key: "fumeFan",  field: "fumeFan",  lane: "fumeFan", color: "--s7", dash: true, label: () => t("fumeFan"), unit: "", def: false },
@@ -2895,7 +2897,7 @@ const LANES = [
   { id: "flame", h: 64,  title: () => t("flamePower"), fixed: [0, 4], ticks: [0, 2, 4] },
   { id: "burn",  h: 56,  title: () => t("burnPct") + " (%)", fixed: [0, 100], ticks: [0, 50, 100] },
   { id: "fan",   h: 56,  title: () => t("tFan"),       fixed: [0, 3], ticks: [0, 3] },
-  { id: "auger", h: 70,  title: () => t("auger") + " (s)" },
+  { id: "auger", h: 56,  title: () => t("auger") + " (%)", fixed: [0, 100], ticks: [0, 50, 100] },
   { id: "fumeFan", h: 70, title: () => t("fumeFan") + " (rpm)" },
   { id: "fanPower", h: 70, title: () => t("fanPower") + " (RAM 0x0A)" },
 ];
@@ -2928,6 +2930,8 @@ function niceTicks(min, max, count) {
   for (let v = lo; v <= hi + 1e-9; v += step) ticks.push(+v.toFixed(6));
   return { lo, hi, ticks };
 }
+// auger value (on-time in s per ~12 s cycle) as the share of the time the auger runs
+function augerPct(v) { return v > 0 ? Math.min(100, Math.round(v / 12 * 100)) : 0; }
 function fmtVal(s, v) {
   if (v === null || v === undefined || isNaN(v)) return "–";
   if (s.unit === "°") return fmtTemp(v, s.dec);
@@ -3200,6 +3204,7 @@ function renderHistory() {
       const v = get(n);
       const txt = n === "t" ? (d => fmtDate(d) + " " + fmtHM(d))(new Date(v * 1000)) : n === "state" ? (STATE_NAME[lang][v] ?? "–")
         : ["room", "stove", "remote"].includes(n) ? fmtTemp(v, 1) : ["setpoint", "fume", "fumeMax"].includes(n) ? fmtTemp(v) : n === "burning" ? v + " %"
+        : n === "auger" && v !== null ? augerPct(v) + " %"
         : n === "fanActual" && v === null && get("fanPower") > 0 ? get("fan") : (v ?? "–");
       tr.appendChild(el("td", "", txt));
     });
