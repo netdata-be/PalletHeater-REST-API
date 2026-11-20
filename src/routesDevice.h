@@ -42,6 +42,7 @@ void handleRouteBluetooth()
 // GET  /api/telnet                   -> { enabled }
 // POST /api/telnet?enabled=true|false  (applied immediately, stored in NVS)
 void setupTelnet();
+void telnetStop();
 void handleRouteTelnet()
 {
     if (wm.server->method() == HTTP_POST)
@@ -57,7 +58,7 @@ void handleRouteTelnet()
         prefs.putBool("enabled", on);
         prefs.end();
         if (on && !telnetEnabled) { telnetEnabled = true; setupTelnet(); }
-        else if (!on && telnetEnabled) { telnet.stop(); telnetEnabled = false; LOGI("sys", "telnet stopped"); }
+        else if (!on && telnetEnabled) { telnetStop(); telnetEnabled = false; LOGI("sys", "telnet stopped"); }
     }
     else if (wm.server->method() != HTTP_GET) { wm.server->send(405); return; }
     StaticJsonDocument<96> json;

@@ -20,7 +20,6 @@
 
 #include <helperFunctions.h>
 #include "Stove.h"
-#include <telnetMenu.h>
 #include <keyWatch.h>
 #include <Preferences.h>
 #include <esp_bt.h>
@@ -44,16 +43,6 @@
 
 #include "status.h"
 
-void setupTelnet()
-{
-    // Menu actions read/write the stove, so hold the bus lock while they run
-    telnet.onConnect([](String ip) { StoveBusLock lock; telnetOnConnect(ip); });
-    telnet.onInputReceived([](String str) { StoveBusLock lock; CmdSource cs("telnet menu"); telnetHandleInput(str); });
-
-    if (telnet.begin()) LOGI("sys", "telnet running");
-    else LOGE("sys", "telnet could not start");
-}
-
 #include "history.h"
 
 #include "pellets.h"   // pellet consumption, time left until the low pellet alarm
@@ -74,6 +63,8 @@ void setupTelnet()
 
 #include "https.h"      // HTTPS on port 443 in front of the HTTP server, self-signed certificate
 #include "http6.h"      // HTTP over IPv6 on port 80 (the Arduino web server is IPv4 only)
+
+#include "telnetMenu.h" // telnet menu on port 23 (IPv4 + IPv6); last: its screens use all modules above
 
 // Serialise all stove bus access: HTTP handlers run on the loop task while the
 // sensor task polls the stove from the other core. Without the lock both talk
@@ -291,8 +282,7 @@ void loop()
     // crumb(): breadcrumb for a watchdog reset, see liveLog.h
     if (telnetEnabled) {
         crumb("telnet");
-        telnet.loop();
-        telnetMenuLoop();
+        telnetLoop();
     }
     if (bleEnabled) { crumb("bluetooth"); bleLoop(); }
     esp_task_wdt_reset();

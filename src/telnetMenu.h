@@ -1,1500 +1,1260 @@
 #pragma once
-#include <constants.h>
+// Telnet debug menu on port 23: the screens.
+//
+//   telnetServer.h  the TCP server (IPv4 + IPv6, one session, take-over), keys
+//   telnetUi.h      output helpers, page stack, generic menu / picker / input / confirm / view
+//   telnetMenu.h    this file: the screens, built from tables of TmItem
+//
+// Included by main.cpp after all other modules: the screens show what those modules
+// keep (pellet estimate, events, history, firmware update, MQTT, HTTPS, WiFi) and
+// reuse their functions for every action (doStoveOn / doStoveOff, setFlamePower,
+// refreshTimerCache, fwStart, ...), so telnet behaves like the web app and the API.
+// Switching the stove on is refused while the pellets are used up (pelletsEmptyOff),
+// as on every other way in.
+//
+// Public: setupTelnet(), telnetStop(), telnetLoop() (main.cpp, routesDevice.h).
+#include "telnetServer.h"
+#include "telnetUi.h"
 
-// Forward declarations for functions defined in main.cpp
-bool        setFlamePower(int power);
-bool        setRoomFanSpeed(int speed);
-bool        setEnergySavingStart(int start);
-bool        setEnergySavingStop(int stop);
-void        setCombustionQuality(int val);
-void        setStoveDateTime();
-void        getStoveState();
-void        getTempSetpoint();
-int         combustionQualityFromLabel(const String& label);
-int         pelletQualityFromLabel(const String& label);
-const char* getCombustionQualityLabel(int val);
-const char* getPelletQualityLabel(int val);
-const char* getRemoteMenuName(int id);
-const char* getSelectedParameterName(int id);
+// ─────────────────────────────────────────────────────────────────────
+// Header and alerts
+// ─────────────────────────────────────────────────────────────────────
 
-// ─────────────────────────────────────────────
-// State machine
-// ─────────────────────────────────────────────
-
-enum TelnetState {
-    TS_NONE,
-    TS_MAIN_MENU,
-    TS_LIVE_SELECT,
-    TS_LIVE_RUNNING,
-    TS_CONFIG_MENU,
-    TS_CONFIG_INPUT,
-    TS_DEBUG_MENU,
-    TS_DEBUG_RAW_READ,
-    TS_DEBUG_RAW_WRITE,
-    TS_WIFI_MENU,
-    TS_WIFI_HOSTNAME_INPUT,
-    TS_WIFI_IP_MENU,
-    TS_WIFI_STATIC_IP,
-    TS_WIFI_STATIC_NETMASK,
-    TS_WIFI_STATIC_GW,
-    TS_WIFI_STATIC_DNS,
-    TS_WIFI_CONFIRM,
-    TS_WIFI_INFO,
-    TS_DEBUG_LOG,
-    TS_TIMERS_MENU,
-    TS_TIMER_EDIT_MENU,
-    TS_TIMER_EDIT_INPUT,
-    TS_TIMER_STEP,
-    TS_TIMER_DOW_SELECT
-};
-
-enum TelnetConfigField {
-    CF_NONE,
-    CF_POWER,
-    CF_FLAME_POWER,
-    CF_FAN_SPEED,
-    CF_ENERGY_SAVE_START,
-    CF_ENERGY_SAVE_STOP,
-    CF_COMBUSTION_QUALITY,
-    CF_PELLET_QUALITY,
-    CF_BEEP,
-    CF_SETPOINT,
-    CF_SYNC_TIME
-};
-
-enum TelnetTimerField {
-    TF_NONE,
-    TF_ENABLED,
-    TF_ONTIME,
-    TF_OFFTIME,
-    TF_SETPOINT,
-    TF_FLAME,
-    TF_FAN,
-    TF_DOW
-};
-
-static TelnetState       telnetState       = TS_NONE;
-static TelnetConfigField telnetConfig      = CF_NONE;
-static TelnetTimerField  currentTimerField = TF_NONE;
-static int               selectedTimerIdx  = 0;
-static int               timerEditReturnCursor = 0;
-
-// Timer stepper state
-static int  timerStepValue  = 0;
-static int  timerStepMin    = 0;
-static int  timerStepMax    = 0;
-static byte timerStepOffset = 0;
-static bool timerStepIsTime = false;
-
-// Timer DOW select state
-static byte timerDowWorking = 0;
-static uint16_t          liveValuesMask       = 0;
-static unsigned long     lastLiveUpdate       = 0;
-static unsigned long     lastTelnetActivity   = 0;
-static int               menuCursor           = 0;
-static int               menuItemCount     = 0;
-static uint8_t           escState          = 0;   // 0=normal 1=got ESC 2=got ESC[
-
-// WiFi static IP wizard
-static String wifiWizardIP      = "";
-static String wifiWizardNetmask = "";
-static String wifiWizardGW      = "";
-
-// Pending static IP confirmation — if not confirmed within 60s, reverts to DHCP
-static bool          wifiPendingConfirm  = false;
-static unsigned long wifiConfirmDeadline = 0;
-static String        wifiPendingIP       = "";
-static String        wifiPendingNetmask  = "";
-static String        wifiPendingGW       = "";
-static String        wifiPendingDNS      = "";
-
-// ─────────────────────────────────────────────
-// Internal helpers
-// ─────────────────────────────────────────────
-
-static void tp(const String& s)  { telnet.print(s); }
-static void tpl(const String& s) { telnet.println(s); }
-static void cls()                { tp("\x1B[2J\x1B[H"); }   // clear screen + cursor home
-
-static bool isCharModeState(TelnetState s) {
-    switch (s) {
-        case TS_MAIN_MENU:
-        case TS_CONFIG_MENU:
-        case TS_DEBUG_MENU:
-        case TS_WIFI_MENU:
-        case TS_WIFI_IP_MENU:
-        case TS_WIFI_CONFIRM:
-        case TS_WIFI_INFO:
-        case TS_DEBUG_LOG:
-        case TS_LIVE_SELECT:
-        case TS_LIVE_RUNNING:
-        case TS_TIMERS_MENU:
-        case TS_TIMER_EDIT_MENU:
-        case TS_TIMER_STEP:
-        case TS_TIMER_DOW_SELECT:
-            return true;
-        default:
-            return false;
-    }
-}
-
-static void setTelnetState(TelnetState s) {
-    bool entering_char = isCharModeState(s);
-    bool was_char      = isCharModeState(telnetState);
-    telnetState = s;
-    telnet.setLineMode(!entering_char);
-
-    if (entering_char && !was_char) {
-        // Tell the client to stop buffering and suppress local echo:
-        //   IAC WILL ECHO        — server will echo; client must suppress its own echo
-        //   IAC WILL SUPPRESS-GA — needed for char-at-a-time mode
-        //   IAC DO   SUPPRESS-GA — ask client to do the same
-        const uint8_t seq[] = {
-            0xFF, 0xFB, 0x01,   // IAC WILL ECHO
-            0xFF, 0xFB, 0x03,   // IAC WILL SGA
-            0xFF, 0xFD, 0x03    // IAC DO  SGA
-        };
-        telnet.write(seq, sizeof(seq));
-    } else if (!entering_char && was_char) {
-        // Restore line mode: undo all three char-mode options so the client
-        // re-enables its line buffer and interprets \r\n correctly again.
-        //   IAC WONT ECHO  — client resumes its own echo
-        //   IAC WONT SGA   — re-enable go-ahead (restores line-at-a-time)
-        //   IAC DONT SGA   — ask client to do the same
-        const uint8_t seq[] = {
-            0xFF, 0xFC, 0x01,   // IAC WONT ECHO
-            0xFF, 0xFC, 0x03,   // IAC WONT SGA
-            0xFF, 0xFE, 0x03    // IAC DONT SGA
-        };
-        telnet.write(seq, sizeof(seq));
-    }
-}
-
-// ─────────────────────────────────────────────
-// Arrow-key menu rendering helpers
-// ─────────────────────────────────────────────
-
-// Print a single menu row — highlighted when selected
-static void menuRow(const String& label, bool selected) {
-    if (selected) tp(" \x1B[7m " + label + " \x1B[0m\x1B[K\r\n");
-    else          tp("   " + label + "\x1B[K\r\n");
-}
-
-static void menuMoveUp()   { menuCursor = (menuCursor - 1 + menuItemCount) % menuItemCount; }
-static void menuMoveDown() { menuCursor = (menuCursor + 1) % menuItemCount; }
-
-// ─────────────────────────────────────────────
-// Forward declarations
-// ─────────────────────────────────────────────
-
-static void telnetShowMainMenu(bool full = true);
-static void telnetShowConfigMenu(bool full = true);
-static void telnetShowDebugMenu(bool full = true);
-static void telnetShowWifiMenu(bool full = true);
-static void telnetShowWifiIpMenu(bool full = true);
-static void telnetShowWifiConfirm(bool full = true);
-static void telnetShowLiveSelect(bool full = true);
-static void telnetShowTimersMenu(bool full = true);
-static void telnetShowTimerEditMenu(bool full = true);
-static void telnetShowTimerStep(bool full = true);
-static void telnetShowTimerDowSelect(bool full = true);
-
-// ─────────────────────────────────────────────
-// WiFi info (not a menu — just prints then returns)
-// ─────────────────────────────────────────────
-
-static void telnetShowWifiInfo()
+static const char* tmStateColor(int s)
 {
-    cls();
-    tpl("=== WiFi Info ===\r\n");
-
-    wl_status_t status = WiFi.status();
-    const char* statusStr =
-        status == WL_CONNECTED       ? "Connected" :
-        status == WL_DISCONNECTED    ? "Disconnected" :
-        status == WL_CONNECTION_LOST ? "Connection lost" :
-        status == WL_CONNECT_FAILED  ? "Connect failed" :
-        status == WL_NO_SSID_AVAIL   ? "SSID not found" :
-        status == WL_IDLE_STATUS     ? "Idle" : "Unknown";
-
-    tpl("Status:       " + String(statusStr));
-    tpl("SSID:         " + WiFi.SSID());
-    tpl("BSSID (AP):   " + WiFi.BSSIDstr());
-    tpl("MAC:          " + WiFi.macAddress());
-    tpl("Hostname:     " + String(WiFi.getHostname()));
-    tpl("IP:           " + WiFi.localIP().toString());
-    tpl("Gateway:      " + WiFi.gatewayIP().toString());
-    tpl("Subnet:       " + WiFi.subnetMask().toString());
-    tpl("DNS:          " + WiFi.dnsIP().toString());
-    tpl("Channel:      " + String(WiFi.channel()));
-
-    int rssi = WiFi.RSSI();
-    const char* rssiLabel =
-        rssi >= -50 ? "Excellent" :
-        rssi >= -60 ? "Good" :
-        rssi >= -70 ? "Fair" :
-        rssi >= -80 ? "Weak" : "Very weak";
-    char rssiLine[48];
-    snprintf(rssiLine, sizeof(rssiLine), "%d dBm (%s)", rssi, rssiLabel);
-    tpl("RSSI:         " + String(rssiLine));
-
-    int8_t txPower = WiFi.getTxPower();
-    tpl("TX power:     " + String(txPower * 0.25f, 2) + " dBm (raw: " + String(txPower) + ")");
-
-    tpl("=================");
-    tpl("");
-    tp("  \x1B[2m[any key] back\x1B[0m\r\n");
-    setTelnetState(TS_WIFI_INFO);
+    if (s == UNKNOWN || pc::alarmState(s)) return A_RED;
+    if (s == WORKING) return A_GRN;
+    if (s == OFF) return A_DIM;
+    return A_YEL;
 }
 
-// ─────────────────────────────────────────────
-// Menu: Main
-// ─────────────────────────────────────────────
-
-static void telnetDrawMainMenu()
+// Warnings shown under the header of every screen (and on the status page)
+static void tmAlerts()
 {
-    const char* items[] = {
-        "Show live values",
-        "Configure",
-        "WiFi info",
-        "Debug",
-        "Reboot",
-        "Exit"
-    };
-    for (int i = 0; i < 6; i++) menuRow(items[i], i == menuCursor);
-}
-
-static void telnetShowMainMenu(bool full)
-{
-    if (full) {
-        char timeBuf[24] = "00:00:00";
-        char dateBuf[16] = "0000-00-00";
-        struct tm now;
-        if (getLocalTime(&now, 100)) {
-            strftime(timeBuf, sizeof(timeBuf), "%H:%M:%S", &now);
-            strftime(dateBuf, sizeof(dateBuf), "%Y-%m-%d", &now);
-        }
-
-        cls();
-        tpl("______ _                   _   _        ");
-        tpl("| ___ (_)                 | | | |       ");
-        tpl("| |_/ /_  __ _ ___________| |_| |_ __ _ ");
-        tpl("|  __/| |/ _` |_  /_  / _ \\ __| __/ _` |");
-        tpl("| |   | | (_| |/ / / /  __/ |_| || (_| |");
-        tpl("\\_|   |_|\\__,_/___/___\\___|\\__|\\__\\__,_|");
-        tpl("   PelletHeater  by  N E T D A T A");
-        tpl("");
-        {
-            String fwLine = "  Firmware: ";
-            fwLine += cachedFirmwareVersion;
-            tpl(fwLine);
-        }
-        if (cachedSerialNumber >= 0) tpl(String("  Serial:   ") + String(cachedSerialNumber));
-        tpl(String("  Date:     ") + dateBuf);
-        tpl(String("  Time:     ") + timeBuf);
-        tpl(String("  Uptime:   ") + uptimeStr());
-        tpl("");
-        if (cachedLowPallet) {
-            tpl("\x1B[41;97m  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  \x1B[0m");
-            tpl("\x1B[41;97m  !!                                     !!  \x1B[0m");
-            tpl("\x1B[41;97m  !!    PELLET ALARM — REFILL PELLETS!   !!  \x1B[0m");
-            tpl("\x1B[41;97m  !!                                     !!  \x1B[0m");
-            tpl("\x1B[41;97m  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  \x1B[0m");
-            tpl("");
-        }
-        tp("\x1B[s");
-        menuItemCount = 6;
+    if (lastFastStatesAt && (stove.linkDown || stoveState == UNKNOWN)) {
+        tpl(A_RED " ! No answer from the stove (serial link down)" A_RST);
     } else {
-        tp("\x1B[u");
+        if (confirmedCurrentError) tpf(A_RED " ! Error %s: %s" A_RST A_EOL, pc::errorCode(confirmedCurrentError), pc::errorDesc(confirmedCurrentError));
+        else if (lastSlowStatesAt && pelletsEmptyOff()) tpl(A_RED " ! PELLETS: pellets used up, the stove switched itself off - refill the hopper" A_RST);
+        if (cachedCurrentError > 0 && cachedCurrentError != confirmedCurrentError) {
+            tpf(A_YEL " ! Stove reports %s (%s)", pc::errorCode(cachedCurrentError), pc::errorDesc(cachedCurrentError));
+            if (cachedErrorCountdown >= 0) tpf(" - acts in %d s", cachedErrorCountdown);
+            tpl(A_RST);
+        }
+        if (lastSlowStatesAt && !pelletsEmptyOff()) {
+            if (cachedPelletShutdown >= 0) tpf(A_YEL " ! Pellet reserve: the stove switches itself off in about %d min" A_RST A_EOL, (cachedPelletShutdown + 1) / 2);
+            else if (cachedLowPallet) tpl(A_YEL " ! Low pellets - refill the hopper" A_RST);
+            else if (pc::reserveSensorLow(cachedPelletSensor) && cachedPelletCounter >= 0)
+                tpf(A_YEL " ! Pellet level sensor low: low pellet alarm in about %d min" A_RST A_EOL, cachedPelletCounter);
+        }
     }
-    telnetDrawMainMenu();
-    if (full) {
-        tpl("");
-        tp("  \x1B[2m[arrows] navigate   [enter] select\x1B[0m\r\n");
-        setTelnetState(TS_MAIN_MENU);
-    }
+    if (fwState == FW_DOWNLOADING && fwTotal) tpf(A_CYN " Firmware update: downloading %u %%" A_RST A_EOL, (unsigned)(fwDone * 100 / fwTotal));
+    if (fwState == FW_RESTARTING) tpl(A_CYN " Firmware update installed - restarting" A_RST);
 }
 
-static void telnetHandleMainMenu(const String& key)
+static void tmHeader()
 {
-    if (key == "UP")   { menuMoveUp();   telnetShowMainMenu(false); return; }
-    if (key == "DOWN") { menuMoveDown(); telnetShowMainMenu(false); return; }
-    if (key != "ENTER") return;
-
-    int saved = menuCursor;
-    menuCursor = 0;
-    switch (saved) {
-        case 0: telnetShowLiveSelect();  break;
-        case 1: telnetShowConfigMenu();  break;
-        case 2:
-            menuCursor = 0;
-            telnetShowWifiMenu();
-            break;
-        case 3: telnetShowDebugMenu();   break;
-        case 4: tpl("Rebooting..."); delay(500); restartWith("telnet menu"); break;
-        case 5: tpl("Goodbye."); telnet.disconnectClient(); telnetState = TS_NONE; break;
-    }
-}
-
-// ─────────────────────────────────────────────
-// Menu: WiFi
-// ─────────────────────────────────────────────
-
-static void telnetDrawWifiMenu()
-{
-    String items[3] = {
-        "Show info",
-        "Set hostname       current: " + String(WiFi.getHostname()),
-        "Configure IP       current: " + WiFi.localIP().toString()
-    };
-    for (int i = 0; i < 3; i++) menuRow(items[i], i == menuCursor);
-    menuRow("Back", 3 == menuCursor);
-}
-
-static void telnetShowWifiMenu(bool full)
-{
-    if (full) { cls(); tpl("=== WiFi ===\r\n"); tp("\x1B[s"); }
-    else      { tp("\x1B[u"); }
-    telnetDrawWifiMenu();
-    if (full) {
-        tpl("");
-        tp("  \x1B[2m[arrows] navigate   [enter] select\x1B[0m\r\n");
-        menuItemCount = 4;
-        setTelnetState(TS_WIFI_MENU);
-    }
-}
-
-static void telnetHandleWifiMenu(const String& key)
-{
-    if (key == "UP")   { menuMoveUp();   telnetShowWifiMenu(false); return; }
-    if (key == "DOWN") { menuMoveDown(); telnetShowWifiMenu(false); return; }
-    if (key != "ENTER") return;
-
-    int saved = menuCursor;
-    menuCursor = 0;
-    switch (saved) {
-        case 0:
-            telnetShowWifiInfo();
-            break;
-        case 1:
-            tp("New hostname (current: " + String(WiFi.getHostname()) + "): ");
-            setTelnetState(TS_WIFI_HOSTNAME_INPUT);
-            break;
-        case 2: telnetShowWifiIpMenu(); break;
-        case 3: telnetShowMainMenu(); break;
-    }
-}
-
-static void telnetHandleWifiHostname(const String& input)
-{
-    if (input.length() == 0 || input.length() > 32) {
-        tpl("Invalid hostname (1-32 chars).");
-        menuCursor = 1;
-        telnetShowWifiMenu();
-        return;
-    }
-    WiFi.setHostname(input.c_str());
-    WiFi.reconnect();
-    tpl("Hostname set to '" + input + "'. Reconnecting WiFi...");
-    menuCursor = 0;
-    telnetShowWifiMenu();
-}
-
-// ─────────────────────────────────────────────
-// Menu: WiFi IP
-// ─────────────────────────────────────────────
-
-static void telnetDrawWifiIpMenu()
-{
-    const char* items[] = { "DHCP (auto)", "Static IP", "Back" };
-    for (int i = 0; i < 3; i++) menuRow(items[i], i == menuCursor);
-}
-
-static void telnetShowWifiIpMenu(bool full)
-{
-    if (full) { cls(); tpl("=== IP Configuration ===\r\n"); tp("\x1B[s"); }
-    else      { tp("\x1B[u"); }
-    telnetDrawWifiIpMenu();
-    if (full) {
-        tpl("");
-        tp("  \x1B[2m[arrows] navigate   [enter] select\x1B[0m\r\n");
-        menuItemCount = 3;
-        setTelnetState(TS_WIFI_IP_MENU);
-    }
-}
-
-static void telnetHandleWifiIpMenu(const String& key)
-{
-    if (key == "UP")   { menuMoveUp();   telnetShowWifiIpMenu(false); return; }
-    if (key == "DOWN") { menuMoveDown(); telnetShowWifiIpMenu(false); return; }
-    if (key != "ENTER") return;
-
-    int saved = menuCursor;
-    menuCursor = 0;
-    switch (saved) {
-        case 0:
-            WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
-            WiFi.reconnect();
-            tpl("Switched to DHCP. Reconnecting WiFi...");
-            telnetShowWifiMenu();
-            break;
-        case 1:
-            tpl("Current IP:      " + WiFi.localIP().toString());
-            tpl("Current netmask: " + WiFi.subnetMask().toString());
-            tpl("Current gateway: " + WiFi.gatewayIP().toString());
-            tpl("Current DNS:     " + WiFi.dnsIP().toString());
-            tp("IP address: ");
-            wifiWizardIP = wifiWizardNetmask = wifiWizardGW = "";
-            setTelnetState(TS_WIFI_STATIC_IP);
-            break;
-        case 2: telnetShowWifiMenu(); break;
-    }
-}
-
-static void telnetHandleWifiStaticIP(const String& input)
-{
-    IPAddress addr;
-    if (!addr.fromString(input)) {
-        tpl("Invalid IP address.");
-        tp("IP address: ");
-        return;
-    }
-    wifiWizardIP = input;
-    tp("Netmask: ");
-    setTelnetState(TS_WIFI_STATIC_NETMASK);
-}
-
-static void telnetHandleWifiStaticNetmask(const String& input)
-{
-    IPAddress addr;
-    if (!addr.fromString(input)) {
-        tpl("Invalid netmask.");
-        tp("Netmask: ");
-        return;
-    }
-    wifiWizardNetmask = input;
-    tp("Gateway: ");
-    setTelnetState(TS_WIFI_STATIC_GW);
-}
-
-static void telnetHandleWifiStaticGW(const String& input)
-{
-    IPAddress addr;
-    if (!addr.fromString(input)) {
-        tpl("Invalid gateway.");
-        tp("Gateway: ");
-        return;
-    }
-    wifiWizardGW = input;
-    tp("DNS server: ");
-    setTelnetState(TS_WIFI_STATIC_DNS);
-}
-
-static void telnetHandleWifiStaticDNS(const String& input)
-{
-    IPAddress dns;
-    if (!dns.fromString(input)) {
-        tpl("Invalid DNS address.");
-        tp("DNS server: ");
-        return;
-    }
-
-    wifiPendingIP      = wifiWizardIP;
-    wifiPendingNetmask = wifiWizardNetmask;
-    wifiPendingGW      = wifiWizardGW;
-    wifiPendingDNS     = input;
-
-    IPAddress ip, netmask, gw;
-    ip.fromString(wifiWizardIP);
-    netmask.fromString(wifiWizardNetmask);
-    gw.fromString(wifiWizardGW);
-
-    WiFi.config(ip, gw, netmask, dns);
-    WiFi.reconnect();
-
-    tpl("Applying static IP: " + wifiWizardIP);
-    tpl("Telnet to " + wifiWizardIP + " within 60s to confirm.");
-    tpl("No confirmation = auto-revert to DHCP.");
-
-    wifiPendingConfirm  = true;
-    wifiConfirmDeadline = millis() + 60000;
-}
-
-// ─────────────────────────────────────────────
-// Menu: WiFi Confirm
-// ─────────────────────────────────────────────
-
-static void telnetDrawWifiConfirm()
-{
-    const char* items[] = { "Confirm — keep this IP", "Revert — switch back to DHCP" };
-    for (int i = 0; i < 2; i++) menuRow(items[i], i == menuCursor);
-}
-
-static void telnetShowWifiConfirm(bool full)
-{
-    if (full) {
-        int secsLeft = max(0L, (long)(wifiConfirmDeadline - millis()) / 1000);
-        cls();
-        tpl("*** Static IP confirmation required ***\r\n");
-        tpl("New IP:   " + wifiPendingIP);
-        tpl("Netmask:  " + wifiPendingNetmask);
-        tpl("Gateway:  " + wifiPendingGW);
-        tpl("DNS:      " + wifiPendingDNS);
-        tpl("Auto-reverts to DHCP in " + String(secsLeft) + " seconds.\r\n");
-        tp("\x1B[s");
+    char clk[10] = "--:--:--";
+    time_t now = time(nullptr);
+    if (now > 1700000000) { struct tm tm; localtime_r(&now, &tm); strftime(clk, sizeof(clk), "%H:%M:%S", &tm); }
+    char left[72];
+    snprintf(left, sizeof(left), " OpenPelletBridge  %s  %s", WiFi.getHostname() ? WiFi.getHostname() : "", BUILD_VERSION);
+    tpf(A_INV "%-68.68s%9s " A_RST A_EOL, left, clk);
+    if (!lastFastStatesAt) {
+        tpl(A_DIM " Waiting for the first reading of the stove" A_RST);
     } else {
-        tp("\x1B[u");
+        tpf(" %s%-16s" A_RST, tmStateColor(stoveState), StoveStateStr);
+        if (lastSlowStatesAt) tpf("  room %.1f C  set %d C", ambTemp, (int)setPointTemp);
+        tpf("  flame %d", flamePower);
+        if (cachedFlameActual >= 0 && cachedFlameActual != flamePower && StoveIsOn) tpf(" (runs %d)", cachedFlameActual);
+        tpf("  fan %d", roomFanSpeed);
+        double rem = pellets.remainingKg();
+        if (rem >= 0) tpf("  pellets ~%.0f kg", rem);
+        tpl();
     }
-    telnetDrawWifiConfirm();
-    if (full) {
-        tpl("");
-        tp("  \x1B[2m[arrows] navigate   [enter] select\x1B[0m\r\n");
-        menuItemCount = 2;
-        setTelnetState(TS_WIFI_CONFIRM);
-    }
+    tmAlerts();
+    tpl();
 }
 
-static void telnetHandleWifiConfirm(const String& key)
+// ─────────────────────────────────────────────────────────────────────
+// Status (refreshes itself)
+// ─────────────────────────────────────────────────────────────────────
+
+static void tmErrorLines()
 {
-    if (key == "UP")   { menuMoveUp();   telnetShowWifiConfirm(false); return; }
-    if (key == "DOWN") { menuMoveDown(); telnetShowWifiConfirm(false); return; }
-    if (key != "ENTER") return;
-
-    wifiPendingConfirm = false;
-    if (menuCursor == 0) {
-        tpl("Static IP confirmed. Settings kept.");
-    } else {
-        WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
-        WiFi.reconnect();
-        tpl("Reverting to DHCP. Reconnecting...");
-    }
-    menuCursor = 0;
-    telnetShowMainMenu();
-}
-
-// ─────────────────────────────────────────────
-// Menu: Debug
-// ─────────────────────────────────────────────
-
-static void telnetDrawDebugMenu()
-{
-    String status = stove.isDebugEnabled() ? "ON " : "OFF";
-    String items[6] = {
-        "Toggle serial debug           currently: " + status,
-        "Show debug log",
-        "Clear debug log",
-        "Raw read   (hex: type addr   e.g. '00 1a')",
-        "Raw write  (hex: type addr val [...]  e.g. '00 21 01')",
-        "Back"
-    };
-    for (int i = 0; i < 6; i++) menuRow(items[i], i == menuCursor);
-}
-
-static void telnetShowDebugMenu(bool full)
-{
-    if (full) { cls(); tpl("=== Debug ===\r\n"); tp("\x1B[s"); }
-    else      { tp("\x1B[u"); }
-    telnetDrawDebugMenu();
-    if (full) {
-        tpl("");
-        tp("  \x1B[2m[arrows] navigate   [enter] select\x1B[0m\r\n");
-        menuItemCount = 6;
-        setTelnetState(TS_DEBUG_MENU);
+    if (stoveState == UNKNOWN && lastFastStatesAt) tkv("Error", "LINK - no answer from the stove (serial link down)");
+    else if (confirmedCurrentError) tkv("Error", "%s - %s (stove)", pc::errorCode(confirmedCurrentError), pc::errorDesc(confirmedCurrentError));
+    else if (lastSlowStatesAt && pelletsEmptyOff()) tkv("Error", "PELLETS - pellets used up, switched off by the stove (controller)");
+    else tkv("Error", "none");
+    if (stoveState != UNKNOWN && cachedCurrentError > 0) {
+        String cd = cachedErrorCountdown >= 0 ? String(", the stove acts in ") + cachedErrorCountdown + " s" : String("");
+        tkv("Reported now", "%s - %s%s", pc::errorCode(cachedCurrentError), pc::errorDesc(cachedCurrentError), cd.c_str());
     }
 }
 
-static void telnetHandleDebugMenu(const String& key)
+// Pellet reserve (installer menu PELLET RESERVE) and the level sensor
+static void tmReserveLines()
 {
-    if (key == "UP")   { menuMoveUp();   telnetShowDebugMenu(false); return; }
-    if (key == "DOWN") { menuMoveDown(); telnetShowDebugMenu(false); return; }
-    if (key != "ENTER") return;
-
-    int saved = menuCursor;
-    menuCursor = 0;
-    switch (saved) {
-        case 0:
-            stove.setDebug(!stove.isDebugEnabled());
-            tpl("Serial debug: " + String(stove.isDebugEnabled() ? "ON" : "OFF"));
-            telnetShowDebugMenu();
-            break;
-        case 1:
-            cls();
-            if (stoveDebugBuffer.length() == 0) tpl("(log is empty)");
-            else {
-                tpl("--- debug log ---");
-                String log = stoveDebugBuffer;
-                log.replace("\r\n", "\n");
-                log.replace("\n", "\r\n");
-                tp(log);
-                tpl("--- end ---");
-            }
-            tpl("");
-            tp("  \x1B[2m[any key] back\x1B[0m\r\n");
-            setTelnetState(TS_DEBUG_LOG);
-            break;
-        case 2:
-            stoveDebugBuffer = "";
-            tpl("Log cleared.");
-            telnetShowDebugMenu();
-            break;
-        case 3:
-            tp("type address (hex, e.g. '00 1a'): ");
-            setTelnetState(TS_DEBUG_RAW_READ);
-            break;
-        case 4:
-            tp("type address value (hex, e.g. '00 21 01'): ");
-            setTelnetState(TS_DEBUG_RAW_WRITE);
-            break;
-        case 5:
-            telnetShowMainMenu();
-            break;
-    }
+    if (!lastSlowStatesAt) { tkv("Pellet reserve", "not read yet"); return; }
+    String s = cachedPelletReserveOn < 0 ? String("?") : cachedPelletReserveOn ? String("enabled") : String("disabled");
+    if (pelletsEmptyOff()) s += " - pellets used up, the stove switched itself off";
+    else if (cachedPelletShutdown >= 0) s += String(" - running: the stove switches off in about ") + ((cachedPelletShutdown + 1) / 2) + " min";
+    else if (pc::reserveSensorLow(cachedPelletSensor) && cachedPelletCounter >= 0) s += String(" - level sensor low, alarm in about ") + cachedPelletCounter + " min";
+    else if (cachedLowPallet) s += " - low pellet alarm";
+    tkv("Pellet reserve", "%s", s.c_str());
+    tkv("Level sensor", "RAM 0xA4 = %d%s, counter RAM 0x89 = %d", cachedPelletSensor, pc::reserveSensorLow(cachedPelletSensor) ? " (low)" : "", cachedPelletCounter);
 }
 
-static void telnetHandleDebugRawRead(const String& input)
+// The estimate until the low pellet alarm (pellets.h, lib/pelletcore PelletTracker)
+static void tmPelletLines(bool detail)
 {
-    unsigned int type = 0, address = 0;
-    if (sscanf(input.c_str(), "%x %x", &type, &address) != 2) {
-        tpl("Invalid format. Use hex: '00 1a'");
-        menuCursor = 0;
-        telnetShowDebugMenu();
+    double k = pellets.kgPerUnit(), rem = pellets.remainingKg();
+    if (k <= 0) tkv("Pellets", "no estimate yet: needs a refill and the next low pellet alarm (%d cycle(s))", pellets.nCycles);
+    else if (rem < 0) tkv("Pellets", "calibrated, waiting for the next low pellet alarm");
+    else {
+        double h = pellets.hoursAt(cachedAugerSpeed);
+        String at = h >= 0 ? String(", ") + fmtAgo((uint32_t)(h * 3600)) + " at the current rate" : String(", stove not feeding now");
+        tkv("Pellets", "~%.1f kg until the low pellet alarm%s", rem, at.c_str());
+        int avgHours = 0;
+        float avg = pelletsAvgAuger(&avgHours);
+        double ha = pellets.hoursAt(avg);
+        if (ha >= 0 && avgHours >= 6 && time(nullptr) > 1700000000)
+            tkv("", "at the 7-day average: %s, alarm expected %s", fmtAgo((uint32_t)(ha * 3600)).c_str(), fmtTime(time(nullptr) + (time_t)(ha * 3600)).c_str());
+        if (detail && cachedAugerSpeed > 0) tkv("Use now", "%.2f kg/h", k * cachedAugerSpeed * 3600.0);
+    }
+    if (!detail) return;
+    if (k > 0) tkv("Calibration", "%d cycle(s), %.4f g per auger unit%s", pellets.nCycles, k * 1000.0,
+                   pellets.nCycles >= 2 ? (String(", spread ") + String(pellets.spread() * 100.0, 1) + " %").c_str() : "");
+    if (pellets.cycleStart >= 0) tkv("Since the last alarm", "%.1f kg added, %.0f auger units burned", pellets.cycleKg, pellets.units - pellets.cycleStart);
+    tkv("Refill amount", "%.1f kg (counted when a refill is detected)", pellets.refillKg);
+    if (pellets.lastRefillT) tkv("Last refill", "%s, %.1f kg", fmtTime(pellets.lastRefillT).c_str(), pellets.lastRefillKg);
+    if (pellets.pendingKg > 0) tkv("Entered by hand", "%.1f kg, used for the refill that follows", pellets.pendingKg);
+    tkv("Hopper", "%s", pellets.low ? "low (between the alarm and the refill)" : "above the sensor");
+}
+
+static void tmStatusRender()
+{
+    const bool fastOk = lastFastStatesAt != 0, slowOk = lastSlowStatesAt != 0;
+    if (!fastOk) { tpl("   No data from the stove yet."); return; }
+    tkv("Stove", "%s%s", StoveStateStr, stoveState == UNKNOWN ? "" : StoveIsOn ? " (on)" : " (off)");
+    tmErrorLines();
+    if (slowOk) {
+        tkv("Temperatures", "room %s, stove sensor %s, remote %s", fmtTemp(ambTemp).c_str(), fmtTemp(ambTempStove).c_str(), fmtTemp(ambTempRemoteControl).c_str());
+        tkv("Set point", "%d C   (wireless sensor %s)", (int)setPointTemp, wirelessSensorStr());
+    }
+    tkv("Fumes", "%d C, fume fan %d rpm", fumesTemp, cachedFumeFanRPM);
+    tkv("Flame power", "set %d, runs at %s", flamePower, cachedFlameActual >= 0 ? String(cachedFlameActual).c_str() : "?");
+    {
+        int act = roomFanActual();
+        tkv("Room fan", "set %d, runs at %s (power %d)%s", roomFanSpeed, act < 0 ? "?" : String(act).c_str(), cachedRoomFanControl,
+            cachedHotForFan == 0 ? ", stove not hot enough yet" : "");
+    }
+    if (slowOk) tkv("Auger", "%.1f s per 12 s cycle (%d %% of the time)", cachedAugerSpeed, pc::augerPercent(cachedAugerSpeed));
+    if (slowOk) {
+        if (energySavingStop) {
+            String rs = energySavingStart ? String(", restarts at ") + (int)(setPointTemp + energySavingStart) + " C" : String(", no automatic restart");
+            tkv("Energy saving", "on: stops at %d C%s", (int)(setPointTemp + energySavingStop), rs.c_str());
+        } else tkv("Energy saving", "off");
+    }
+    if (stoveState == WORKING && cachedBrazierCountdown >= 0) tkv("Brazier cleaning", "in %d min (every %d min)", cachedBrazierCountdown, cachedBrazierInterval);
+    else if (stoveState == BRAZIER_CLEANING) tkv("Brazier cleaning", "running");
+    tmPelletLines(false);
+    tmReserveLines();
+    if (cachedRemoteControlLastSeen >= 0) tkv("Remote control", "heard %d s ago", cachedRemoteControlLastSeen);
+    else tkv("Remote control", "not heard recently");
+    if (stoveTimeReadMs) {
+        long d = (long)(ntpTimeNow() - stoveTimeNow());
+        tkv("Stove clock", "%s (%ld s %s NTP)", fmtTime(stoveTimeNow(), "%d/%m/%Y %H:%M:%S").c_str(), labs(d), d >= 0 ? "behind" : "ahead of");
+    }
+    if (slowOk) tkv("Counters", "%d starts, %d h burning, %d h since the service", cachedNumberOfStarts, cachedTotalRuntime, cachedHoursSinceLastService);
+    tkv("Data age", "fast %lu s, slow %s", (millis() - lastFastStatesAt) / 1000, slowOk ? (String((millis() - lastSlowStatesAt) / 1000) + " s").c_str() : "not read yet");
+}
+static const TmView TM_STATUS = { "Status", tmStatusRender, 2000, false };
+
+// ─────────────────────────────────────────────────────────────────────
+// Live values (scrolling, every 2 s)
+// ─────────────────────────────────────────────────────────────────────
+
+static const char* const TM_LIVE_GROUPS[] = {
+    "Stove state", "Temperatures", "Flame power", "Fans", "Auger", "Pellets",
+    "Energy saving", "Errors", "Remote control / display", "Network",
+};
+static const int TM_LIVE_N = sizeof(TM_LIVE_GROUPS) / sizeof(TM_LIVE_GROUPS[0]);
+static uint16_t tmLiveMask = 0x000F;
+
+static void tmLiveTick()
+{
+    tpf(A_BOLD "--- %s ---" A_RST "\r\n", fmtTime(time(nullptr), "%H:%M:%S").c_str());
+    if (tmLiveMask & (1 << 0)) tpf("State:        %d (%s)\r\n", stoveState, StoveStateStr);
+    if (tmLiveMask & (1 << 1)) {
+        tpf("Temperatures: room %.1f  stove %.1f  remote %.1f  set point %d  fumes %d C\r\n", ambTemp, ambTempStove, ambTempRemoteControl, (int)setPointTemp, fumesTemp);
+    }
+    if (tmLiveMask & (1 << 2)) tpf("Flame power:  set %d, actual %d\r\n", flamePower, cachedFlameActual);
+    if (tmLiveMask & (1 << 3)) {
+        int act = roomFanActual();
+        tpf("Fans:         room fan set %d, actual %d (power 0x0A = %d%s), fume fan %d rpm\r\n", roomFanSpeed, act, cachedRoomFanControl,
+            roomFanIsRunning() == 0 ? ", stopped" : "", cachedFumeFanRPM);
+    }
+    if (tmLiveMask & (1 << 4)) tpf("Auger:        %.1f s (%d %%)\r\n", cachedAugerSpeed, pc::augerPercent(cachedAugerSpeed));
+    if (tmLiveMask & (1 << 5)) {
+        double rem = pellets.remainingKg(), h = pellets.hoursAt(cachedAugerSpeed);
+        tpf("Pellets:      low alarm %s, sensor 0xA4 = %d, counter 0x89 = %d, reserve 0x91 = %d, estimate %s kg / %s h%s\r\n",
+            cachedLowPallet ? "YES" : "no", cachedPelletSensor, cachedPelletCounter, cachedPelletShutdown,
+            rem >= 0 ? String(rem, 1).c_str() : "?", h >= 0 ? String(h, 1).c_str() : "?", pelletsEmptyOff() ? ", USED UP" : "");
+    }
+    if (tmLiveMask & (1 << 6)) tpf("Energy save:  stop +%d, restart -%d\r\n", energySavingStop, energySavingStart);
+    if (tmLiveMask & (1 << 7)) {
+        tpf("Errors:       now %d (%s), confirmed %d, countdown %d s%s\r\n", cachedCurrentError, pc::errorCode(cachedCurrentError),
+            confirmedCurrentError, cachedErrorCountdown, pelletsEmptyOff() ? ", PELLETS" : "");
+    }
+    if (tmLiveMask & (1 << 8)) {
+        int menuId, paramId;
+        { StoveBusLock lock; menuId = stove.read(ram, displayMenuAddr); paramId = stove.read(ram, selectedParamAddr); }
+        const char* param = paramId >= 0 ? getSelectedParameterName(paramId) : "?";
+        tpf("Remote:       heard %d s ago, menu %s, selected %s\r\n", cachedRemoteControlLastSeen,
+            menuId >= 0 ? getRemoteMenuName(menuId) : "?", param ? param : "none");
+    }
+    if (tmLiveMask & (1 << 9)) {
+        tpf("Network:      WiFi %d dBm, heap %u KB free (largest block %u KB)\r\n", WiFi.status() == WL_CONNECTED ? (int)WiFi.RSSI() : 0,
+            (unsigned)(ESP.getFreeHeap() / 1024), (unsigned)(ESP.getMaxAllocHeap() / 1024));
+    }
+}
+static const TmView TM_LIVE = { "Live values (every 2 s)", tmLiveTick, 2000, true };
+
+static void tmLiveValue(int i, String& v)
+{
+    if (i < TM_LIVE_N) v = (tmLiveMask & (1 << i)) ? "[x]" : "[ ]";
+}
+static void tmLiveToggle(int i) { tmLiveMask ^= (1 << i); }
+static void tmLiveAll(int) { tmLiveMask = tmLiveMask == (1 << TM_LIVE_N) - 1 ? 0 : (1 << TM_LIVE_N) - 1; }
+static void tmLiveStart(int)
+{
+    if (!tmLiveMask) { tmMsgSet(false, "Select at least one group."); return; }
+    tmView(&TM_LIVE);
+}
+static const TmItem TM_LIVE_ITEMS[] = {
+    { "Stove state",    tmLiveValue, tmLiveToggle, "State number and name (RAM 0x21)" },
+    { "Temperatures",   tmLiveValue, tmLiveToggle, "Room, stove sensor, remote control, set point, fumes" },
+    { "Flame power",    tmLiveValue, tmLiveToggle, "Setting and the power the stove runs at now" },
+    { "Fans",           tmLiveValue, tmLiveToggle, "Room fan (set / actual / power) and fume fan" },
+    { "Auger",          tmLiveValue, tmLiveToggle, "On-time per 12 s cycle and the share of the time it runs" },
+    { "Pellets",        tmLiveValue, tmLiveToggle, "Low pellet alarm, level sensor, reserve counters, estimate" },
+    { "Energy saving",  tmLiveValue, tmLiveToggle, "Stop / restart offsets" },
+    { "Errors",         tmLiveValue, tmLiveToggle, "Error reported now, confirmed error, countdown" },
+    { "Remote control / display", tmLiveValue, tmLiveToggle, "Menu shown on the remote (reads 2 registers every 2 s)" },
+    { "Network",        tmLiveValue, tmLiveToggle, "WiFi signal and free memory" },
+    { "All / none",     nullptr, tmLiveAll, nullptr },
+    { "Start",          nullptr, tmLiveStart, "Prints the selected values every 2 s; any key stops" },
+};
+static const TmMenu TM_LIVE_MENU = { "Live values - choose what to show", TM_LIVE_ITEMS, sizeof(TM_LIVE_ITEMS) / sizeof(TM_LIVE_ITEMS[0]), nullptr, 0 };
+
+// ─────────────────────────────────────────────────────────────────────
+// Control: power and settings
+// ─────────────────────────────────────────────────────────────────────
+
+static void tmPowerOnYes()
+{
+    getStoveState();
+    int code = 0;
+    String r = doStoveOn(code);   // refuses while the pellets are used up (PELLETS)
+    getStoveState();
+    tmMsgSet(code < 300, r);
+}
+static void tmPowerOffYes()
+{
+    getStoveState();
+    int code = 0;
+    String r = doStoveOff(code);
+    getStoveState();
+    tmMsgSet(code < 300, r);
+}
+static void tmPowerOpen(int)
+{
+    if (!lastFastStatesAt || stoveState == UNKNOWN) { tmMsgSet(false, "The stove does not answer - try again later."); return; }
+    if (!StoveIsOn && pelletsEmptyOff()) {
+        tmMsgSet(false, "Refused: pellets used up (the stove switched itself off at the end of the pellet reserve) - refill the hopper first.");
         return;
     }
-    bool prevDebug = stove.isDebugEnabled();
+    if (StoveIsOn) tmConfirmStart(String("   Switch the stove OFF?  (now: ") + StoveStateStr + ")", tmPowerOffYes);
+    else           tmConfirmStart(String("   Switch the stove ON?  (now: ") + StoveStateStr + ")", tmPowerOnYes);
+}
+
+static bool tmFail(const char* what) { tmMsgSet(false, String(what) + " failed (no answer from the stove)."); return false; }
+
+static void fmtC(int v, String& o) { o = String(v) + " C"; }
+static void fmtNum(int v, String& o) { o = String(v); }
+static void fmtFan(int v, String& o) { o = v ? String(v) : String("0 (off)"); }
+static void fmtOnOff(int v, String& o) { o = v ? "on" : "off"; }
+static void fmtEsStop(int v, String& o)
+{
+    o = v ? String("+") + v + " C  (stops at " + (int)(setPointTemp + v) + " C)" : String("0 = energy saving off");
+}
+static void fmtEsStart(int v, String& o)
+{
+    o = v ? String("-") + v + " C  (restarts at " + (int)(setPointTemp - v) + " C)" : String("0 = no automatic restart");
+}
+static const int TM_CQ[] = { 2, 3, 4, 5, 6, 7, 8, 76 };   // combustion quality values, label "-3" .. "+3", "+G"
+static void fmtCq(int i, String& o) { const char* l = pc::combustionQualityLabel(TM_CQ[i]); o = l ? l : "?"; }
+static void fmtPq(int v, String& o) { const char* l = pc::pelletQualityLabel(v); o = l ? l : "?"; }
+
+static bool tmSetSetpoint(int v)
+{
+    if (!stove.write(eeprom, TempSetpointAddr, (byte)v)) return tmFail("Set point");
+    setPointTemp = v;
+    return true;
+}
+static bool tmSetFlame(int v) { if (!setFlamePower(v)) return tmFail("Flame power"); getFlamePower(); return true; }
+static bool tmSetFan(int v) { if (!setRoomFanSpeed(v)) return tmFail("Room fan"); getRoomFanSpeed(); return true; }
+static bool tmSetEsStop(int v) { if (!setEnergySavingStop(v)) return tmFail("Energy saving"); getEnergySaving(); return true; }
+static bool tmSetEsStart(int v) { if (!setEnergySavingStart(v)) return tmFail("Energy saving"); getEnergySaving(); return true; }
+static bool tmSetCq(int i)
+{
+    if (!stove.write(eeprom, combustionQualityAddr, TM_CQ[i])) return tmFail("Combustion quality");
+    cachedCombustionQuality = TM_CQ[i];
+    return true;
+}
+static bool tmSetPq(int v)
+{
+    if (!stove.write(eeprom, pelletQualityAddr, v)) return tmFail("Pellet quality");
+    cachedPelletQuality = v;
+    return true;
+}
+static bool tmSetBeep(int v)
+{
+    if (!stove.write(eeprom, beepEnabledAddr, v ? 1 : 0)) return tmFail("Beep");
+    cachedBeepEnabled = v != 0;
+    return true;
+}
+static void tmClockYes()
+{
+    setStoveDateTime();
+    delay(200);
+    getStoveDateTime();
+    tmMsgSet(true, "Stove clock set to " + fmtTime(time(nullptr), "%d/%m/%Y %H:%M:%S") + ".");
+}
+
+static void tmCtlValue(int i, String& v)
+{
+    if (!lastSlowStatesAt && i != 0) { v = "-"; return; }
+    switch (i) {
+    case 0: v = stoveState == UNKNOWN || !lastFastStatesAt ? String("?") : String(StoveIsOn ? "on" : "off") + "  (" + StoveStateStr + ")"; break;
+    case 1: fmtC((int)setPointTemp, v); break;
+    case 2: v = String(flamePower); if (cachedFlameActual >= 0 && StoveIsOn) v += String("  (runs at ") + cachedFlameActual + ")"; break;
+    case 3: fmtFan(roomFanSpeed, v); break;
+    case 4: fmtEsStop(energySavingStop, v); break;
+    case 5: fmtEsStart(energySavingStart, v); break;
+    case 6: { const char* l = pc::combustionQualityLabel(cachedCombustionQuality); v = l ? l : "?"; break; }
+    case 7: fmtPq(cachedPelletQuality, v); break;
+    case 8: fmtOnOff(cachedBeepEnabled, v); break;
+    case 9: if (stoveTimeReadMs) { long d = (long)(ntpTimeNow() - stoveTimeNow()); v = String(labs(d)) + " s " + (d >= 0 ? "behind" : "ahead of") + " NTP"; } break;
+    }
+}
+static void tmCtlOpen(int i)
+{
+    if (i > 0 && !lastSlowStatesAt) { tmMsgSet(false, "The settings are not read from the stove yet."); return; }
+    switch (i) {
+    case 0: tmPowerOpen(i); break;
+    case 1: tmPickStart("Set point (room temperature)", 7, 30, (int)setPointTemp, false, fmtC, tmSetSetpoint); break;
+    case 2: tmPickStart("Flame power", 1, 4, flamePower, false, fmtNum, tmSetFlame, "The stove lowers the flame by itself near the set point"); break;
+    case 3: tmPickStart("Room fan speed", 0, 3, roomFanSpeed, false, fmtFan, tmSetFan); break;
+    case 4: tmPickStart("Energy saving: stop above the set point", 0, 3, energySavingStop, false, fmtEsStop, tmSetEsStop,
+                        "The stove stops when the room is this much warmer than the set point (0 = off)"); break;
+    case 5: tmPickStart("Energy saving: restart below the set point", 0, 3, energySavingStart, false, fmtEsStart, tmSetEsStart,
+                        "After an energy saving stop: restart when the room is this much colder (0 = no restart)"); break;
+    case 6: {
+        int cur = 3;
+        for (int k = 0; k < 8; k++) if (TM_CQ[k] == cachedCombustionQuality) cur = k;
+        tmPickStart("Combustion quality", 0, 7, cur, false, fmtCq, tmSetCq, "Air for the combustion: -3 .. +3, +G");
+        break;
+    }
+    case 7: tmPickStart("Pellet quality", 0, 10, cachedPelletQuality, false, fmtPq, tmSetPq, "Amount of pellets per auger cycle: -5 .. +5"); break;
+    case 8: tmPickStart("Beep of the stove", 0, 1, cachedBeepEnabled ? 1 : 0, false, fmtOnOff, tmSetBeep); break;
+    case 9:
+        if (time(nullptr) <= 1700000000) { tmMsgSet(false, "No valid NTP time yet."); return; }
+        tmConfirmStart("   Set the stove clock to " + fmtTime(time(nullptr), "%d/%m/%Y %H:%M:%S") + " (NTP)?", tmClockYes);
+        break;
+    }
+}
+static const TmItem TM_CTL_ITEMS[] = {
+    { "Power",                 tmCtlValue, tmCtlOpen, "Switch on / off (asks for confirmation)" },
+    { "Set point",             tmCtlValue, tmCtlOpen, "Room temperature to reach, 7 - 30 C" },
+    { "Flame power",           tmCtlValue, tmCtlOpen, "1 - 4" },
+    { "Room fan",              tmCtlValue, tmCtlOpen, "0 (off) - 3" },
+    { "Energy saving stop",    tmCtlValue, tmCtlOpen, "Stop the stove when the room is warmer than the set point" },
+    { "Energy saving restart", tmCtlValue, tmCtlOpen, "Restart after an energy saving stop" },
+    { "Combustion quality",    tmCtlValue, tmCtlOpen, "Combustion air: -3 .. +3, +G" },
+    { "Pellet quality",        tmCtlValue, tmCtlOpen, "Pellets per auger cycle: -5 .. +5" },
+    { "Beep",                  tmCtlValue, tmCtlOpen, "Beep of the stove on key presses" },
+    { "Sync stove clock",      tmCtlValue, tmCtlOpen, "Set the stove clock to the NTP time (the timers run on it)" },
+};
+static const TmMenu TM_CONTROL = { "Control", TM_CTL_ITEMS, sizeof(TM_CTL_ITEMS) / sizeof(TM_CTL_ITEMS[0]), nullptr, 2000 };
+
+// ─────────────────────────────────────────────────────────────────────
+// Timers PR1 - PR6
+// ─────────────────────────────────────────────────────────────────────
+
+static int  tmTimerIdx = 0;
+static byte tmTimerOffset = 0;
+static byte tmDays = 0;            // working copy while choosing the days
+static char tmTimerTitle[24] = "";
+
+static String tmDaysText(int mask)
+{
+    static const char* d[7] = { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
+    if ((mask & 0x7F) == 0x7F) return "every day";
+    if ((mask & 0x7F) == 0x1F) return "Mon - Fri";
+    if ((mask & 0x7F) == 0x60) return "Sat Sun";
+    String s;
+    for (int i = 0; i < 7; i++) if (mask & (1 << i)) { if (s.length()) s += " "; s += d[i]; }
+    return s.length() ? s : String("no days");
+}
+
+static bool tmTimerWrite(byte offset, int v)
+{
+    bool ok = stove.write(eeprom, timerBases[tmTimerIdx] + offset, (byte)v);
+    refreshTimerCache(tmTimerIdx);   // the cache used by the screens, BLE and the metrics
+    if (!ok) tmFail("Timer");
+    return ok;
+}
+
+static void tmTimersInfo()
+{
+    if (stoveTimeReadMs) tkv("Stove clock", "%s - the timers run on it", fmtTime(stoveTimeNow(), "%a %d/%m/%Y %H:%M").c_str());
+}
+static void tmTimerValue(int i, String& v)
+{
+    if (!lastSlowStatesAt) { v = "not read yet"; return; }
+    v = cachedTimerEnabled[i] ? "on   " : A_DIM "off  ";
+    v += timerValueToTimeStr(cachedTimerOnVal[i]) + " - " + timerValueToTimeStr(cachedTimerOffVal[i]);
+    v += "  " + String(cachedTimerSetpoint[i]) + " C  flame " + cachedTimerFlame[i] + "  fan " + cachedTimerFan[i];
+    v += "  " + tmDaysText(cachedTimerDowMask[i]);
+    if (!cachedTimerEnabled[i]) v += A_RST;
+}
+extern const TmMenu TM_TIMER_EDIT;   // below (a menu that refers to a later one)
+static void tmTimerOpen(int i)
+{
+    if (!lastSlowStatesAt) { tmMsgSet(false, "The timers are not read from the stove yet."); return; }
+    tmTimerIdx = i;
+    snprintf(tmTimerTitle, sizeof(tmTimerTitle), "Timer PR%d", i + 1);
+    tmMenu(&TM_TIMER_EDIT);
+}
+static const TmItem TM_TIMERS_ITEMS[] = {
+    { "PR1", tmTimerValue, tmTimerOpen, "Enter: change this program" },
+    { "PR2", tmTimerValue, tmTimerOpen, "Enter: change this program" },
+    { "PR3", tmTimerValue, tmTimerOpen, "Enter: change this program" },
+    { "PR4", tmTimerValue, tmTimerOpen, "Enter: change this program" },
+    { "PR5", tmTimerValue, tmTimerOpen, "Enter: change this program" },
+    { "PR6", tmTimerValue, tmTimerOpen, "Enter: change this program" },
+};
+static const TmMenu TM_TIMERS = { "Timers (week programs)", TM_TIMERS_ITEMS, 6, tmTimersInfo, 0 };
+
+static void fmtTimerTime(int v, String& o) { o = timerValueToTimeStr(v); if (v >= 144) o += "  (not used)"; }
+static bool tmTimerPickApply(int v) { return tmTimerWrite(tmTimerOffset, v); }
+
+static void tmTimerEditValue(int i, String& v)
+{
+    int t = tmTimerIdx;
+    switch (i) {
+    case 0: v = cachedTimerEnabled[t] ? "yes" : "no"; break;
+    case 1: v = timerValueToTimeStr(cachedTimerOnVal[t]); break;
+    case 2: v = timerValueToTimeStr(cachedTimerOffVal[t]); break;
+    case 3: v = String(cachedTimerSetpoint[t]) + " C"; break;
+    case 4: v = String(cachedTimerFlame[t]); break;
+    case 5: fmtFan(cachedTimerFan[t], v); break;
+    case 6: v = tmDaysText(cachedTimerDowMask[t]); break;
+    }
+}
+extern const TmMenu TM_DAYS;
+static void tmTimerEditOpen(int i)
+{
+    int t = tmTimerIdx;
+    char title[40];
+    switch (i) {
+    case 0: {   // a toggle: written right away
+        TmBus bus;
+        bool on = !cachedTimerEnabled[t];
+        if (tmTimerWrite(TIMER_ONOFF_OFFSET, on ? 1 : 0)) tmMsgSet(true, String("PR") + (t + 1) + (on ? " enabled." : " disabled."));
+        break;
+    }
+    case 1: case 2:
+        tmTimerOffset = i == 1 ? TIMER_ONTIME_OFFSET : TIMER_OFFTIME_OFFSET;
+        snprintf(title, sizeof(title), "PR%d: %s (10 minute steps)", t + 1, i == 1 ? "switch on at" : "switch off at");
+        tmPickStart(title, 0, 144, i == 1 ? cachedTimerOnVal[t] : cachedTimerOffVal[t], true, fmtTimerTime, tmTimerPickApply,
+                    "Page up / down: 1 hour");
+        break;
+    case 3:
+        tmTimerOffset = TIMER_SETPOINT_OFFSET;
+        snprintf(title, sizeof(title), "PR%d: set point", t + 1);
+        tmPickStart(title, 7, 30, cachedTimerSetpoint[t], false, fmtC, tmTimerPickApply);
+        break;
+    case 4:
+        tmTimerOffset = TIMER_FLAME_OFFSET;
+        snprintf(title, sizeof(title), "PR%d: flame power", t + 1);
+        tmPickStart(title, 1, 4, cachedTimerFlame[t], false, fmtNum, tmTimerPickApply);
+        break;
+    case 5:
+        tmTimerOffset = TIMER_FAN_OFFSET;
+        snprintf(title, sizeof(title), "PR%d: room fan", t + 1);
+        tmPickStart(title, 0, 3, cachedTimerFan[t], false, fmtFan, tmTimerPickApply);
+        break;
+    case 6:
+        tmDays = (byte)(cachedTimerDowMask[t] & 0x7F);
+        tmMenu(&TM_DAYS);
+        break;
+    }
+}
+static const TmItem TM_TIMER_EDIT_ITEMS[] = {
+    { "Enabled",       tmTimerEditValue, tmTimerEditOpen, "Enter: switch the program on / off (written right away)" },
+    { "Switch on at",  tmTimerEditValue, tmTimerEditOpen, "Time the stove starts" },
+    { "Switch off at", tmTimerEditValue, tmTimerEditOpen, "Time the stove stops" },
+    { "Set point",     tmTimerEditValue, tmTimerEditOpen, "Room temperature during the program" },
+    { "Flame power",   tmTimerEditValue, tmTimerEditOpen, "Flame power during the program" },
+    { "Room fan",      tmTimerEditValue, tmTimerEditOpen, "Room fan during the program" },
+    { "Days",          tmTimerEditValue, tmTimerEditOpen, "Days of the week the program runs" },
+};
+extern const TmMenu TM_TIMER_EDIT = { tmTimerTitle, TM_TIMER_EDIT_ITEMS, 7, nullptr, 0 };
+
+static void tmDayValue(int i, String& v) { v = (tmDays & (1 << i)) ? "[x]" : "[ ]"; }
+static void tmDayToggle(int i) { tmDays ^= (1 << i); }
+static void tmDaysAll(int) { tmDays = tmDays == 0x7F ? 0 : 0x7F; }
+static void tmDaysSave(int)
+{
+    bool ok;
+    { TmBus bus; ok = tmTimerWrite(TIMER_DOW_OFFSET, tmDays); }
+    if (ok) tmMsgSet(true, String("PR") + (tmTimerIdx + 1) + ": " + tmDaysText(tmDays) + ".");
+    tmPop();
+}
+static void tmDaysCancel(int) { tmMsgSet(true, "Cancelled - nothing written."); tmPop(); }
+static const TmItem TM_DAYS_ITEMS[] = {
+    { "Monday",        tmDayValue, tmDayToggle, nullptr },
+    { "Tuesday",       tmDayValue, tmDayToggle, nullptr },
+    { "Wednesday",     tmDayValue, tmDayToggle, nullptr },
+    { "Thursday",      tmDayValue, tmDayToggle, nullptr },
+    { "Friday",        tmDayValue, tmDayToggle, nullptr },
+    { "Saturday",      tmDayValue, tmDayToggle, nullptr },
+    { "Sunday",        tmDayValue, tmDayToggle, nullptr },
+    { "All / none",    nullptr,    tmDaysAll,   nullptr },
+    { "Save",          nullptr,    tmDaysSave,  "Write the days to the stove" },
+    { "Cancel",        nullptr,    tmDaysCancel, nullptr },
+};
+extern const TmMenu TM_DAYS = { "Days of the week", TM_DAYS_ITEMS, 10, nullptr, 0 };
+
+// ─────────────────────────────────────────────────────────────────────
+// Pellets: estimate, refill, calibration (pellets.h; no stove writes)
+// ─────────────────────────────────────────────────────────────────────
+
+static void tmPelletsInfo()
+{
+    tmPelletLines(true);
+    tmReserveLines();
+    if (pellets.nCycles) {
+        tkv("Measured cycles", "%s", "");
+        for (int i = pellets.nCycles - 1; i >= 0 && i >= pellets.nCycles - 5; i--) {
+            const pc::PelletCycle& c = pellets.cycles[i];
+            tpf("      %s  %5.1f kg  %8.0f units  %.4f g/unit" A_EOL, fmtTime(c.t, "%d/%m/%Y").c_str(), c.kg, c.units, c.units > 0 ? c.kg / c.units * 1000.0 : 0.0);
+        }
+    }
+}
+static void tmPelletsAdded(const String& s)
+{
+    float v = s.toFloat();
+    if (v <= 0 || v > 100) { tmMsgSet(false, "Must be 0 - 100 kg."); return; }
+    pellets.addKg(v, (uint32_t)time(nullptr));
+    pelletsSave();
+    LOGI("stove", "pellets: %.1f kg added by hand (%s) by %s", v, pellets.low ? "used for the refill when the sensor clears" : "topped up", tmSource());
+    tmMsgSet(true, String(v, 1) + " kg added" + (pellets.low ? " - counted when the level sensor clears." : "."));
+}
+static void tmPelletsRefillKg(const String& s)
+{
+    float v = s.toFloat();
+    if (v < 1 || v > 100) { tmMsgSet(false, "Must be 1 - 100 kg."); return; }
+    pellets.refillKg = v;
+    pelletsSave();
+    LOGI("stove", "pellets: refill amount set to %.1f kg by %s", v, tmSource());
+    tmMsgSet(true, "Refill amount " + String(v, 1) + " kg.");
+}
+static void tmPelletsResetYes()
+{
+    pellets.resetCalibration();
+    pelletsSave();
+    LOGI("stove", "pellets: calibration reset by %s", tmSource());
+    tmMsgSet(true, "Calibration reset.");
+}
+static void tmPelletsOpen(int i)
+{
+    switch (i) {
+    case 0: tmInputStart("Pellets added by hand (kg)", tmPelletsAdded, 8,
+                         "Topped up without a low pellet alarm, or another amount than the refill amount for the coming refill"); break;
+    case 1: tmInputStart("Refill amount (kg)", tmPelletsRefillKg, 8, "Counted when a refill is detected (the level sensor clears after an alarm)"); break;
+    case 2: tmConfirmStart("   Forget the measured cycles? The estimate starts again after the next two alarms.", tmPelletsResetYes); break;
+    }
+}
+static void tmPelletsValue(int i, String& v) { if (i == 1) v = String(pellets.refillKg, 1) + " kg"; }
+static const TmItem TM_PELLETS_ITEMS[] = {
+    { "Pellets added (kg)", nullptr,        tmPelletsOpen, "Enter the kg you added by hand" },
+    { "Refill amount",      tmPelletsValue, tmPelletsOpen, "Kg counted for an automatically detected refill" },
+    { "Reset calibration",  nullptr,        tmPelletsOpen, "Forget the measured cycles (asks for confirmation)" },
+};
+static const TmMenu TM_PELLETS = { "Pellets", TM_PELLETS_ITEMS, 3, tmPelletsInfo, 5000 };
+
+// ─────────────────────────────────────────────────────────────────────
+// Errors, events and history
+// ─────────────────────────────────────────────────────────────────────
+
+static void tmErrorsInfo()
+{
+    tmErrorLines();
+    if (!lastSlowStatesAt) { tkv("Error memory", "not read yet"); return; }
+    for (int i = 0; i < 5; i++) {
+        char l[20]; snprintf(l, sizeof(l), "Memory %d", i + 1);
+        if (cachedErrors[i]) tkv(l, "%s - %s", pc::errorCode(cachedErrors[i]), pc::errorDesc(cachedErrors[i]));
+        else tkv(l, "-");
+    }
+}
+
+static void tmEventsRender()
+{
+    if (!evtCount) { tpl("   No events yet."); return; }
+    for (int i = 0; i < evtCount && i < 30; i++) {   // newest first
+        const StateEvent& e = evts[(evtHead - 1 - i + 2 * EVT_SIZE) % EVT_SIZE];
+        String t = fmtTime(e.t, "%d/%m %H:%M");
+        switch (e.kind) {
+        case EVT_STATE:
+            tpf("   %s  state   %s -> %s" A_EOL, t.c_str(), e.from < 0 ? "?" : pc::stoveStateName(e.from), pc::stoveStateName(e.to));
+            break;
+        case EVT_ERROR:
+            if (e.code) tpf("   %s  " A_RED "error   %s - %s" A_RST A_EOL, t.c_str(), pc::errorCode(e.code), pc::errorDesc(e.code));
+            else tpf("   %s  error   cleared" A_EOL, t.c_str());
+            break;
+        case EVT_PELLET:
+            tpf("   %s  pellet  %s %d -> %d" A_EOL, t.c_str(), e.code == palletSensorAddr ? "level sensor (0xA4)" : "reserve counter (0x89)", e.from, e.to);
+            break;
+        case EVT_LINK:
+            tpf("   %s  link    serial link to the stove %s" A_EOL, t.c_str(), e.to ? "back" : "lost");
+            break;
+        }
+    }
+}
+static const TmView TM_EVENTS = { "Event log (newest first)", tmEventsRender, 0, false };
+
+static void tmHistoryRender()
+{
+    if (!histCount) { tpl("   No history yet (needs NTP time and data from the stove)."); return; }
+    tpl(A_DIM "   Time   State             Room  Set  Fumes  Flame  Fan  Auger" A_RST);
+    uint32_t lastSlot = 0;
+    int rows = 0;
+    for (int i = 0; i < histCount && rows < 18; i++) {   // newest first, one row per 10 min
+        const HistSample& s = hist[(histHead - 1 - i + 2 * HIST_SIZE) % HIST_SIZE];
+        uint32_t slot = s.t / 600;
+        if (i && slot == lastSlot) continue;
+        lastSlot = slot;
+        rows++;
+        String fl = String(s.flame) + (s.flameActual >= 0 ? "/" + String(s.flameActual) : String(""));
+        String fan = String(s.fan) + (s.fanActual >= 0 ? "/" + String(s.fanActual) : String(""));
+        String aug = s.auger10 >= 0 ? String(pc::augerPercent(s.auger10 / 10.0f)) + " %" : String("-");
+        tpf("   %s  %-16.16s %5.1f  %3d  %5d  %5s  %3s  %5s" A_EOL, fmtTime(s.t, "%H:%M").c_str(), pc::stoveStateName(s.state),
+            s.room10 / 10.0, s.setpoint, s.fume, fl.c_str(), fan.c_str(), aug.c_str());
+    }
+    tpl(A_DIM "   Flame and fan: set / actual. The web app shows 24 h and 7 days." A_RST);
+}
+static const TmView TM_HISTORY = { "History (newest first, one row per 10 min)", tmHistoryRender, 0, false };
+
+static void tmClearErrorsYes()
+{
+    bool ok = true;
+    for (int i = 0; i < 5; i++) {
+        setError(i, 0);
+        int v = getErrorMemory(i);
+        if (v >= 0) cachedErrors[i] = v;
+        if (v != 0) ok = false;
+    }
+    tmMsgSet(ok, ok ? "Error memory cleared." : "Not every slot could be cleared (no answer from the stove).");
+}
+static void tmErrorsOpen(int i)
+{
+    switch (i) {
+    case 0: tmView(&TM_EVENTS); break;
+    case 1: tmView(&TM_HISTORY); break;
+    case 2: tmConfirmStart("   Clear all 5 slots of the error memory of the stove?", tmClearErrorsYes); break;
+    }
+}
+static const TmItem TM_ERRORS_ITEMS[] = {
+    { "Event log",          nullptr, tmErrorsOpen, "State changes, errors, pellet sensor and serial link (kept over restarts)" },
+    { "History",            nullptr, tmErrorsOpen, "The last 3 hours: temperatures, flame, fan, auger" },
+    { "Clear error memory", nullptr, tmErrorsOpen, "Write 0 to the 5 error memory slots (asks for confirmation)" },
+};
+static const TmMenu TM_ERRORS = { "Errors and history", TM_ERRORS_ITEMS, 3, tmErrorsInfo, 3000 };
+
+// ─────────────────────────────────────────────────────────────────────
+// Network: WiFi, IPv4 / IPv6, hostname, IP settings (NVS "net", see wifiInfo.h)
+// ─────────────────────────────────────────────────────────────────────
+
+static void tmWifiRender()
+{
+    bool up = WiFi.status() == WL_CONNECTED;
+    tkv("WiFi", "%s", up ? "connected" : "not connected");
+    tkv("Network", "%s (access point %s, channel %d)", WiFi.SSID().c_str(), up ? WiFi.BSSIDstr().c_str() : "-", up ? WiFi.channel() : 0);
+    int rssi = up ? WiFi.RSSI() : 0;
+    tkv("Signal", "%d dBm (%d %%), TX power %.1f dBm", rssi, pc::rssiQuality(rssi), WiFi.getTxPower() * 0.25f);
+    tkv("IPv4", "%s / %s, gateway %s, DNS %s", WiFi.localIP().toString().c_str(), WiFi.subnetMask().toString().c_str(),
+        WiFi.gatewayIP().toString().c_str(), WiFi.dnsIP().toString().c_str());
+    String ll = WiFi.localIPv6().toString();
+    if (ll.length() && ll != "0000:0000:0000:0000:0000:0000:0000:0000") tkv("IPv6", "%s (link-local)", ll.c_str());
+    for (auto& g : ipv6Global) if (g.length()) tkv("IPv6", "%s", g.c_str());
+    tkv("Hostname", "%s (%s.local)", WiFi.getHostname(), WiFi.getHostname());
+    tkv("MAC", "%s", WiFi.macAddress().c_str());
+    tkv("Power save", "%s", WiFi.getSleep() ? "on (modem sleep)" : "off");
+    tkv("Drops", "%lu since the start", (unsigned long)wifiDisconnects);
+    if (wifiLastDisconnectMs) tkv("Last drop", "%s ago: %s (%u)", fmtAgo((millis() - wifiLastDisconnectMs) / 1000).c_str(),
+                                  WiFi.disconnectReasonName((wifi_err_reason_t)wifiLastReason), (unsigned)wifiLastReason);
+    tkv("Network watchdog", "%lu repair(s) since the start%s", (unsigned long)netwdRepairs, netwdDownAt ? " - network down now, repairing" : "");
+    if (netSwitchMsg.length()) tkv("Last change", "%s", netSwitchMsg.c_str());
+    if (netPendingConfirm) tkv("Static IP", "waiting for confirmation, %lu s left", (NET_CONFIRM_MS - (millis() - netPendingSince)) / 1000);
+    tkv("Telnet", "port %d, %s", TN_PORT, tnListenText());
+    tkv("HTTP over IPv6", "%s", http6Listening ? "listening on port 80" : "not listening");
+}
+static const TmView TM_WIFI = { "WiFi and IP status", tmWifiRender, 3000, false };
+
+static String tmIp, tmMask, tmGw;   // the static IP wizard
+
+static void tmNetInfo()
+{
+    String nc = netGet("netcfg", "dhcp");
+    tkv("Running", "%s, hostname %s", WiFi.localIP().toString().c_str(), WiFi.getHostname());
+    if (nc.startsWith("static,")) tkv("Saved", "static: %s", nc.substring(7).c_str());
+    else tkv("Saved", "DHCP");
+    tkv("", "hostname %s", netGet("hostname", "openpelletbridge").c_str());
+    tpl(A_DIM "   Saved settings take effect after a restart." A_RST);
+}
+
+static void tmRestartYes()
+{
+    tpl(A_RST "\r\n   Restarting the controller - connect again in about 20 s.");
+    tnFlush();
+    delay(300);
+    restartWith("telnet menu");
+}
+
+static void tmHostnameDone(const String& s)
+{
+    if (!pc::validHostname(s.c_str())) { tmMsgSet(false, "Hostname: 1 - 32 letters, digits or '-', not starting or ending with '-'."); return; }
+    Preferences p; p.begin("net", false); p.putString("hostname", s); p.end();
+    LOGI("wifi", "hostname set to '%s' by %s (after a restart)", s.c_str(), tmSource());
+    tmMsgSet(true, "Hostname '" + s + "' saved - takes effect after a restart.");
+}
+
+static void tmDhcpYes()
+{
+    Preferences p; p.begin("net", false); p.putString("netcfg", "dhcp"); p.putBool("netpend", false); p.end();
+    LOGI("wifi", "IP settings: DHCP, set by %s (after a restart)", tmSource());
+    tmMsgSet(true, "DHCP saved - takes effect after a restart.");
+}
+
+static void tmStaticDns(const String& s);
+static void tmStaticGw(const String& s);
+static void tmStaticMask(const String& s);
+static bool tmIpOk(const String& s) { uint32_t x; return pc::ipv4FromStr(s.c_str(), x); }
+static void tmStaticIp(const String& s)
+{
+    tmIp = s.length() ? s : WiFi.localIP().toString();
+    if (!tmIpOk(tmIp)) { tmMsgSet(false, "Invalid IP address: " + tmIp); return; }
+    tmInputStart(("Netmask [" + WiFi.subnetMask().toString() + "]").c_str(), tmStaticMask, 15, "Enter: keep the value in brackets");
+}
+static void tmStaticMask(const String& s)
+{
+    tmMask = s.length() ? s : WiFi.subnetMask().toString();
+    if (!tmIpOk(tmMask)) { tmMsgSet(false, "Invalid netmask: " + tmMask); return; }
+    tmInputStart(("Gateway [" + WiFi.gatewayIP().toString() + "]").c_str(), tmStaticGw, 15, "Enter: keep the value in brackets");
+}
+static void tmStaticGw(const String& s)
+{
+    tmGw = s.length() ? s : WiFi.gatewayIP().toString();
+    if (!tmIpOk(tmGw)) { tmMsgSet(false, "Invalid gateway: " + tmGw); return; }
+    tmInputStart(("DNS server [" + tmGw + "]").c_str(), tmStaticDns, 15, "Enter: the gateway");
+}
+static void tmStaticDns(const String& s)
+{
+    String dns = s.length() ? s : tmGw;
+    const char* e = pc::checkStaticIp(tmIp.c_str(), tmMask.c_str(), tmGw.c_str(), dns.c_str());
+    if (e) { tmMsgSet(false, String("Not saved: ") + e + "."); return; }
+    String cfg = "static," + tmIp + "," + tmGw + "," + tmMask + "," + dns;   // the order setup_wifi() reads
+    Preferences p; p.begin("net", false);
+    bool changed = p.getString("netcfg", "dhcp") != cfg;
+    p.putString("netcfg", cfg);
+    if (changed) p.putBool("netpend", true);   // wifiInfo.h: back to DHCP when nobody reaches the new address
+    p.end();
+    LOGI("wifi", "IP settings: static %s, set by %s (after a restart)", tmIp.c_str(), tmSource());
+    tmConfirmStart("   Static IP " + tmIp + " saved.\n\n   Restart now to use it? After the restart, open the web app or telnet to\n   " + tmIp +
+                   " within 5 minutes; otherwise the controller goes back to DHCP.", tmRestartYes);
+}
+
+static void tmNetOpen(int i)
+{
+    switch (i) {
+    case 0: tmConfirmStart("   Use DHCP (after a restart)?", tmDhcpYes); break;
+    case 1: tmInputStart(("IP address [" + WiFi.localIP().toString() + "]").c_str(), tmStaticIp, 15, "Enter: keep the value in brackets"); break;
+    case 2: tmConfirmStart("   Restart the controller now?", tmRestartYes); break;
+    }
+}
+static const TmItem TM_IP_ITEMS[] = {
+    { "Use DHCP",         nullptr, tmNetOpen, "Address from the router" },
+    { "Static IP",        nullptr, tmNetOpen, "IP, netmask, gateway, DNS; checked before it is saved" },
+    { "Restart to apply", nullptr, tmNetOpen, "Restart the controller (asks for confirmation)" },
+};
+static const TmMenu TM_IP = { "IP settings", TM_IP_ITEMS, 3, tmNetInfo, 0 };
+
+static void tmNetworkOpen(int i)
+{
+    switch (i) {
+    case 0: tmView(&TM_WIFI); break;
+    case 1: tmInputStart(("Hostname [" + netGet("hostname", "openpelletbridge") + "]").c_str(), tmHostnameDone, 32,
+                         "Letters, digits and '-'; the name in <hostname>.local"); break;
+    case 2: tmMenu(&TM_IP); break;
+    }
+}
+static void tmNetworkValue(int i, String& v)
+{
+    if (i == 0) v = WiFi.status() == WL_CONNECTED ? WiFi.SSID() + ", " + String((int)WiFi.RSSI()) + " dBm" : String("not connected");
+    if (i == 1) v = netGet("hostname", "openpelletbridge");
+    if (i == 2) v = netGet("netcfg", "dhcp").startsWith("static,") ? "static" : "DHCP";
+}
+static const TmItem TM_NETWORK_ITEMS[] = {
+    { "WiFi and IP status", tmNetworkValue, tmNetworkOpen, "Signal, IPv4 and IPv6 addresses, drops, network watchdog" },
+    { "Hostname",           tmNetworkValue, tmNetworkOpen, "Saved in the controller, used after a restart" },
+    { "IP settings",        tmNetworkValue, tmNetworkOpen, "DHCP or static IP, used after a restart" },
+};
+static const TmMenu TM_NETWORK = { "Network", TM_NETWORK_ITEMS, 3, nullptr, 0 };
+
+// ─────────────────────────────────────────────────────────────────────
+// Device: firmware update, services, system, log levels, restart
+// ─────────────────────────────────────────────────────────────────────
+
+static void tmFirmwareInfo()
+{
+    pc::Version v;
+    bool parsed = pc::parseVersion(BUILD_VERSION, v);
+    bool dev = !parsed || v.ahead > 0 || v.dirty;
+    tkv("This firmware", "%s%s", BUILD_VERSION, dev ? " (development build)" : "");
+    tkv("Built", "%s (%s), for a %s", BUILD_TIME, BUILD_ENV, BUILD_STOVE_MODEL);
+    int st = fwState;
+    String state = FW_STATE_STR[st];
+    if ((st == FW_DOWNLOADING || st == FW_RESTARTING) && fwTotal) state += String(" ") + (unsigned)(fwDone * 100 / fwTotal) + " %";
+    tkv("Update", "%s", state.c_str());
+    if (st != FW_CHECKING && fwLatest.length()) {
+        pc::Version l;
+        const char* what = "unknown (this build has no release version)";
+        if (parsed && pc::parseVersion(fwLatest.c_str(), l)) {
+            int c = pc::compareVersion(l, v);
+            what = c > 0 ? "an update" : c == 0 && !v.dirty ? "the same version" : "older than this build";
+        }
+        tkv("Latest release", "%s, published %s - %s", fwLatest.c_str(), fwPublished.substring(0, 10).c_str(), what);
+        if (!fwAssetUrl.length()) tkv("", "this release has no firmware image");
+    } else tkv("Latest release", "%s", st == FW_CHECKING ? "checking ..." : "not checked yet");
+    if (fwCheckedAt) tkv("Checked", "%s ago", fmtAgo((millis() - fwCheckedAt) / 1000).c_str());
+    if (st == FW_ERROR && fwError.length()) tpf(A_RED "   %-18s %s" A_RST A_EOL, "Last error", fwError.c_str());
+    if (fwLastInstall.length()) tkv("Last install", "%s", fwLastInstall.c_str());
+    if (fwLastAttempt.length()) tkv("Unfinished install", "%s", fwLastAttempt.c_str());
+    tkv("Memory", "%u KB free, largest block %u KB (an update needs 45 / 20 KB)", (unsigned)(ESP.getFreeHeap() / 1024), (unsigned)(ESP.getMaxAllocHeap() / 1024));
+}
+static void tmFwInstallYes()
+{
+    if (!fwStart(true)) tmMsgSet(false, "Could not start: " + (fwError.length() ? fwError : String("an update or check is running")));
+    else tmMsgSet(true, "Installing - the controller restarts when the new firmware is in place.");
+}
+static void tmFwOpen(int i)
+{
+    switch (i) {
+    case 0:
+        if (fwBusy || otaActive) { tmMsgSet(false, "An update or check is already running."); return; }
+        if (fwStart(false)) tmMsgSet(true, "Checking GitHub ...");
+        else tmMsgSet(false, "Could not start: " + fwError);
+        break;
+    case 1:
+        if (fwBusy || otaActive) { tmMsgSet(false, "An update or check is already running."); return; }
+        if (!fwAssetUrl.length()) { tmMsgSet(false, "No release with firmware known - check first."); return; }
+        if (pc::updateAvailable(BUILD_VERSION, fwLatest.c_str()))
+            tmConfirmStart("   Install " + fwLatest + " (now " + BUILD_VERSION + ") and restart?\n   The stove keeps running; the controller is away for about a minute.", tmFwInstallYes);
+        else
+            tmConfirmStart("   " + fwLatest + " is not newer than " + BUILD_VERSION + ".\n   Install it anyway (reinstall / go back) and restart?", tmFwInstallYes);
+        break;
+    case 2: {
+        fwAutoCheck = !fwAutoCheck;
+        Preferences p; p.begin("fwupd", false); p.putBool("auto", fwAutoCheck); p.end();
+        LOGI("update", "automatic update check %s by %s", fwAutoCheck ? "on" : "off", tmSource());
+        tmMsgSet(true, fwAutoCheck ? "Automatic check on." : "Automatic check off.");
+        break;
+    }
+    }
+}
+static void tmFwValue(int i, String& v) { if (i == 2) v = fwAutoCheck ? (httpsTlsOn ? "on (at start-up only, HTTPS is on)" : "on (daily)") : "off"; }
+static const TmItem TM_FW_ITEMS[] = {
+    { "Check for an update",  nullptr,   tmFwOpen, "Ask GitHub for the latest release (takes a few seconds)" },
+    { "Install latest",       nullptr,   tmFwOpen, "Download, verify and install, then restart (asks for confirmation)" },
+    { "Automatic check",      tmFwValue, tmFwOpen, "Enter: switch on / off" },
+};
+static const TmMenu TM_FIRMWARE = { "Firmware update (GitHub releases)", TM_FW_ITEMS, 3, tmFirmwareInfo, 1000 };
+
+static void tmServicesRender()
+{
+    if (mqttCfg.enabled) {
+        tkv("MQTT", "%s, broker %s:%u", mqtt.connected() ? "connected" : "not connected", mqttCfg.host.c_str(), mqttCfg.port);
+        tkv("", "%lu messages sent, %lu commands%s%s", (unsigned long)mqttPublishes, (unsigned long)mqttCommands,
+            mqttLastError.length() ? ", last error: " : "", mqttLastError.c_str());
+    } else tkv("MQTT", "off");
+    if (httpsEnabled) tkv("HTTPS", "%s, %lu sessions, %lu requests, %lu refused (memory)", httpsListening ? "listening on port 443" : "starting",
+                          (unsigned long)httpsStats.sessions, (unsigned long)httpsStats.requests, (unsigned long)httpsStats.refused);
+    else tkv("HTTPS", "off");
+    tkv("HTTP over IPv6", "%s, %lu connections", http6Listening ? "on" : "not listening", (unsigned long)http6Connections);
+    tkv("Bluetooth", "%s", bleEnabled ? (bleIsClientConnected() ? "on, app connected" : "on") : "off");
+    tkv("API key", "%s (not used by telnet and Bluetooth)", apiKeyRequired ? "required" : "not required");
+    tkv("Telnet", "%s, this session from %s, %lu session(s) since the start, %lu taken over", tnListenText(), tnS.peer,
+        (unsigned long)tnSessions, (unsigned long)tnTakeovers);
+    if (tnW.fd >= 0) tkv("", "%s waits to take over", tnW.peer);
+    tpl(A_DIM "   MQTT, HTTPS and Bluetooth are set up in the web app (Device card)." A_RST);
+}
+static const TmView TM_SERVICES = { "Services", tmServicesRender, 2000, false };
+
+static void tmSystemRender()
+{
+    tkv("Uptime", "%s", uptimeStr().c_str());
+    tkv("Started after", "%s", diagResetText().c_str());
+    tkv("Starts", "%lu, %lu after a crash / watchdog / brown-out", (unsigned long)diagBoots, (unsigned long)diagCrashes);
+    if (coreDumpText.length()) tkv("Crash dump", "present (web app or /api/coredump)");
+    tkv("Memory", "%u KB free, lowest %u KB, largest block %u KB", (unsigned)(ESP.getFreeHeap() / 1024), (unsigned)(ESP.getMinFreeHeap() / 1024),
+        (unsigned)(ESP.getMaxAllocHeap() / 1024));
+    tkv("Controller", "%s (%s), built %s", BUILD_VERSION, BUILD_BRANCH, BUILD_TIME);
+    tkv("Stove", "%s, firmware %s, serial number %ld", BUILD_STOVE_MODEL, cachedFirmwareVersion, cachedSerialNumber);
+    tkv("Stove bus", "%s, %lu transactions, %lu retries, %lu read / %lu write errors, %lu skipped", stove.linkDown ? "link DOWN" : "link up",
+        (unsigned long)stove.transactions, (unsigned long)stove.retries, (unsigned long)stove.readErrors, (unsigned long)stove.writeErrors,
+        (unsigned long)stove.skipped);
+    if (spiffsMounted) tkv("SPIFFS", "%u of %u KB used", (unsigned)(SPIFFS.usedBytes() / 1024), (unsigned)(SPIFFS.totalBytes() / 1024));
+    tkv("History", "%d samples (24 h), %d hours (7 days), %d events", histCount, weekCount, evtCount);
+}
+static const TmView TM_SYSTEM = { "System", tmSystemRender, 2000, false };
+
+// Log levels per module (liveLog.h), the items are made from the module table
+static TmItem tmLogItems[LOG_MODULES];
+static TmMenu tmLogMenu = { "Log levels (kept over restarts)", tmLogItems, 0, nullptr, 0 };
+static int    tmLogIdx = 0;
+static void fmtLevel(int v, String& o) { o = LOG_LEVEL_NAMES[v]; }
+static bool tmSetLevel(int v)
+{
+    logModules[tmLogIdx].level = (uint8_t)v;
+    logSaveLevel(logModules[tmLogIdx].tag, (uint8_t)v);
+    LOGI("sys", "log level %s = %s (by %s)", logModules[tmLogIdx].tag, LOG_LEVEL_NAMES[v], tmSource());
+    return true;
+}
+static void tmLogValue(int i, String& v) { v = LOG_LEVEL_NAMES[logModules[i].level]; }
+static void tmLogOpen(int i)
+{
+    tmLogIdx = i;
+    char t[40]; snprintf(t, sizeof(t), "Log level of '%s'", logModules[i].tag);
+    tmPickStart(t, LOG_OFF, LOG_DEBUG, logModules[i].level, false, fmtLevel, tmSetLevel, logModules[i].what);
+}
+static void tmLogMenuOpen()
+{
+    for (int i = 0; i < LOG_MODULES; i++) tmLogItems[i] = { logModules[i].tag, tmLogValue, tmLogOpen, logModules[i].what };
+    tmLogMenu.n = LOG_MODULES;
+    tmMenu(&tmLogMenu);
+}
+
+static void tmDeviceOpen(int i)
+{
+    switch (i) {
+    case 0: tmMenu(&TM_FIRMWARE); break;
+    case 1: tmView(&TM_SERVICES); break;
+    case 2: tmView(&TM_SYSTEM); break;
+    case 3: tmLogMenuOpen(); break;
+    case 4: tmConfirmStart("   Restart the controller now? (The stove keeps running.)", tmRestartYes); break;
+    }
+}
+static void tmDeviceValue(int i, String& v)
+{
+    if (i == 0) {
+        v = BUILD_VERSION;
+        if (fwState == FW_CHECKING || fwState == FW_DOWNLOADING) v += String(" - ") + FW_STATE_STR[fwState];
+        else if (fwAssetUrl.length() && pc::updateAvailable(BUILD_VERSION, fwLatest.c_str())) v += A_CYN " - " + fwLatest + " available" A_RST;
+    }
+    if (i == 2) v = "up " + uptimeStr();
+}
+static const TmItem TM_DEVICE_ITEMS[] = {
+    { "Firmware update",     tmDeviceValue, tmDeviceOpen, "Check GitHub for a newer release and install it" },
+    { "Services",            tmDeviceValue, tmDeviceOpen, "MQTT, HTTPS, HTTP over IPv6, Bluetooth, telnet" },
+    { "System",              tmDeviceValue, tmDeviceOpen, "Uptime, restarts, memory, stove bus counters" },
+    { "Log levels",          tmDeviceValue, tmDeviceOpen, "How much each module writes to the firmware log" },
+    { "Restart controller",  tmDeviceValue, tmDeviceOpen, "Restart the ESP32 (asks for confirmation)" },
+};
+static const TmMenu TM_DEVICE = { "Device", TM_DEVICE_ITEMS, 5, nullptr, 0 };
+
+// ─────────────────────────────────────────────────────────────────────
+// Debug: firmware log, bus debug, raw register access
+// ─────────────────────────────────────────────────────────────────────
+
+static uint32_t tmLogCursor = 0;
+static bool     tmLogFirst = true;
+static void tmLogTick()
+{
+    if (!logRing) { tpl("Live log not available (memory)."); return; }
+    char piece[256];
+    for (int i = 0; i < 8; i++) {   // at most 2 KB per tick
+        uint32_t from; bool lost; size_t n;
+        portENTER_CRITICAL(&logMux);
+        n = logRing->read(tmLogCursor, piece, sizeof(piece), from, lost);
+        portEXIT_CRITICAL(&logMux);
+        if (lost) tpl(A_YEL "... (older lines overwritten)" A_RST);
+        if (!n) break;
+        size_t skip = 0;
+        if (tmLogFirst) {   // start at a line start
+            while (skip < n && piece[skip] != '\n') skip++;
+            if (skip < n) skip++;
+            if (skip >= n) skip = 0;
+            tmLogFirst = false;
+        }
+        tpText(piece + skip, n - skip);
+        tmLogCursor = from + n;
+    }
+}
+static const TmView TM_LOG = { "Firmware log (follows new lines)", tmLogTick, 300, true };
+
+static void tmDebugTextOf(String& out)   // the bus debug buffer, collected by the Stove library
+{
+    out = stoveDebugBuffer.length() ? stoveDebugBuffer : String("(empty - switch the bus frame debug on, or do a raw read)\n");
+}
+
+static uint8_t tmRaw[12];   // raw write: up to 4 x (type, address, value)
+static int     tmRawN = 0;
+
+// "00 1a", "ram 1a", "eeprom 7d" -> type, address
+static bool tmParseRead(const String& s, unsigned& type, unsigned& addr)
+{
+    char t[12] = ""; char a[8] = "";
+    if (sscanf(s.c_str(), "%11s %7s", t, a) != 2) return false;
+    if (!strcasecmp(t, "ram")) type = ram;
+    else if (!strcasecmp(t, "eeprom") || !strcasecmp(t, "ee")) type = eeprom;
+    else type = strtoul(t, nullptr, 16);
+    char* end = nullptr;
+    addr = strtoul(a, &end, 16);
+    return end && !*end && addr <= 0xFF && (type == ram || type == eeprom);
+}
+static String tmRegText(byte type, byte addr, int v)
+{
+    String t = type == eeprom ? getEepromValueTxt(addr, v) : getRamValueTxt(addr, v);
+    return t.length() ? " (" + t + ")" : String("");
+}
+static void tmRawReadDone(const String& s)
+{
+    unsigned type = 0, addr = 0;
+    if (!tmParseRead(s, type, addr)) { tmMsgSet(false, "Use hex: type address, e.g. '00 1a' or 'eeprom 7d' (type 00 = RAM, 20 = EEPROM)."); return; }
+    bool prev = stove.isDebugEnabled();
     stove.setDebug(true);
     stoveDebugBuffer = "";
-
-    int val = stove.read((byte)type, (byte)address);
-
-    { String _log = stoveDebugBuffer; _log.replace("\r\n", "\n"); _log.replace("\n", "\r\n"); tp(_log); }
-    if (val >= 0) {
-        char result[48];
-        snprintf(result, sizeof(result), "Result: 0x%02X (%d)", (uint8_t)val, val);
-        tpl(result);
-    }
-    stove.setDebug(prevDebug);
-    menuCursor = 0;
-    telnetShowDebugMenu();
+    int v = stove.read((byte)type, (byte)addr);
+    stove.setDebug(prev);
+    char head[64];
+    snprintf(head, sizeof(head), "%s 0x%02X: ", type == eeprom ? "EEPROM" : "RAM", addr);
+    String out = stoveDebugBuffer + "\n" + head;
+    if (v >= 0) { char r[24]; snprintf(r, sizeof(r), "0x%02X = %d", v, v); out += r; out += tmRegText(type, addr, v); }
+    else out += "FAILED (no answer)";
+    tmShowText("Raw read", out + "\n");
 }
 
-static void telnetHandleDebugRawWrite(const String& input)
+static void tmRawWriteYes()
 {
-    // One or more writes "type addr val", e.g. '00 21 01' or '00 24 07 00 08 02'.
-    // Several writes are sent back to back (~30 ms apart, stove lock held), for
-    // tests where the timing between registers matters (e.g. a remote key press).
-    const int MAXW = 4;
-    unsigned int v[MAXW * 3];
-    int n = 0;
-    String rest = input; rest.trim();
-    while (rest.length() && n < MAXW * 3) {
+    bool prev = stove.isDebugEnabled();
+    stove.setDebug(true);
+    stoveDebugBuffer = "";
+    bool ok = true;
+    unsigned long t0 = millis(), at[4];
+    for (int i = 0; i < tmRawN; i++) {   // back to back (the bus lock is held): for tests where the timing matters
+        at[i] = millis() - t0;
+        if (!stove.write(tmRaw[i * 3], tmRaw[i * 3 + 1], tmRaw[i * 3 + 2])) ok = false;
+    }
+    stove.setDebug(prev);
+    String out = stoveDebugBuffer;
+    if (tmRawN > 1) { out += "Sent at (ms):"; for (int i = 0; i < tmRawN; i++) out += " " + String(at[i]); out += "\n"; }
+    out += ok ? "Result: SUCCESS\n" : "Result: FAILED\n";
+    tmShowText("Raw write", out);
+}
+static void tmRawWriteDone(const String& in)
+{
+    // One or more writes "type addr val", e.g. '00 21 01' or '00 24 07 00 08 02'
+    unsigned v[12]; int n = 0;
+    String rest = in;
+    while (rest.length() && n < 12) {
         int sp = rest.indexOf(' ');
         String tok = sp < 0 ? rest : rest.substring(0, sp);
-        rest = sp < 0 ? "" : rest.substring(sp + 1); rest.trim();
+        rest = sp < 0 ? String("") : rest.substring(sp + 1); rest.trim();
         char* end = nullptr;
         unsigned long x = strtoul(tok.c_str(), &end, 16);
         if (!tok.length() || (end && *end) || x > 0xFF) { n = -1; break; }
-        v[n++] = (unsigned int)x;
+        v[n++] = (unsigned)x;
     }
-    if (n <= 0 || n % 3 != 0 || rest.length()) {
-        tpl("Invalid format. Use hex: '00 21 01' (up to 4 writes: '00 24 07 00 08 02')");
-        menuCursor = 0;
-        telnetShowDebugMenu();
+    bool typesOk = n > 0;
+    for (int i = 0; i + 2 < n; i += 3) if (v[i] != ram && v[i] != eeprom) typesOk = false;
+    if (n <= 0 || n % 3 || rest.length() || !typesOk) {
+        tmMsgSet(false, "Use hex: type address value, e.g. '00 21 01'; up to 4 writes ('00 24 07 00 08 02').");
         return;
     }
-    bool prevDebug = stove.isDebugEnabled();
-    stove.setDebug(true);
-    stoveDebugBuffer = "";
-
-    bool ok = true;
-    if (stoveMutex) xSemaphoreTakeRecursive(stoveMutex, portMAX_DELAY);
-    unsigned long t0 = millis();
-    unsigned long at[MAXW];
-    for (int i = 0; i < n / 3; i++) {
-        at[i] = millis() - t0;
-        if (!stove.write((byte)v[i * 3], (byte)v[i * 3 + 1], (byte)v[i * 3 + 2])) ok = false;
+    tmRawN = n / 3;
+    String q = "   Write to the stove:\n";
+    for (int i = 0; i < tmRawN; i++) {
+        tmRaw[i * 3] = v[i * 3]; tmRaw[i * 3 + 1] = v[i * 3 + 1]; tmRaw[i * 3 + 2] = v[i * 3 + 2];
+        char l[48];
+        snprintf(l, sizeof(l), "     %s 0x%02X = 0x%02X (%u)", v[i * 3] == eeprom ? "EEPROM" : "RAM", v[i * 3 + 1], v[i * 3 + 2], v[i * 3 + 2]);
+        q += l + tmRegText(v[i * 3], v[i * 3 + 1], v[i * 3 + 2]) + "\n";
     }
-    if (stoveMutex) xSemaphoreGiveRecursive(stoveMutex);
-
-    { String _log = stoveDebugBuffer; _log.replace("\r\n", "\n"); _log.replace("\n", "\r\n"); tp(_log); }
-    if (n > 3) {
-        String tl = "Sent at (ms):";
-        for (int i = 0; i < n / 3; i++) tl += " " + String(at[i]);
-        tpl(tl);
-    }
-    tpl(ok ? "Result: SUCCESS" : "Result: FAILED");
-    stove.setDebug(prevDebug);
-    menuCursor = 0;
-    telnetShowDebugMenu();
+    q += "   A wrong value can upset the stove.";
+    tmConfirmStart(q, tmRawWriteYes);
 }
 
-// ─────────────────────────────────────────────
-// Menu: Live select (checkbox style)
-// ─────────────────────────────────────────────
-
-static void telnetDrawLiveSelect()
+static void tmDebugValue(int i, String& v) { if (i == 1) v = stove.isDebugEnabled() ? "on" : "off"; }
+static void tmDebugOpen(int i)
 {
-    const char* valueLabels[] = {
-        "Stove state",
-        "Temperatures",
-        "Flame power",
-        "Fan speeds",
-        "Fume fan RPM",
-        "Auger speed",
-        "Pellet alarm",
-        "Energy saving",
-        "Remote control"
-    };
-    for (int i = 0; i < 9; i++) {
-        bool checked = (liveValuesMask & (1 << i)) != 0;
-        String label = String(checked ? "[x] " : "[ ] ") + valueLabels[i];
-        menuRow(label, i == menuCursor);
-    }
-    menuRow("[x] All / None", 9  == menuCursor);
-    menuRow("Start",          10 == menuCursor);
-    menuRow("Back",           11 == menuCursor);
-}
-
-static void telnetShowLiveSelect(bool full)
-{
-    if (full) { cls(); tpl("=== Live Values ===\r\n"); tpl("  Select which values to monitor:\r\n"); tp("\x1B[s"); }
-    else      { tp("\x1B[u"); }
-    telnetDrawLiveSelect();
-    if (full) {
-        tpl("");
-        tp("  \x1B[2m[arrows] navigate   [enter/space] toggle   [enter] on Start\x1B[0m\r\n");
-        menuItemCount = 12;
-        setTelnetState(TS_LIVE_SELECT);
+    switch (i) {
+    case 0: tmLogCursor = logRing && logRing->total > 2048 ? logRing->total - 2048 : 0; tmLogFirst = tmLogCursor != 0; tmView(&TM_LOG); break;
+    case 1:
+        stove.setDebug(!stove.isDebugEnabled());
+        LOGI("sys", "bus frame debug %s by %s", stove.isDebugEnabled() ? "on" : "off", tmSource());
+        tmMsgSet(true, stove.isDebugEnabled() ? "Bus frame debug on: every frame goes to the bus debug buffer (and the log at bus=debug)." : "Bus frame debug off.");
+        break;
+    case 2: { String t; tmDebugTextOf(t); tmShowText("Bus debug buffer", t); break; }
+    case 3: stoveDebugBuffer = ""; tmMsgSet(true, "Bus debug buffer cleared."); break;
+    case 4: tmInputStart("Raw read: type address (hex)", tmRawReadDone, 20, "e.g. '00 1a' (RAM 0x1A) or '20 7d' / 'eeprom 7d' (EEPROM 0x7D)"); break;
+    case 5: tmInputStart("Raw write: type address value (hex)", tmRawWriteDone, 40, "e.g. '00 21 01'; up to 4 writes sent back to back; asks for confirmation"); break;
     }
 }
+static const TmItem TM_DEBUG_ITEMS[] = {
+    { "Firmware log",      nullptr,      tmDebugOpen, "The log of the controller, live (levels: Device > Log levels)" },
+    { "Bus frame debug",   tmDebugValue, tmDebugOpen, "Keep every stove bus frame in the bus debug buffer" },
+    { "Bus debug buffer",  nullptr,      tmDebugOpen, "The last frames (about 3 KB)" },
+    { "Clear the buffer",  nullptr,      tmDebugOpen, nullptr },
+    { "Raw read",          nullptr,      tmDebugOpen, "Read one register and show the frames" },
+    { "Raw write",         nullptr,      tmDebugOpen, "Write registers directly (asks for confirmation)" },
+};
+static const TmMenu TM_DEBUG = { "Debug", TM_DEBUG_ITEMS, 6, nullptr, 0 };
 
-static void telnetHandleLiveSelect(const String& key)
+// ─────────────────────────────────────────────────────────────────────
+// Main menu, help, session
+// ─────────────────────────────────────────────────────────────────────
+
+static void tmMainOpen(int i)
 {
-    if (key == "UP")   { menuMoveUp();   telnetShowLiveSelect(false); return; }
-    if (key == "DOWN") { menuMoveDown(); telnetShowLiveSelect(false); return; }
-
-    if (key == "ENTER" || key == "SPACE") {
-        if (menuCursor <= 8) {
-            // Toggle individual value
-            liveValuesMask ^= (1 << menuCursor);
-            telnetShowLiveSelect(false);
-            return;
-        }
-        if (menuCursor == 9) {
-            // Toggle all / none
-            liveValuesMask = (liveValuesMask == 0x1FF) ? 0 : 0x1FF;
-            telnetShowLiveSelect(false);
-            return;
-        }
-        if (menuCursor == 10) {
-            // Start
-            if (liveValuesMask == 0) {
-                tpl("  \x1B[31mNo values selected.\x1B[0m");
-                return;
-            }
-            tpl("\r\nLive mode started. Press any key to stop.\r\n");
-            setTelnetState(TS_LIVE_RUNNING);
-            lastLiveUpdate = 0;
-            return;
-        }
-        if (menuCursor == 11) {
-            // Back
-            menuCursor = 0;
-            telnetShowMainMenu();
-            return;
-        }
+    switch (i) {
+    case 0: tmView(&TM_STATUS); break;
+    case 1: tmMenu(&TM_LIVE_MENU, TM_LIVE_N + 1); break;   // cursor on Start
+    case 2: tmMenu(&TM_CONTROL); break;
+    case 3: tmMenu(&TM_TIMERS); break;
+    case 4: tmMenu(&TM_PELLETS); break;
+    case 5: tmMenu(&TM_ERRORS); break;
+    case 6: tmMenu(&TM_NETWORK); break;
+    case 7: tmMenu(&TM_DEVICE); break;
+    case 8: tmMenu(&TM_DEBUG); break;
+    case 9: tmExit(); break;
     }
 }
-
-// ─────────────────────────────────────────────
-// Live values printer
-// ─────────────────────────────────────────────
-
-static void telnetPrintLiveValues()
+static void tmMainValue(int i, String& v)
 {
-    tpl("\r\n--- Live ---");
-    if (liveValuesMask & (1 << 0)) {
-        tpl("State:        " + String(stoveState) + " (" + StoveStateStr + ")");
-    }
-    if (liveValuesMask & (1 << 1)) {
-        tpl("Temp room:    " + String(ambTemp)          + " C   setpoint: " + String(setPointTemp) + " C");
-        tpl("Temp stove:   " + String(ambTempStove)     + " C   remote:   " + String(ambTempRemoteControl) + " C");
-        tpl("Wireless sensor: " + String(wirelessSensorStr()) + " (INSTELL WIRELESS)");
-        tpl("Fume temp:    " + String(fumesTemp)        + " C");
-    }
-    if (liveValuesMask & (1 << 2)) tpl("Flame power:  " + String(flamePower));
-    if (liveValuesMask & (1 << 3)) {
-        int act = roomFanActual();
-        tpl("Room fan:     " + String(roomFanSpeed) + " (actual " + (act < 0 ? String("?") : String(act)) +
-            ", power 0x0A = " + String(cachedRoomFanControl) + (roomFanIsRunning() == 0 ? ", stopped" : "") + ")");
-    }
-    if (liveValuesMask & (1 << 4)) tpl("Fume fan RPM: " + String(cachedFumeFanRPM));
-    if (liveValuesMask & (1 << 5)) tpl("Auger speed:  " + String(cachedAugerSpeed));
-    if (liveValuesMask & (1 << 6)) tpl("Low pellet:   " + String(cachedLowPallet ? "YES" : "no"));
-    if (liveValuesMask & (1 << 7)) tpl("Energy save:  start=" + String(energySavingStart) + "  stop=" + String(energySavingStop));
-    if (liveValuesMask & (1 << 8)) {
-        int menuId  = stove.read(ram, displayMenuAddr);
-        int paramId = stove.read(ram, selectedParamAddr);
-        const char* param = (paramId >= 0) ? getSelectedParameterName(paramId) : "?";
-        tpl("Remote:       last seen " + String(cachedRemoteControlLastSeen) + "s ago");
-        tpl("  menu:       " + String(menuId  >= 0 ? getRemoteMenuName(menuId) : "?"));
-        tpl("  selected:   " + String(param ? param : "none"));
-    }
-    tp("[any key to stop]");
-}
-
-// ─────────────────────────────────────────────
-// Menu: Config
-// ─────────────────────────────────────────────
-
-static void telnetDrawConfigMenu()
-{
-    String items[12] = {
-        "Power state (on/off)             current: " + String(StoveIsOn ? "on" : "off"),
-        "Flame power       [1-4]          current: " + String(flamePower),
-        "Room fan speed    [0-3]          current: " + String(roomFanSpeed),
-        "Energy save start [0,-1,-2,-3]   current: " + String(energySavingStart),
-        "Energy save stop  [0,1,2,3]      current: " + String(energySavingStop),
-        "Combustion quality               current: " + String(getCombustionQualityLabel(cachedCombustionQuality) ? getCombustionQualityLabel(cachedCombustionQuality) : "Unknown"),
-        "Pellet quality                   current: " + String(getPelletQualityLabel(cachedPelletQuality) ? getPelletQualityLabel(cachedPelletQuality) : "Unknown"),
-        "Beep                             current: " + String(cachedBeepEnabled ? "enabled" : "disabled"),
-        "Temperature setpoint [7-30] C    current: " + String((int)setPointTemp) + " C",
-        "Sync NTP time to stove",
-        "View timers (PR1-PR6)",
-        "Back"
-    };
-    for (int i = 0; i < 12; i++) menuRow(items[i], i == menuCursor);
-}
-
-static void telnetShowConfigMenu(bool full)
-{
-    if (full) { cls(); tpl("=== Configure ===\r\n"); tp("\x1B[s"); }
-    else      { tp("\x1B[u"); }
-    telnetDrawConfigMenu();
-    if (full) {
-        tpl("");
-        tp("  \x1B[2m[arrows] navigate   [enter] select\x1B[0m\r\n");
-        menuItemCount = 12;
-        setTelnetState(TS_CONFIG_MENU);
-    }
-}
-
-static void telnetHandleConfigMenu(const String& key)
-{
-    if (key == "UP")   { menuMoveUp();   telnetShowConfigMenu(false); return; }
-    if (key == "DOWN") { menuMoveDown(); telnetShowConfigMenu(false); return; }
-    if (key != "ENTER") return;
-
-    struct { const char* prompt; TelnetConfigField field; } opts[] = {
-        { "Enter 'on' or 'off': ",                                CF_POWER              },
-        { "Flame power [1-4]: ",                                  CF_FLAME_POWER        },
-        { "Fan speed [0-3]: ",                                    CF_FAN_SPEED          },
-        { "Energy saving start [0,-1,-2,-3]: ",                   CF_ENERGY_SAVE_START  },
-        { "Energy saving stop [0,1,2,3]: ",                       CF_ENERGY_SAVE_STOP   },
-        { "Combustion quality [+G,-3,-2,-1,0,+1,+2,+3]: ",       CF_COMBUSTION_QUALITY },
-        { "Pellet quality [+G,-3,-2,-1,0,+1,+2,+3]: ",           CF_PELLET_QUALITY     },
-        { "Beep [on/off]: ",                                      CF_BEEP               },
-        { "Temperature setpoint [7-30] C: ",                      CF_SETPOINT           },
-    };
-
-    if (menuCursor <= 8) {
-        tp(opts[menuCursor].prompt);
-        telnetConfig = opts[menuCursor].field;
-        setTelnetState(TS_CONFIG_INPUT);
-        return;
-    }
-    if (menuCursor == 9) {
-        setStoveDateTime();
-        tpl("Time synced to NTP.");
-        telnetShowConfigMenu();
-        return;
-    }
-    if (menuCursor == 10) {
-        menuCursor = 0;
-        telnetShowTimersMenu();
-        return;
-    }
-    if (menuCursor == 11) {
-        menuCursor = 0;
-        telnetShowMainMenu();
-        return;
-    }
-}
-
-static void telnetHandleConfigInput(const String& input)
-{
-    bool ok = false;
-
-    switch (telnetConfig) {
-        case CF_POWER:
-            if (input == "on") {
-                getStoveState();
-                ok = pelletsEmptyOff() ? (tpl("Refused: pellets used up - refill the hopper first."), false)
-                   : (stoveState == OFF)
-                    ? stove.write(ram, stoveStateAddr, 1)
-                    : (tpl("Already on."), true);
-            } else if (input == "off") {
-                getStoveState();
-                if (stoveState == IGNITION || stoveState == WORKING || stoveState == ALARM)
-                    ok = stove.write(ram, stoveStateAddr, 6);
-                else if (stoveState == STARTING || stoveState == PALLET_LOADING)
-                    ok = stove.write(ram, stoveStateAddr, 0);
-                else { tpl("Already off."); ok = true; }
-            } else {
-                tpl("Invalid. Enter 'on' or 'off'.");
-                tp("> "); return;
-            }
+    switch (i) {
+    case 4: { double r = pellets.remainingKg(); if (r >= 0) v = "~" + String(r, 1) + " kg until the alarm"; break; }
+    case 5: if (confirmedCurrentError) v = pc::errorCode(confirmedCurrentError);
+            else if (lastSlowStatesAt && pelletsEmptyOff()) v = "PELLETS";
             break;
-
-        case CF_FLAME_POWER: {
-            int v = input.toInt();
-            if (v < 1 || v > 4) { tpl("Invalid. Must be 1-4."); tp("> "); return; }
-            ok = setFlamePower(v);
-            break;
-        }
-
-        case CF_FAN_SPEED: {
-            int v = input.toInt();
-            if (v < 0 || v > 3) { tpl("Invalid. Must be 0-3."); tp("> "); return; }
-            ok = setRoomFanSpeed(v);
-            break;
-        }
-
-        case CF_ENERGY_SAVE_START: {
-            int v = input.toInt() * -1;
-            if (v < 0 || v > 3) { tpl("Invalid. Must be 0,-1,-2,-3."); tp("> "); return; }
-            ok = setEnergySavingStart(v);
-            break;
-        }
-
-        case CF_ENERGY_SAVE_STOP: {
-            int v = input.toInt();
-            if (v < 0 || v > 3) { tpl("Invalid. Must be 0,1,2,3."); tp("> "); return; }
-            ok = setEnergySavingStop(v);
-            break;
-        }
-
-        case CF_COMBUSTION_QUALITY: {
-            int v = combustionQualityFromLabel(input);
-            if (v != -1) { setCombustionQuality(v); cachedCombustionQuality = v; ok = true; }
-            else          { tpl("Invalid. Use +G,-3,-2,-1,0,+1,+2,+3."); tp("> "); return; }
-            break;
-        }
-
-        case CF_PELLET_QUALITY: {
-            int v = pelletQualityFromLabel(input);
-            if (v != -1) { stove.write(eeprom, pelletQualityAddr, v); cachedPelletQuality = v; ok = true; }
-            else          { tpl("Invalid. Use +G,-3,-2,-1,0,+1,+2,+3."); tp("> "); return; }
-            break;
-        }
-
-        case CF_BEEP: {
-            String val = input;
-            val.toLowerCase();
-            if (val == "on" || val == "1" || val == "true") {
-                ok = stove.write(eeprom, beepEnabledAddr, 1);
-                if (ok) cachedBeepEnabled = true;
-            } else if (val == "off" || val == "0" || val == "false") {
-                ok = stove.write(eeprom, beepEnabledAddr, 0);
-                if (ok) cachedBeepEnabled = false;
-            } else {
-                tpl("Invalid. Enter on or off.");
-                tp("> "); return;
-            }
-            break;
-        }
-
-        case CF_SETPOINT: {
-            int v = input.toInt();
-            if (v < 7 || v > 30) { tpl("Invalid. Must be 7-30."); tp("> "); return; }
-            ok = stove.write(eeprom, TempSetpointAddr, v);
-            if (ok) { setPointTemp = (float)v; }
-            break;
-        }
-
-        default: break;
+    case 7: if (fwAssetUrl.length() && pc::updateAvailable(BUILD_VERSION, fwLatest.c_str())) v = "update " + fwLatest + " available"; break;
     }
-
-    tpl(ok ? "Done." : "Failed (RS232 error).");
-    telnetConfig = CF_NONE;
-    telnetShowConfigMenu();
 }
+static const TmItem TM_MAIN_ITEMS[] = {
+    { "Status",             tmMainValue, tmMainOpen, "Everything at a glance, refreshes by itself" },
+    { "Live values",        tmMainValue, tmMainOpen, "Chosen values printed every 2 s (scrolls)" },
+    { "Control",            tmMainValue, tmMainOpen, "Power, set point, flame, fan, energy saving, burn settings, clock" },
+    { "Timers",             tmMainValue, tmMainOpen, "Week programs PR1 - PR6" },
+    { "Pellets",            tmMainValue, tmMainOpen, "Estimate until the low pellet alarm, pellet reserve, refill, calibration" },
+    { "Errors and history", tmMainValue, tmMainOpen, "Current error, error memory, event log, last 3 hours" },
+    { "Network",            tmMainValue, tmMainOpen, "WiFi, IPv4 / IPv6, hostname, IP settings" },
+    { "Device",             tmMainValue, tmMainOpen, "Firmware update, services, system, log levels, restart" },
+    { "Debug",              tmMainValue, tmMainOpen, "Firmware log, stove bus frames, raw register read / write" },
+    { "Exit",               tmMainValue, tmMainOpen, "Close the session (q)" },
+};
+static const TmMenu TM_MAIN = { "Main menu", TM_MAIN_ITEMS, sizeof(TM_MAIN_ITEMS) / sizeof(TM_MAIN_ITEMS[0]), nullptr, 5000 };
 
-// ─────────────────────────────────────────────
-// Timer helpers
-// ─────────────────────────────────────────────
-
-static String dowToString(int dow)
+static void tmHelpRender()
 {
-    const char* labels[7] = { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
-    const byte  bits[7]   = { 1, 2, 4, 8, 16, 32, 64 };
-    String s = "";
-    for (int d = 0; d < 7; d++) {
-        if (dow & bits[d]) {
-            if (s.length() > 0) s += " ";
-            s += labels[d];
-        }
-    }
-    return s.length() > 0 ? s : "none";
+    tpl("   Keys");
+    tpl("     up / down, tab         move");
+    tpl("     enter, right, space    open / select");
+    tpl("     1 - 9, a - h           open an item directly");
+    tpl("     esc, left, backspace   back");
+    tpl("     q                      back; in the main menu: exit");
+    tpl("     r                      redraw");
+    tpl("     ?                      this help");
+    tpl();
+    tpl("   Values: up / down (or left / right) change, enter writes, esc cancels.");
+    tpl("   The stove is only written after enter in a value, y in a question, or");
+    tpl("   enter on a toggle (timer enabled). Every write is logged with this session");
+    tpl("   as its source. Switching on is refused while the pellets are used up.");
+    tpl();
+    tpl("   One session at a time. Who connects while the menu is in use can take the");
+    tpl("   session over. A session without a key for 30 min is closed.");
+    tpl("   Telnet is not encrypted and not protected by the API key; switch it off");
+    tpl("   in the web app (Device card) or with POST /api/telnet?enabled=false.");
 }
+static const TmView TM_HELP = { "Help", tmHelpRender, 0, false };
+static void tmHelp() { tmView(&TM_HELP); }
 
-static byte parseDOWString(const String& input)
+static void tmExit()
 {
-    if (input == "none" || input == "0" || input.length() == 0) return 0;
-    String up = input;
-    up.toUpperCase();
-    byte mask = 0;
-    if (up.indexOf("MON") >= 0) mask |= 1;
-    if (up.indexOf("TUE") >= 0) mask |= 2;
-    if (up.indexOf("WED") >= 0) mask |= 4;
-    if (up.indexOf("THU") >= 0) mask |= 8;
-    if (up.indexOf("FRI") >= 0) mask |= 16;
-    if (up.indexOf("SAT") >= 0) mask |= 32;
-    if (up.indexOf("SUN") >= 0) mask |= 64;
-    return mask;
+    tp(A_RST "\r\n   Goodbye.\r\n");
+    tnEndSession("exit");
 }
 
-// ─────────────────────────────────────────────
-// Menu: Timers list
-// ─────────────────────────────────────────────
-
-static void telnetDrawTimersMenu()
+// ── Called by the server (telnetServer.h) ─────────────────────────────
+static void tmStart()
 {
-    const char* prNames[6] = { "PR1", "PR2", "PR3", "PR4", "PR5", "PR6" };
-    for (int i = 0; i < 6; i++) {
-        byte base    = timerBases[i];
-        int  enabled = stove.read(eeprom, base + TIMER_ONOFF_OFFSET);
-        String label;
-        if (enabled <= 0) {
-            label = String(prNames[i]) + ": disabled";
-        } else {
-            int onVal  = stove.read(eeprom, base + TIMER_ONTIME_OFFSET);
-            int offVal = stove.read(eeprom, base + TIMER_OFFTIME_OFFSET);
-            int dow    = stove.read(eeprom, base + TIMER_DOW_OFFSET);
-            label = String(prNames[i]) + ": "
-                + timerValueToTimeStr(onVal) + " -> " + timerValueToTimeStr(offVal)
-                + "  [" + dowToString(dow) + "]";
-        }
-        menuRow(label, i == menuCursor);
-    }
-    menuRow("Back", 6 == menuCursor);
+    tmDepth = 0;
+    tmMsg = "";
+    tmPush(PK_MENU, &TM_MAIN);
 }
-
-static void telnetShowTimersMenu(bool full)
+static void tmEnd()
 {
-    if (full) { cls(); tpl("=== Timers ===\r\n"); tp("\x1B[s"); }
-    else      { tp("\x1B[u"); }
-    telnetDrawTimersMenu();
-    if (full) {
-        tpl("");
-        tp("  \x1B[2m[arrows] navigate   [enter] select\x1B[0m\r\n");
-        menuItemCount = 7;
-        setTelnetState(TS_TIMERS_MENU);
-    }
+    tmDepth = 0;
+    tmText = "";
+    tmInput.buf = "";
+    tmConfirm.question = "";
 }
-
-static void telnetHandleTimersMenu(const String& key)
+static void tmKey(int k)
 {
-    if (key == "UP")   { menuMoveUp();   telnetShowTimersMenu(false); return; }
-    if (key == "DOWN") { menuMoveDown(); telnetShowTimersMenu(false); return; }
-    if (key != "ENTER") return;
-
-    if (menuCursor == 6) { menuCursor = 9; telnetShowConfigMenu(); return; }
-    selectedTimerIdx = menuCursor;
-    menuCursor = 0;
-    telnetShowTimerEditMenu();
+    if (!tmDepth) return;
+    TmPage& p = tmTop();
+    switch (p.kind) {
+    case PK_MENU:    tmMsg = ""; tmKeyMenu(p, k); break;
+    case PK_PICK:    tmKeyPick(k); break;
+    case PK_INPUT:   tmKeyInput(k); break;
+    case PK_CONFIRM: tmKeyConfirm(k); break;
+    case PK_VIEW:    tmKeyView((const TmView*)p.def, k); break;
+    }
 }
-
-// ─────────────────────────────────────────────
-// Menu: Timer edit
-// ─────────────────────────────────────────────
-
-static void telnetDrawTimerEditMenu()
+static void tmTick()
 {
-    byte base    = timerBases[selectedTimerIdx];
-    int  enabled = stove.read(eeprom, base + TIMER_ONOFF_OFFSET);
-    int  onVal   = stove.read(eeprom, base + TIMER_ONTIME_OFFSET);
-    int  offVal  = stove.read(eeprom, base + TIMER_OFFTIME_OFFSET);
-    int  sp      = stove.read(eeprom, base + TIMER_SETPOINT_OFFSET);
-    int  flame   = stove.read(eeprom, base + TIMER_FLAME_OFFSET);
-    int  fan     = stove.read(eeprom, base + TIMER_FAN_OFFSET);
-    int  dow     = stove.read(eeprom, base + TIMER_DOW_OFFSET);
-
-    String items[8] = {
-        "Enabled:     " + String(enabled > 0 ? "yes" : "no"),
-        "On time:     " + timerValueToTimeStr(onVal)  + "  (HH:MM, 10-min steps)",
-        "Off time:    " + timerValueToTimeStr(offVal) + "  (HH:MM, 10-min steps)",
-        "Setpoint:    " + String(sp)    + " C",
-        "Flame power: " + String(flame),
-        "Fan speed:   " + String(fan),
-        "Days:        " + dowToString(dow),
-        "Back"
-    };
-    for (int i = 0; i < 8; i++) menuRow(items[i], i == menuCursor);
+    if (!tmDepth) return;
+    TmPage& p = tmTop();
+    uint16_t every = 0;
+    if (p.kind == PK_MENU) every = ((const TmMenu*)p.def)->refreshMs;
+    else if (p.kind == PK_VIEW) every = ((const TmView*)p.def)->refreshMs;
+    if (!every || millis() - tmLastDraw < every) return;
+    if (p.kind == PK_VIEW && ((const TmView*)p.def)->stream) { ((const TmView*)p.def)->render(); tmLastDraw = millis(); }
+    else tmDraw();
 }
 
-static void telnetShowTimerEditMenu(bool full)
+// ─────────────────────────────────────────────────────────────────────
+// Public interface (main.cpp, routesDevice.h)
+// ─────────────────────────────────────────────────────────────────────
+
+// Start listening (again); the socket opens as soon as WiFi is up
+void setupTelnet()
 {
-    if (full) {
-        const char* prNames[6] = { "PR1", "PR2", "PR3", "PR4", "PR5", "PR6" };
-        cls();
-        tpl("=== " + String(prNames[selectedTimerIdx]) + " ===\r\n");
-        tp("\x1B[s");
-    } else {
-        tp("\x1B[u");
-    }
-    telnetDrawTimerEditMenu();
-    if (full) {
-        tpl("");
-        tp("  \x1B[2m[arrows] navigate   [enter] edit\x1B[0m\r\n");
-        menuItemCount = 8;
-        setTelnetState(TS_TIMER_EDIT_MENU);
-    }
+    tnRunning = true;
+    tnRetryAt = 0;
 }
-
-static void telnetHandleTimerEditMenu(const String& key)
-{
-    if (key == "UP")   { menuMoveUp();   telnetShowTimerEditMenu(false); return; }
-    if (key == "DOWN") { menuMoveDown(); telnetShowTimerEditMenu(false); return; }
-    if (key != "ENTER") return;
-
-    if (menuCursor == 7) { menuCursor = selectedTimerIdx; telnetShowTimersMenu(); return; }
-
-    timerEditReturnCursor = menuCursor;
-    byte base = timerBases[selectedTimerIdx];
-
-    switch (menuCursor) {
-        case 0: { // Enabled — toggle directly
-            int cur = stove.read(eeprom, base + TIMER_ONOFF_OFFSET);
-            stove.write(eeprom, base + TIMER_ONOFF_OFFSET, cur > 0 ? 0 : 1);
-            telnetShowTimerEditMenu(false);
-            break;
-        }
-        case 1: { // On time stepper
-            timerStepIsTime = true;
-            timerStepOffset = TIMER_ONTIME_OFFSET;
-            timerStepMin = 0; timerStepMax = 144;
-            int v = stove.read(eeprom, base + TIMER_ONTIME_OFFSET);
-            timerStepValue = (v < 0 || v > 144) ? 144 : v;
-            menuCursor = 0;
-            telnetShowTimerStep();
-            break;
-        }
-        case 2: { // Off time stepper
-            timerStepIsTime = true;
-            timerStepOffset = TIMER_OFFTIME_OFFSET;
-            timerStepMin = 0; timerStepMax = 144;
-            int v = stove.read(eeprom, base + TIMER_OFFTIME_OFFSET);
-            timerStepValue = (v < 0 || v > 144) ? 144 : v;
-            menuCursor = 0;
-            telnetShowTimerStep();
-            break;
-        }
-        case 3: { // Setpoint — text input
-            tp("Setpoint [7-30] C: ");
-            currentTimerField = TF_SETPOINT;
-            setTelnetState(TS_TIMER_EDIT_INPUT);
-            break;
-        }
-        case 4: { // Flame power stepper
-            timerStepIsTime = false;
-            timerStepOffset = TIMER_FLAME_OFFSET;
-            timerStepMin = 1; timerStepMax = 4;
-            int v = stove.read(eeprom, base + TIMER_FLAME_OFFSET);
-            timerStepValue = (v < 1 || v > 4) ? 1 : v;
-            menuCursor = 0;
-            telnetShowTimerStep();
-            break;
-        }
-        case 5: { // Fan speed stepper
-            timerStepIsTime = false;
-            timerStepOffset = TIMER_FAN_OFFSET;
-            timerStepMin = 0; timerStepMax = 3;
-            int v = stove.read(eeprom, base + TIMER_FAN_OFFSET);
-            timerStepValue = (v < 0 || v > 3) ? 0 : v;
-            menuCursor = 0;
-            telnetShowTimerStep();
-            break;
-        }
-        case 6: { // DOW multi-select
-            int d = stove.read(eeprom, base + TIMER_DOW_OFFSET);
-            timerDowWorking = (d < 0) ? 0 : (byte)d;
-            menuCursor = 0;
-            telnetShowTimerDowSelect();
-            break;
-        }
-    }
-}
-
-static void telnetHandleTimerEditInput(const String& input)
-{
-    byte base = timerBases[selectedTimerIdx];
-    bool ok   = false;
-
-    if (currentTimerField == TF_SETPOINT) {
-        int v = input.toInt();
-        if (v < 7 || v > 30) { tpl("Invalid. Must be 7-30."); tp("> "); return; }
-        ok = stove.write(eeprom, base + TIMER_SETPOINT_OFFSET, v);
-    }
-
-    tpl(ok ? "Done." : "Failed (RS232 error).");
-    currentTimerField = TF_NONE;
-    menuCursor = timerEditReturnCursor;
-    telnetShowTimerEditMenu();
-}
-
-// ─────────────────────────────────────────────
-// Timer: value stepper (on/off time, flame, fan)
-// ─────────────────────────────────────────────
-
-static const char* timerStepFieldName() {
-    switch (timerStepOffset) {
-        case TIMER_ONTIME_OFFSET:  return "On Time";
-        case TIMER_OFFTIME_OFFSET: return "Off Time";
-        case TIMER_FLAME_OFFSET:   return "Flame Power";
-        case TIMER_FAN_OFFSET:     return "Fan Speed";
-        default:                   return "Value";
-    }
-}
-
-static void telnetShowTimerStep(bool full) {
-    if (full) {
-        const char* prNames[6] = { "PR1", "PR2", "PR3", "PR4", "PR5", "PR6" };
-        cls();
-        tpl("=== " + String(prNames[selectedTimerIdx]) + " - " + timerStepFieldName() + " ===\r\n");
-        tp("\x1B[s");
-    } else {
-        tp("\x1B[u");
-    }
-    String display = timerStepIsTime ? timerValueToTimeStr(timerStepValue) : String(timerStepValue);
-    menuRow("^  " + display + "  v", true);
-    if (full) {
-        tpl("");
-        if (timerStepIsTime)
-            tp("  \x1B[2m[UP] +10min  [DOWN] -10min  [ENTER] set\x1B[0m\r\n");
-        else
-            tp("  \x1B[2m[UP] +1  [DOWN] -1  [ENTER] set\x1B[0m\r\n");
-        setTelnetState(TS_TIMER_STEP);
-    }
-}
-
-static void telnetHandleTimerStep(const String& key) {
-    if (key == "UP") {
-        if (timerStepIsTime)
-            timerStepValue = (timerStepValue >= timerStepMax) ? timerStepMin : timerStepValue + 1;
-        else
-            if (timerStepValue < timerStepMax) timerStepValue++;
-        telnetShowTimerStep(false);
-        return;
-    }
-    if (key == "DOWN") {
-        if (timerStepIsTime)
-            timerStepValue = (timerStepValue <= timerStepMin) ? timerStepMax : timerStepValue - 1;
-        else
-            if (timerStepValue > timerStepMin) timerStepValue--;
-        telnetShowTimerStep(false);
-        return;
-    }
-    if (key == "ENTER") {
-        byte base = timerBases[selectedTimerIdx];
-        bool ok = stove.write(eeprom, base + timerStepOffset, (byte)timerStepValue);
-        tpl(ok ? "\r\nDone." : "\r\nFailed (RS232 error).");
-        menuCursor = timerEditReturnCursor;
-        telnetShowTimerEditMenu();
-    }
-}
-
-// ─────────────────────────────────────────────
-// Timer: day-of-week multi-select
-// ─────────────────────────────────────────────
-
-static void telnetDrawTimerDowSelect() {
-    const byte  bits[7] = { 1, 2, 4, 8, 16, 32, 64 };
-    const char* days[7] = { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" };
-    for (int i = 0; i < 7; i++) {
-        bool checked = (timerDowWorking & bits[i]) != 0;
-        menuRow(String(checked ? "[x] " : "[ ] ") + days[i], i == menuCursor);
-    }
-    bool allSet = (timerDowWorking & 0x7F) == 0x7F;
-    menuRow(String(allSet ? "[x] " : "[ ] ") + "All / None", 7 == menuCursor);
-    menuRow("Done",   8 == menuCursor);
-    menuRow("Cancel", 9 == menuCursor);
-}
-
-static void telnetShowTimerDowSelect(bool full) {
-    if (full) {
-        const char* prNames[6] = { "PR1", "PR2", "PR3", "PR4", "PR5", "PR6" };
-        cls();
-        tpl("=== " + String(prNames[selectedTimerIdx]) + " - Days ===\r\n");
-        tp("\x1B[s");
-    } else {
-        tp("\x1B[u");
-    }
-    telnetDrawTimerDowSelect();
-    if (full) {
-        tpl("");
-        tp("  \x1B[2m[arrows] navigate   [enter/space] toggle   [enter] on Done/Cancel\x1B[0m\r\n");
-        menuItemCount = 10;
-        setTelnetState(TS_TIMER_DOW_SELECT);
-    }
-}
-
-static void telnetHandleTimerDowSelect(const String& key) {
-    const byte bits[7] = { 1, 2, 4, 8, 16, 32, 64 };
-
-    if (key == "UP")   { menuMoveUp();   telnetShowTimerDowSelect(false); return; }
-    if (key == "DOWN") { menuMoveDown(); telnetShowTimerDowSelect(false); return; }
-
-    if (key == "ENTER" || key == "SPACE") {
-        if (menuCursor <= 6) {
-            timerDowWorking ^= bits[menuCursor];
-            telnetShowTimerDowSelect(false);
-            return;
-        }
-        if (menuCursor == 7) {
-            timerDowWorking = ((timerDowWorking & 0x7F) == 0x7F) ? 0 : 0x7F;
-            telnetShowTimerDowSelect(false);
-            return;
-        }
-        if (menuCursor == 8) { // Done — save
-            byte base = timerBases[selectedTimerIdx];
-            bool ok = stove.write(eeprom, base + TIMER_DOW_OFFSET, timerDowWorking);
-            tpl(ok ? "\r\nDone." : "\r\nFailed (RS232 error).");
-            menuCursor = timerEditReturnCursor;
-            telnetShowTimerEditMenu();
-            return;
-        }
-        if (menuCursor == 9) { // Cancel — discard
-            menuCursor = timerEditReturnCursor;
-            telnetShowTimerEditMenu();
-            return;
-        }
-    }
-}
-
-// ─────────────────────────────────────────────
-// Escape sequence + key dispatcher
-// ─────────────────────────────────────────────
-
-static void menuDispatch(const String& key)
-{
-    switch (telnetState) {
-        case TS_MAIN_MENU:       telnetHandleMainMenu(key);      break;
-        case TS_CONFIG_MENU:     telnetHandleConfigMenu(key);    break;
-        case TS_DEBUG_MENU:      telnetHandleDebugMenu(key);     break;
-        case TS_WIFI_MENU:       telnetHandleWifiMenu(key);      break;
-        case TS_WIFI_IP_MENU:    telnetHandleWifiIpMenu(key);    break;
-        case TS_WIFI_CONFIRM:    telnetHandleWifiConfirm(key);   break;
-        case TS_WIFI_INFO:       menuCursor = 0; telnetShowWifiMenu();  break;
-        case TS_DEBUG_LOG:       menuCursor = 0; telnetShowDebugMenu(); break;
-        case TS_LIVE_SELECT:     telnetHandleLiveSelect(key);    break;
-        case TS_TIMERS_MENU:      telnetHandleTimersMenu(key);      break;
-        case TS_TIMER_EDIT_MENU:  telnetHandleTimerEditMenu(key);  break;
-        case TS_TIMER_STEP:       telnetHandleTimerStep(key);      break;
-        case TS_TIMER_DOW_SELECT: telnetHandleTimerDowSelect(key); break;
-        case TS_LIVE_RUNNING:
-            tpl("\r\nLive mode stopped.");
-            menuCursor = 0;
-            telnetShowMainMenu();
-            break;
-        default: break;
-    }
-}
-
-// ─────────────────────────────────────────────
-// Public interface — called from main.cpp
-// ─────────────────────────────────────────────
-
-void telnetHandleInput(const String& rawInput)
-{
-    lastTelnetActivity = millis();
-
-    // ── Char-mode states: parse arrow keys and control chars ──────
-    if (isCharModeState(telnetState)) {
-        for (int i = 0; i < (int)rawInput.length(); i++) {
-            uint8_t c = (uint8_t)rawInput[i];
-
-            // Accumulate ESC sequence (ESC [ A/B/C/D)
-            if (escState == 0 && c == 0x1B) { escState = 1; continue; }
-            if (escState == 1 && c == '[')  { escState = 2; continue; }
-            if (escState == 2) {
-                escState = 0;
-                if      (c == 'A') menuDispatch("UP");
-                else if (c == 'B') menuDispatch("DOWN");
-                // ignore left/right
-                return;
-            }
-            escState = 0;
-
-            if (c == '\r' || c == '\n') { menuDispatch("ENTER"); return; }
-            if (c == ' ')               { menuDispatch("SPACE"); return; }
-        }
-        return;
-    }
-
-    // ── Line-mode states: text input ──────────────────────────────
-    String input = rawInput;
-    input.trim();
-    if (input.length() == 0) return;
-
-    switch (telnetState) {
-        case TS_CONFIG_INPUT:        telnetHandleConfigInput(input);      break;
-        case TS_DEBUG_RAW_READ:      telnetHandleDebugRawRead(input);     break;
-        case TS_DEBUG_RAW_WRITE:     telnetHandleDebugRawWrite(input);    break;
-        case TS_WIFI_HOSTNAME_INPUT: telnetHandleWifiHostname(input);     break;
-        case TS_WIFI_STATIC_IP:      telnetHandleWifiStaticIP(input);     break;
-        case TS_WIFI_STATIC_NETMASK: telnetHandleWifiStaticNetmask(input);break;
-        case TS_WIFI_STATIC_GW:      telnetHandleWifiStaticGW(input);     break;
-        case TS_WIFI_STATIC_DNS:     telnetHandleWifiStaticDNS(input);    break;
-        case TS_TIMER_EDIT_INPUT:    telnetHandleTimerEditInput(input);   break;
-        default:                     menuCursor = 0; telnetShowMainMenu(); break;
-    }
-}
-
-void telnetOnConnect(const String& ip)
-{
-    LOGI("sys", "telnet client connected from %s", ip.c_str());
-    escState             = 0;
-    menuCursor           = 0;
-    lastTelnetActivity   = millis();
-
-    // Negotiate character-at-a-time mode immediately on connect
-    const uint8_t seq[] = {
-        0xFF, 0xFB, 0x01,   // IAC WILL ECHO
-        0xFF, 0xFB, 0x03,   // IAC WILL SGA
-        0xFF, 0xFD, 0x03    // IAC DO  SGA
-    };
-    telnet.write(seq, sizeof(seq));
-
-    if (wifiPendingConfirm) {
-        telnetShowWifiConfirm();
-    } else {
-        telnetShowMainMenu();
-    }
-}
-
-void telnetMenuLoop()
-{
-    // Auto-revert static IP if not confirmed in time
-    if (wifiPendingConfirm && millis() > wifiConfirmDeadline) {
-        wifiPendingConfirm = false;
-        LOGW("wifi", "static IP not confirmed in time (telnet menu) - reverting to DHCP");
-        WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
-        WiFi.reconnect();
-    }
-
-    // Drop stale connections — a client that disappears without TCP FIN (NAT
-    // timeout, network blip) would otherwise block new connections indefinitely.
-    if (telnetState != TS_NONE && millis() - lastTelnetActivity > 1800000UL) {
-        LOGI("sys", "telnet: idle timeout - closing the connection");
-        telnet.disconnectClient();
-        telnetState = TS_NONE;
-    }
-
-    if (telnetState != TS_LIVE_RUNNING) return;
-    unsigned long now_ms = millis();
-    if (now_ms - lastLiveUpdate >= 2000) {
-        StoveBusLock lock;  // live view reads the stove directly
-        telnetPrintLiveValues();
-        lastLiveUpdate = now_ms;
-    }
-}
+// Close the session and stop listening (POST /api/telnet?enabled=false)
+void telnetStop() { tnStop(); }
+// From loop()
+void telnetLoop() { tnLoop(); }

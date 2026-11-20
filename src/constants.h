@@ -15,7 +15,6 @@
 
 #ifdef ESP32
 #include <FS.h>
-#include "ESPTelnet.h" 
 #include <SPIFFS.h>
 #include "esp_log.h"
 #include <esp_task_wdt.h>
@@ -52,7 +51,6 @@ unsigned long lastEntryTime;
 
 WiFiUDP udp;
 WiFiClient espClient;
-ESPTelnet telnet;
 EasyButton resetButton(RESET_PIN);
 
 const char * swaggerUI = "<!DOCTYPE html><html lang=\"en\"> <head> <meta charset=\"UTF-8\"> <title>Swagger UI</title> <link rel=\"stylesheet\" type=\"text/css\" href=\"https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.14.2/swagger-ui.css\"/> <link rel=\"stylesheet\" type=\"text/css\" href=\"https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.14.2/swagger-ui.css\"/> </head> <body> <div id=\"swagger-ui\"></div><script src=\"https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.14.2/swagger-ui-bundle.js\" charset=\"UTF-8\"> </script> <script src=\"https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.14.2/swagger-ui-standalone-preset.js\" charset=\"UTF-8\"> </script> <script>window.onload=function(){window.ui=SwaggerUIBundle({url: \"api-specs.json\", dom_id: '#swagger-ui', deepLinking: true, presets: [ SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset], plugins: [ SwaggerUIBundle.plugins.DownloadUrl], layout: \"StandaloneLayout\"});}; </script> </body></html>";
