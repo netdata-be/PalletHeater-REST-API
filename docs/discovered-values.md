@@ -10,7 +10,7 @@ RAM (0x00)
 | 0x04       | 4          | x         | Bool   | Hot enough for the room fan (0 = no, 2 = yes) |                        |            |
 | 0x0A       | 10         | x         |        | Room fan drive value: 0 off, 21 / 23 / 25 at speed 1 / 2 / 3 (verified 16/11/2026, stove working) | 23 | |
 | 0x0B       | 11         |           |        | Unknown, 0 if off ~ 100 if on               |                          |            |
-| 0x0D       | 13         | x/10      | rpm    | Auger speed                                 |                          |            |
+| 0x0D       | 13         | x/10      | s      | Auger on-time per cycle of ~12 s (not rpm; measured 20/11/2026 with RAM 0xB2, see "Start-up") | 62 | |
 | 0x11       | 17         | x         |        | Countdown counter 20 -> 0 / sec             |                          |            |
 | 0x13       | 19         |           |        | Countdown Counter ? 120 -> 0                |                          |            |
 | 0x14       | 20         |           |        | Unknown Boolean value                       |                          |            | 
@@ -92,13 +92,26 @@ EEPROM (0x20)
 
 | ADDR (HEX) | ADDR (DEC) | Formula | Unit   | Description                            | Example or default value | Range      |
 |------------|------------|---------|--------|----------------------------------------|--------------------------|------------|
-| 0x02       |            | x       | Min    | Interval between braizer cleanings     | 45                       |            |
-| 0x04       | 4          | x/10    |        | Auger value at ignition (by analogy; earlier listed as kg/h) | 27 == 2.7 |            |
+| 0x00       | 0          | x       | min    | Max. ignition time (L023 Pr01, 5 – 25); after it the ignition fails (probably E9) | 15 | |
+| 0x01       | 1          | x       | min    | Duration of START PHASE II (L023 Pr02): state 3 lasted ~4 min on 20/11/2026 | 4 | |
+| 0x02       | 2          | x       | Min    | Interval between braizer cleanings (L023 Pr03) | 45                       |            |
+| 0x03       | 3          | x/10    | s      | Auger on-time while loading pellets in START PHASE I (L023 Pr04): RAM 0x0D = 25 on 20/11/2026 | 25 == 2.5 | |
+| 0x04       | 4          | x/10    | s      | Auger on-time in START PHASE II (L023 Pr05): RAM 0x0D = 27 in state 3 on 20/11/2026 | 27 == 2.7 |            |
 | 0x05       | 5          | x/10    |        | Auger value at power 1 (RAM 0x0D shows 3.0 at power 1, verified 16/11/2026; earlier listed as kg/h) | 30 == 3.0 |            |
 | 0x06       | 6          | x/10    |        | Auger value at power 2 (RAM 0x0D shows 4.6 at power 2, verified) | 46 == 4.6 |            |   
 | 0x07       | 7          | x/10    |        | Auger value at power 3 (RAM 0x0D shows 6.2 at power 3, verified 17/11/2026) | 62 == 6.2 |            | 
 | 0x08       | 8          | x/10    |        | Auger value at power 4 (by analogy)    | 78 == 7.8                |            | 
 | 0x09       | 9          | x/10    |        | Auger value at power 5 (unused, the stove has 4 levels) | 78 == 7.8 |            |
+| 0x0A       | 10         | x       | s      | Alarm delay (L023 Pr11): RAM 0x30 counts down from 55 on E1 | 55 | |
+| 0x0B       | 11         | x       | s      | Brazier cleaning duration (L023 Pr12): cleanings lasted 24 – 26 s | 25 | |
+| 0x0C       | 12         | ?       | °C     | L023 Pr13 "min. fume temperature, stove on" (40 – 180 °C); 17 is out of that range, x2 = 34 °C would fit the switch to START PHASE II at 32 – 35 °C (not verified) | 17 | |
+| 0x0D       | 13         | x       | °C     | L023 Pr14 "fume temperature that forces modulation" (110 – 270 °C), not tested | 155 | |
+| 0x0E       | 14         | ?       | °C     | L023 Pr15 "fume temperature for the room fan" (50 – 210 °C); x2 = 70 °C would fit (not verified) | 35 | |
+| 0x0F       | 15         | (x+25)×10 | rpm  | Fume fan in START PHASE I (L023 Pr16): RAM 0x36 = 149 in state 2 | 150 | |
+| 0x10       | 16         | (x+25)×10 | rpm  | Fume fan in START PHASE II (L023 Pr17): RAM 0x36 = 164 in state 3 | 165 | |
+| 0x11 – 0x15 | 17 – 21   | (x+25)×10 | rpm  | Fume fan at power 1 – 5 (L023 Pr18 – Pr22); powers 1 – 3 verified, predicts 205 at power 4 | 135 / 155 / 180 / 205 / 205 | |
+| 0x20       | 32         | x       | s      | Wait after the pellet pre-load (RAM 0x70 counted 170 → 0 on 20/11/2026; L023 Pr41 at another address) | 170 | |
+| 0x21       | 33         | x       | s      | Pellet pre-load time (RAM 0x6F counted ~120 → 0 with the auger running; L023 Pr40 at another address) | 120 | |
 | 0x3C       | 60         | x       | bool   | Timer PR1 enabled                      | 0                        | 0 - 1      |
 | 0x3D       | 61         | val×10min | HH:MM | Timer PR1 on time (144 = off)       | 144                      | 0 - 144    |
 | 0x3E       | 62         | val×10min | HH:MM | Timer PR1 off time (144 = off)      | 144                      | 0 - 144    |
@@ -696,3 +709,34 @@ Observations, not verified:
   hopper.
 - No register was seen to follow the vacuum switch (160 in the wiring diagram) when the fume
   fan started; with dumps 32 s apart a short change can be missed.
+
+### The Micronova L023 installer manual compared with this stove (20/11/2026)
+
+The technical manual of another Micronova board, L023 (27/05/2016,
+[sercatec.com](https://www.sercatec.com/wp-content/uploads/2021/10/MANUAL-AIRE.pdf)), was compared with
+our dumps. Its installer parameters Pr01 – Pr22 sit at **EEPROM address = Pr − 1** on this stove too,
+with the same meanings; the values match what the start-up and the cleanings showed (see the EEPROM
+table: 0x00 – 0x15). From Pr23 on the layout differs (timers, MultiFuoco); the pre-load (120 s) and
+the wait (170 s) are at 0x21 / 0x20.
+
+Documented for L023, matching what this stove does:
+- Start: pre-load (auger on), wait (auger off), pellet load (Pr04) until the fumes pass Pr13, then
+  START PHASE II (Pr05) for Pr02 minutes, then working. The glow plug is on until the fire is detected
+  (start of START PHASE II). So the glow plug candidate is rather **bit 2 of RAM 0x29** (set only in
+  state 2) than bit 0 (still set in state 3); not verified.
+- The auger runs on a fixed period with the on-time in seconds per phase / power (L023: T = 4 s;
+  this stove: ~12 s).
+- Brazier cleaning every Pr03 minutes for Pr12 seconds with its own fan speed and auger time.
+- The vacuum switch and the safety thermostat are in series with the auger supply and are also
+  read by the board as alarm inputs; every alarm switches the stove off after the alarm delay Pr11
+  (55 s here). Fits E1 (lid / vacuum) while working and nothing while off.
+- 5 alarm memory entries, total hours, resettable partial hours (= hours since service), starts.
+- Databases o0 – o9 are factory presets of the PR parameters (loading one overwrites them; the
+  user parameters stay): "DATA BANK = 08" on this stove is probably preset o8.
+- Serial port of the board: 1200 baud, 8 data bits, no parity, 2 stop bits.
+
+Documented for L023, not checked here: ignition failure when the fumes do not reach Pr13 within
+Pr01 minutes (probably E9); after a power cut shorter than Pr48 seconds the stove resumes,
+otherwise final cleaning; modulation to minimum when the fumes pass Pr14; a restart after final
+cleaning only once the fumes are below Pr13. Not in the manual: the pellet level sensor and the
+pellet reserve (0xA4, 0x89, 0x91), which are specific to this stove.

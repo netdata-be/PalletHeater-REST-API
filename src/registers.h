@@ -120,6 +120,8 @@ static bool isKnownRamAddr(byte addr)
 static bool isKnownEepromAddr(byte addr)
 {
     switch (addr) {
+        case 0x00: case 0x01: case 0x03: case 0x0A: case 0x0B: case 0x0F: case 0x10: case 0x11:
+        case 0x12: case 0x13: case 0x14: case 0x15: case 0x20: case 0x21:
         case 0x02: case 0x04: case 0x05: case 0x06: case 0x07:
         case 0x08: case 0x09: case 0x48: case 0x49: case 0x4B:
         case 0x4F: case 0x7D: case 0x7F: case 0x81: case 0x8A:
@@ -216,12 +218,23 @@ static String getEepromValueTxt(byte addr, int val)
     if (val < 0) return "read error";
     char buf[64];
     switch (addr) {
+        // 0x00 - 0x15: installer parameters Pr01 - Pr22 (address = Pr - 1), as in the Micronova
+        // L023 manual; the values match what the stove did (20/11/2026)
+        case 0x00: snprintf(buf, sizeof(buf), "%d min (max. ignition time, Pr01)", val); return buf;
+        case 0x01: snprintf(buf, sizeof(buf), "%d min (start phase II, Pr02)", val); return buf;
         case 0x02: snprintf(buf, sizeof(buf), "%d min (brazier cleaning interval)", val); return buf;
-        case 0x04: snprintf(buf, sizeof(buf), "%.1f (auger value at ignition)", val / 10.0f); return buf;
-        case 0x05: snprintf(buf, sizeof(buf), "%.1f (auger value at flame power 1)", val / 10.0f); return buf;
-        case 0x06: snprintf(buf, sizeof(buf), "%.1f (auger value at flame power 2)", val / 10.0f); return buf;
-        case 0x07: snprintf(buf, sizeof(buf), "%.1f (auger value at flame power 3)", val / 10.0f); return buf;
-        case 0x08: snprintf(buf, sizeof(buf), "%.1f (auger value at flame power 4)", val / 10.0f); return buf;
+        case 0x03: snprintf(buf, sizeof(buf), "%.1f s (auger, pellet load, Pr04)", val / 10.0f); return buf;
+        case 0x04: snprintf(buf, sizeof(buf), "%.1f s (auger, start phase II, Pr05)", val / 10.0f); return buf;
+        case 0x0A: snprintf(buf, sizeof(buf), "%d s (alarm delay, Pr11)", val); return buf;
+        case 0x0B: snprintf(buf, sizeof(buf), "%d s (brazier cleaning time, Pr12)", val); return buf;
+        case 0x0F: case 0x10: case 0x11: case 0x12: case 0x13: case 0x14: case 0x15:
+            snprintf(buf, sizeof(buf), "%d rpm (fume fan %s)", (val + 25) * 10, addr == 0x0F ? "start I" : addr == 0x10 ? "start II" : "per power"); return buf;
+        case 0x20: snprintf(buf, sizeof(buf), "%d s (wait after pre-load)", val); return buf;
+        case 0x21: snprintf(buf, sizeof(buf), "%d s (pellet pre-load time)", val); return buf;
+        case 0x05: snprintf(buf, sizeof(buf), "%.1f s (auger, flame power 1)", val / 10.0f); return buf;
+        case 0x06: snprintf(buf, sizeof(buf), "%.1f s (auger, flame power 2)", val / 10.0f); return buf;
+        case 0x07: snprintf(buf, sizeof(buf), "%.1f s (auger, flame power 3)", val / 10.0f); return buf;
+        case 0x08: snprintf(buf, sizeof(buf), "%.1f s (auger, flame power 4)", val / 10.0f); return buf;
         case 0x09: snprintf(buf, sizeof(buf), "%.1f (auger value level 5, unused)", val / 10.0f); return buf;
         case 0x48: return val ? "Ext thermostat: Stop" : "Ext thermostat: Modulate";
         case 0x49: return val ? "Ext thermostat: N.C." : "Ext thermostat: N.O.";
