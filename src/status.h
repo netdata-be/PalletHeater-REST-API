@@ -121,6 +121,7 @@ void getStatus()
     KNOWN(slowOk, json["hoursSinceLastService"], cachedHoursSinceLastService);
     KNOWN(slowOk, json["totalRuntime"], cachedTotalRuntime);
     KNOWN(slowOk, json["firmwareVersion"], cachedFirmwareVersion);
+    if (cachedSerialNumber >= 0) json["serialNumber"] = cachedSerialNumber; else json["serialNumber"] = nullptr;   // MATR, EEPROM 0xCD - 0xCF
     if (slowOk) json["augerSpeed"] = serialized(String(cachedAugerSpeed, 1)); else json["augerSpeed"] = nullptr;
     JsonObject obj_burn = json.createNestedObject("burn");
     const char* cqLabel = getCombustionQualityLabel(cachedCombustionQuality);

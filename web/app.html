@@ -762,7 +762,7 @@ const I18N = {
     roomSrc:"Room ({0})", srcRemote:"remote", srcStove:"stove", srcLabel:"Temperature source", srcRemoteLong:"Remote control sensor", srcStoveLong:"Stove sensor", unknown:"Unknown",
     roomTemp:"Room temperature", stoveSensor:"Stove sensor", remoteSensor:"Remote control sensor", fumeFan:"Fume fan", auger:"Auger speed",
     pelletLevel:"Pellet level", low:"Low", ok:"OK", remoteSeen:"Remote last seen", secAgo:"{0} s ago", waterPres:"Water pressure", waterTemp:"Water temperature",
-    fw:"Stove firmware", starts:"Number of starts", hours:"Working hours", service:"Hours since service", uptime:"Controller uptime", serialErr:"Serial errors (read / write)", retries:"Serial retries",
+    fw:"Stove firmware", serial:"Serial number (MATR)", starts:"Number of starts", hours:"Working hours", service:"Hours since service", uptime:"Controller uptime", serialErr:"Serial errors (read / write)", retries:"Serial retries",
     menu:"Menu", selParam:"Selected parameter", remoteValue:"Value on the remote", language:"Language", mainScreen:"Main screen", none:"none",
     aAlarm:"Alarm: {0}", aAlarmSub:"Check the stove display and the error memory.", aNoAnswer:"The stove does not answer on the serial bus",
     aError:"Active error {0}", aPending:"{0}: the stove acts in {1} s", aPendingSub:"{0}. If it does not clear in time, the stove switches off (alarm). E1 = hopper lid open: close the lid.", aLow:"Pellet level is low", aLowSub:"Refill the pellet hopper.", aLowMin:"Refill the pellet hopper: about {0} min until the pellet reserve alarm.", aLowOff:"Pellets used up: the stove switches off in about {0} min (PELLET RESERVE on the remote). Refill the hopper.", pelOffIn:"off in {0} min", lowOff:"empty · off in {0} min", pelMinLeft:"{0} min to the alarm", lowSoon:"low · {0} min", aStale:"Stove data is {0} s old", aStaleSub:"The controller cannot read the stove at the moment.",
@@ -924,7 +924,7 @@ pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low 
     roomSrc:"Kamer ({0})", srcRemote:"afstandsbed.", srcStove:"kachel", srcLabel:"Temperatuurbron", srcRemoteLong:"Sensor afstandsbediening", srcStoveLong:"Sensor kachel", unknown:"Onbekend",
     roomTemp:"Kamertemperatuur", stoveSensor:"Sensor kachel", remoteSensor:"Sensor afstandsbediening", fumeFan:"Rookgasventilator", auger:"Schroef",
     pelletLevel:"Pelletniveau", low:"Laag", ok:"OK", remoteSeen:"Afstandsbed. laatst gezien", secAgo:"{0} s geleden", waterPres:"Waterdruk", waterTemp:"Watertemperatuur",
-    fw:"Firmware kachel", starts:"Aantal starts", hours:"Werkuren", service:"Uren sinds onderhoud", uptime:"Uptime controller", serialErr:"Seriële fouten (lezen / schrijven)", retries:"Seriële herhalingen",
+    fw:"Firmware kachel", serial:"Serienummer (MATR)", starts:"Aantal starts", hours:"Werkuren", service:"Uren sinds onderhoud", uptime:"Uptime controller", serialErr:"Seriële fouten (lezen / schrijven)", retries:"Seriële herhalingen",
     menu:"Menu", selParam:"Geselecteerde parameter", remoteValue:"Waarde op de afstandsbediening", language:"Taal", mainScreen:"Hoofdscherm", none:"geen",
     aAlarm:"Alarm: {0}", aAlarmSub:"Kijk op het display van de kachel en in het foutgeheugen.", aNoAnswer:"De kachel antwoordt niet op de seriële bus",
     aError:"Actieve fout {0}", aPending:"{0}: de kachel grijpt in over {1} s", aPendingSub:"{0}. Verdwijnt de fout niet op tijd, dan schakelt de kachel uit (alarm). E1 = deksel van de bak open: sluit het deksel.", aLow:"Pelletniveau is laag", aLowSub:"Vul de pellettank bij.", aLowMin:"Vul de pellettank bij: nog ongeveer {0} min tot het pelletreserve-alarm.", aLowOff:"Pellets op: de kachel schakelt uit over ongeveer {0} min (PELLET RESERVE op de afstandsbediening). Vul de pellettank bij.", pelOffIn:"uit over {0} min", lowOff:"leeg · uit over {0} min", pelMinLeft:"nog {0} min tot het alarm", lowSoon:"laag · {0} min", aStale:"Gegevens van de kachel zijn {0} s oud", aStaleSub:"De controller kan de kachel momenteel niet uitlezen.",
@@ -2124,6 +2124,7 @@ function render(s) {
   } }
   fillDl($("deviceList"), [
     [t("fw"), s.firmwareVersion || "–"],
+    [t("serial"), s.serialNumber ?? "–"],
     [t("builtFor"), s.controller && s.controller.stoveModel ? s.controller.stoveModel : "–"],
     [t("ctrlFw"), s.controller ? s.controller.version : "–", true],
     [t("ctrlBuilt"), s.controller && s.controller.built ? (d => fmtDate(d) + " " + fmtHM(d))(new Date(s.controller.built)) : "–", true], [t("starts"), s.numberOfStarts ?? "–"], [t("hours"), s.totalRuntime ?? "–"],

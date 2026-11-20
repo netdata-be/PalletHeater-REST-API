@@ -130,6 +130,7 @@ curl http://openpelletbridge.local/api/state
   "hoursSinceLastService": 213,
   "totalRuntime": 1873,
   "firmwareVersion": "FW-PZ-02-V-01-04-00",
+  "serialNumber": 12345678,
   "augerSpeed": 2.4,
   "burn": { "combustionQuality": "0", "pelletQuality": "0" },
   "fumeFanRPM": 1550,
@@ -156,6 +157,7 @@ curl http://openpelletbridge.local/api/state
 | `energySaving` | See [`/api/energysaving`](#apienergysaving). |
 | `lowPalletAlarm` | `1` when the pellet level is low. |
 | `pelletReserve` | `enabled` (installer setting PELLET RESERVE), `sensor` (RAM 0xA4: `5` = the level sensor sees low pellets), `counter` (RAM 0x89) and `minutesLeft`: while the sensor reports low pellets RAM 0x89 counts down from 20 to 0, about one step per minute, to the reserve alarm; `null` otherwise. |
+| `serialNumber` | Serial number of the stove: **MATR** on the nameplate (EEPROM 0xCD – 0xCF, read once). `null` until read. |
 | `pendingError` | The error the stove reports right now (RAM 0x33), also before it counts as `currentError`, with `secondsLeft`: seconds until the stove acts on it (RAM 0x30). E1 (hopper lid open) gives 55 s; closing the lid in time clears it. `null` without an error. The web app shows it as an alert with the countdown. |
 | `brazierCleaning` | `minutesLeft`: minutes to the next brazier cleaning (RAM 0x32), `null` when the stove is not working; `active`: `true` while the cleaning runs (state 5); `interval`: minutes between cleanings (EEPROM 0x02). |
 | `totalRuntime` | Total working hours. |
@@ -626,7 +628,7 @@ Prometheus text format. Contains:
 - WiFi: connected, RSSI, channel, TX power
 - HTTP: request counters per method and per endpoint
 - Serial bus: read/write errors after retries, number of retries
-- Stove: state, temperatures, wireless sensor setting (`stove_wireless_sensor_enabled`), flame power, fan speed, fume fan rpm, auger speed, energy saving, low pellet alarm, remote last seen, timers, stove/NTP time delta, firmware version
+- Stove: state, temperatures, wireless sensor setting (`stove_wireless_sensor_enabled`), flame power, fan speed, fume fan rpm, auger speed, energy saving, low pellet alarm, remote last seen, timers, stove/NTP time delta, firmware version, serial number (`stove_serial_number_info{serial="…"} 1`)
 
 Example scrape config:
 

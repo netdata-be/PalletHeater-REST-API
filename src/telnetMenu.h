@@ -289,6 +289,7 @@ static void telnetShowMainMenu(bool full)
             fwLine += cachedFirmwareVersion;
             tpl(fwLine);
         }
+        if (cachedSerialNumber >= 0) tpl(String("  Serial:   ") + String(cachedSerialNumber));
         tpl(String("  Date:     ") + dateBuf);
         tpl(String("  Time:     ") + timeBuf);
         tpl(String("  Uptime:   ") + uptimeStr());

@@ -113,6 +113,7 @@
                   "hoursSinceLastService": 213,
                   "totalRuntime": 1873,
                   "firmwareVersion": "FW-PZ-02-V-01-04-00",
+                  "serialNumber": 12345678,
                   "augerSpeed": 2.4,
                   "burn": {
                     "combustionQuality": "0",
@@ -4477,6 +4478,11 @@
           },
           "firmwareVersion": {
             "type": "string"
+          },
+          "serialNumber": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Serial number of the stove (MATR on the nameplate), EEPROM 0xCD - 0xCF; null until read"
           },
           "augerSpeed": {
             "type": "number",

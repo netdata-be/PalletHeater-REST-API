@@ -192,6 +192,7 @@ static void mqttDiscoveryEntity(const char* component, const char* id, const cha
     dev["manufacturer"] = "Micronova (OpenPelletBridge controller)";
     dev["model"] = BUILD_STOVE_MODEL;                 // the stove this firmware is built for
     if (cachedFirmwareVersion[0] && strcmp(cachedFirmwareVersion, "Unknown") != 0) dev["hw_version"] = cachedFirmwareVersion;   // firmware of the stove board
+    if (cachedSerialNumber >= 0) dev["serial_number"] = String(cachedSerialNumber);   // MATR of the stove
     dev["sw_version"] = BUILD_VERSION;
     dev["configuration_url"] = "http://" + WiFi.localIP().toString() + "/app";
     if (fill) fill(o);
@@ -363,6 +364,13 @@ void mqttLoop()
         if (!mqtt.connected()) return;
     }
     mqtt.loop();
+    {
+        // the device info (stove firmware, serial number) is read after the first connect:
+        // send the discovery again once it is known
+        static bool devInfoSent = false;
+        bool known = cachedSerialNumber >= 0 && strcmp(cachedFirmwareVersion, "Unknown") != 0;
+        if (known && !devInfoSent) { devInfoSent = true; if (mqttDiscoveryCount) { mqttDiscoveryCount = 0; mqttPublishDiscovery(); } }
+    }
     if (energySavingStop) mqttEsLastStop = energySavingStop;     // remembered for energy_saving ON
     if (energySavingStart) mqttEsLastStart = energySavingStart;
     if (mqttNeedFull || now - mqttLastFull >= 300000) {

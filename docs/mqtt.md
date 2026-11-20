@@ -47,6 +47,8 @@ mosquitto_pub -h broker -t openpelletbridge/set/setpoint -m 21
 
 **Loxone and others.** The state and command topics are plain MQTT and work with any client. Loxone needs an MQTT gateway for this (for example LoxBerry with the MQTT Gateway plugin) unless your Miniserver supports MQTT itself; check that for your Loxone version. Discovery can be switched off when Home Assistant is not used. Alternatively Loxone can call the REST API directly with virtual HTTP inputs and outputs.
 
+The Home Assistant device carries the stove firmware as `hw_version` and the stove serial number (MATR) as `serial_number`, once they have been read.
+
 ## Other interfaces
 
 | Interface | Details |

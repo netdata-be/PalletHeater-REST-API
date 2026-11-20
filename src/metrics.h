@@ -291,6 +291,11 @@ String getMetrics() {
     String firmwareMetric = String("stove_firmware_info{version=\"") + String(cachedFirmwareVersion) + String("\"} 1\n");
     p += firmwareMetric;
   }
+  if (cachedSerialNumber >= 0) {
+    p += "# HELP stove_serial_number_info Serial number of the stove (MATR on the nameplate)\n";
+    p += "# TYPE stove_serial_number_info gauge\n";
+    p += String("stove_serial_number_info{serial=\"") + String(cachedSerialNumber) + String("\"} 1\n");
+  }
   }
 
   return p;

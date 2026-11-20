@@ -148,6 +148,9 @@ EEPROM (0x20)
 | 0x91       | 145        | x * -1  | °C     | Energy saving START negative offset    |                          | 0 - 3      |
 | 0xC0       | 192        | x       | id     | Combustion Quality, see lookup         | 76                       |            |
 | 0xC6       | 198        | x       | bool   | Low pellets monitoring                 | 1                        | 0 - 1      |
+| 0xCD       | 205        |         | uint24 | Serial number (MATR), high byte        |                          |            |
+| 0xCE       | 206        |         | uint24 | Serial number (MATR), middle byte      |                          |            |
+| 0xCF       | 207        |         | uint24 | Serial number (MATR), low byte         |                          |            |
 | 0xC4       | 196        | x       | bool   | Pellet contact N.O. = 0 / N.C. = 1 (verified 17/11/2026) | 0              | 0 - 1      |
 | 0xE0       | 224        | x       | error  | Memory Error - Position 1 - See table  |                          |            |
 | 0xE1       | 225        | x       | error  | Memory Error - Position 2 - See table  |                          |            |
@@ -529,3 +532,7 @@ Read-only RAM dump, compared with the hypotheses:
 - **RAM 0xA1 = 239** at set flame 3 / actual 1: follows the set flame power, not the actual one.
 - **Not as expected:** 0x96 = 72 (before 41 – 48: the "raw ADC, same on or off" idea is doubtful); 0x1F / 0x20 / 0xB7 = 142 / 8 / 2 while working (before 158 / 0 / 230 – 236 working, 144 / 8 / 234 off: the on / off difference does not hold); 0xC6 = 211 (75 and 143 before: a counter); 0x14 / 0x22 / 0x3A / 0xC7 = 1 / 1 / 1 / 0.
 - RAM 0xA4 = 0 and 0x89 = 20: enough pellets (both confirmed on 17/11).
+
+### Serial number (EEPROM 0xCD – 0xCF)
+
+Checked 18/11/2026 against the nameplate of a P220 M and read again live: the **MATR** number is stored as 24 bits, high byte first, in EEPROM 0xCD – 0xCF (e.g. `0xBC 0x61 0x4E` = 12345678). The bytes before it (0xC7 – 0xCC) are 0xFF; 0xD0 changes over time and is not part of it. Not found anywhere in RAM or EEPROM (searched big / little endian, BCD and ASCII): ORD, N Body, DoP, build date, model, vendor and type from the nameplate. Exposed as `serialNumber` in `/api/state`, `serial_number` of the Home Assistant device and `stove_serial_number_info` in `/metrics`.

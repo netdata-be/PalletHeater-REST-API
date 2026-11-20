@@ -261,6 +261,9 @@ long previousMillisNTP;
 #define fwMajorAddr           0x8D  // Firmware major version
 #define fwMinorAddr           0x8E  // Firmware minor version
 #define fwPatchAddr           0x8F  // Firmware patch version
+// Serial number (MATR on the nameplate), 24 bits big-endian in EEPROM 0xCD - 0xCF
+// (matches the nameplate of a P220 M, checked live 18/11/2026; 0xC7 - 0xCC are 0xFF)
+#define serialNumberAddr      0xCD
 // EEPROM date/time write addresses (BCD encoded)
 #define eepromDateDayAddr     0xfb
 #define eepromDateMonthAddr   0xfc
@@ -289,6 +292,7 @@ String stoveDebugBuffer = "";
 
 float cachedAugerSpeed = 0.0;
 char cachedFirmwareVersion[32] = "Unknown";
+long cachedSerialNumber = -1;   // EEPROM 0xCD - 0xCF, -1 = not read yet
 int cachedLowPallet = 0;
 // Pellet reserve (installer menu PELLET RESERVE, EEPROM 0xC6). How the stove decides
 // the reserve is not verified: the alarm is taken as sensor (RAM 0xA4) = 5 and

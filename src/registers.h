@@ -236,6 +236,9 @@ static String getEepromValueTxt(byte addr, int val)
         case 0x8D: snprintf(buf, sizeof(buf), "FW major %d", val);    return buf;
         case 0x8E: snprintf(buf, sizeof(buf), "FW minor %d", val);    return buf;
         case 0x8F: snprintf(buf, sizeof(buf), "FW patch %d", val);    return buf;
+        case 0xCD: snprintf(buf, sizeof(buf), "Serial number byte 1 (high) 0x%02X", val); return buf;
+        case 0xCE: snprintf(buf, sizeof(buf), "Serial number byte 2 0x%02X", val);        return buf;
+        case 0xCF: snprintf(buf, sizeof(buf), "Serial number byte 3 (low) 0x%02X", val);  return buf;
         case 0xBC: { const char* l = getPelletQualityLabel(val);     return l ? l : "Unknown pellet quality"; }
         case 0xC0: { const char* l = getCombustionQualityLabel(val); return l ? l : "Unknown combustion quality"; }
         case 0xC4: return val ? "Pellet contact N.C." : "Pellet contact N.O.";

@@ -68,6 +68,17 @@ void readFirmwareVersion(char* out, size_t len)
              (char)variant0, (char)variant1, product, major, minor, patch);
 }
 
+// Serial number (MATR on the nameplate). Fixed, so read once until it succeeds.
+void readSerialNumber()
+{
+    if (cachedSerialNumber >= 0) return;
+    int b0 = stove.read(eeprom, serialNumberAddr);
+    int b1 = stove.read(eeprom, serialNumberAddr + 1);
+    int b2 = stove.read(eeprom, serialNumberAddr + 2);
+    if (b0 < 0 || b1 < 0 || b2 < 0) return;
+    cachedSerialNumber = ((long)b0 << 16) | (b1 << 8) | b2;
+}
+
 int getFumeFanRPM()
 {
     return pc::fumeFanRpm(stove.read(ram, fumeFanRPMAddr));
@@ -393,6 +404,7 @@ void getSlowStates()
 
     readKeep(cachedAugerSpeed, ram, augerSpeedAddr, 0.1f);
     readFirmwareVersion(cachedFirmwareVersion, sizeof(cachedFirmwareVersion));
+    readSerialNumber();
     yield();
 
     cachedLowPallet      = arePalletsLow();
