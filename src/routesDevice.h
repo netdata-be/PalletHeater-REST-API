@@ -8,9 +8,25 @@
 // POST /api/bluetooth?enabled=true|false[&restart=true]
 // The setting is stored in NVS and applied at the next boot (BLE is started or
 // skipped in setup()), so a change requires a restart of the controller.
+// Bluetooth setting in NVS (applied at the next start); shared with the telnet menu
+static bool bleSavedEnabled() { Preferences p; p.begin("ble", true); bool on = p.getBool("enabled", true); p.end(); return on; }
+static void bleSaveEnabled(bool on, const char* who)
+{
+    Preferences p; p.begin("ble", false); p.putBool("enabled", on); p.end();
+    LOGI("sys", "Bluetooth %s by %s (applied after a restart)", on ? "on" : "off", who);
+}
+// Telnet on / off, stored in NVS and applied at once (switching off ends a session)
+void setupTelnet();
+void telnetStop();
+static void telnetSetEnabled(bool on)
+{
+    Preferences prefs; prefs.begin("telnet", false); prefs.putBool("enabled", on); prefs.end();
+    if (on && !telnetEnabled) { telnetEnabled = true; setupTelnet(); }
+    else if (!on && telnetEnabled) { telnetStop(); telnetEnabled = false; LOGI("sys", "telnet stopped"); }
+}
+
 void handleRouteBluetooth()
 {
-    Preferences prefs;
     if (wm.server->method() == HTTP_POST)
     {
         String v = wm.server->arg("enabled");
@@ -18,15 +34,11 @@ void handleRouteBluetooth()
             wm.server->send(400, "application/json", "{\"result\":\"failed - expected enabled=true/false\"}");
             return;
         }
-        prefs.begin("ble", false);
-        prefs.putBool("enabled", v == "true" || v == "1");
-        prefs.end();
+        bleSaveEnabled(v == "true" || v == "1", clientIp().c_str());
     }
     else if (wm.server->method() != HTTP_GET) { wm.server->send(405); return; }
 
-    prefs.begin("ble", true);
-    bool saved = prefs.getBool("enabled", true);
-    prefs.end();
+    bool saved = bleSavedEnabled();
     bool restart = wm.server->method() == HTTP_POST && wm.server->arg("restart") == "true" && saved != bleEnabled;
 
     StaticJsonDocument<192> json;
@@ -41,8 +53,6 @@ void handleRouteBluetooth()
 
 // GET  /api/telnet                   -> { enabled }
 // POST /api/telnet?enabled=true|false  (applied immediately, stored in NVS)
-void setupTelnet();
-void telnetStop();
 void handleRouteTelnet()
 {
     if (wm.server->method() == HTTP_POST)
@@ -52,13 +62,7 @@ void handleRouteTelnet()
             wm.server->send(400, "application/json", "{\"result\":\"failed - expected enabled=true/false\"}");
             return;
         }
-        bool on = (v == "true" || v == "1");
-        Preferences prefs;
-        prefs.begin("telnet", false);
-        prefs.putBool("enabled", on);
-        prefs.end();
-        if (on && !telnetEnabled) { telnetEnabled = true; setupTelnet(); }
-        else if (!on && telnetEnabled) { telnetStop(); telnetEnabled = false; LOGI("sys", "telnet stopped"); }
+        telnetSetEnabled(v == "true" || v == "1");
     }
     else if (wm.server->method() != HTTP_GET) { wm.server->send(405); return; }
     StaticJsonDocument<96> json;

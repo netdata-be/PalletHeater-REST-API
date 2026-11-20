@@ -173,6 +173,21 @@ std::function<void()> authed(std::function<void()> fn)
 // POST /api/auth?required=true|false   -> enable / disable enforcement
 // POST /api/auth?rotate=true           -> generate a new key
 // Changing anything while the key is required needs the current key.
+// Shared by /api/auth and the telnet menu; who = client address or "telnet menu (<ip>)"
+void apiKeySetRequired(bool on, const char* who)
+{
+    Preferences prefs; prefs.begin("auth", false); prefs.putBool("required", on); prefs.end();
+    if (on != apiKeyRequired) LOGI("sys", "API key %s by %s", on ? "required" : "no longer required", who);
+    apiKeyRequired = on;
+}
+void apiKeyRotate(const char* who)
+{
+    apiKey = generateApiKey();
+    Preferences prefs; prefs.begin("auth", false); prefs.putString("key", apiKey); prefs.end();
+    ArduinoOTA.setPassword(apiKey.c_str());   // the OTA password is the API key (ota.h)
+    LOGI("sys", "API key rotated by %s (also the OTA password)", who);
+}
+
 void handleRouteAuth()
 {
     bool authorised = authOk();
@@ -183,25 +198,15 @@ void handleRouteAuth()
             wm.server->send(401, "application/json", "{\"error\":\"Missing or invalid API key (X-API-Key header)\"}");
             return;
         }
-        Preferences prefs;
-        prefs.begin("auth", false);
         if (wm.server->hasArg("required")) {
             String v = wm.server->arg("required");
             if (v != "true" && v != "false") {
-                prefs.end();
                 wm.server->send(400, "application/json", "{\"result\":\"failed - expected required=true/false\"}");
                 return;
             }
-            apiKeyRequired = (v == "true");
-            prefs.putBool("required", apiKeyRequired);
+            apiKeySetRequired(v == "true", clientIp().c_str());
         }
-        if (wm.server->arg("rotate") == "true") {
-            apiKey = generateApiKey();
-            prefs.putString("key", apiKey);
-            ArduinoOTA.setPassword(apiKey.c_str());   // the OTA password is the API key (ota.h)
-            LOGI("sys", "API key rotated by %s (also the OTA password)", clientIp().c_str());
-        }
-        prefs.end();
+        if (wm.server->arg("rotate") == "true") apiKeyRotate(clientIp().c_str());
     }
     else if (wm.server->method() != HTTP_GET) { wm.server->send(405); return; }
 

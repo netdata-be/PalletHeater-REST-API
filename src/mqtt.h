@@ -390,6 +390,19 @@ void mqttLoop()
 // GET  /api/mqtt  -> settings (without the password) and connection status
 // POST /api/mqtt?enabled=&host=&port=&user=&password=&prefix=&discovery=&discoveryPrefix=
 //      only the given fields change; password "" keeps the stored one, "-" clears it
+// Check and apply a changed configuration (shared by /api/mqtt and the telnet menu):
+// stored in NVS and the client reconnects. Returns an error text, "" = applied.
+static String mqttApply(const MqttConfig& c, const char* who)
+{
+    if (c.enabled && !c.host.length()) return "host is required when MQTT is enabled";
+    if (!c.prefix.length() || c.prefix.indexOf('#') >= 0 || c.prefix.indexOf('+') >= 0) return "prefix must not be empty or contain # / +";
+    if (!c.discoveryPrefix.length()) return "discoveryPrefix must not be empty";
+    if (mqttCfg.enabled && mqtt.connected()) mqttRestart();
+    mqttCfg = c; mqttSaveConfig(); mqttRestart();
+    LOGI("mqtt", "settings changed by %s: %s, broker %s:%u", who, c.enabled ? "on" : "off", c.host.c_str(), c.port);
+    return "";
+}
+
 void handleRouteMqtt()
 {
     StaticJsonDocument<768> json;
@@ -409,14 +422,9 @@ void handleRouteMqtt()
         if (has("prefix")) { String p = arg("prefix"); while (p.endsWith("/")) p.remove(p.length() - 1);
                              if (!p.length() || p.indexOf('#') >= 0 || p.indexOf('+') >= 0) err = "prefix must not be empty or contain # / +"; else c.prefix = p; }
         if (has("discoveryPrefix")) { String p = arg("discoveryPrefix"); if (!p.length()) err = "discoveryPrefix must not be empty"; else c.discoveryPrefix = p; }
-        if (c.enabled && !c.host.length()) err = "host is required when MQTT is enabled";
+        if (!err.length()) err = mqttApply(c, clientIp().c_str());
         if (err.length()) { json["result"] = "failed - " + err; code = 400; }
-        else {
-            bool wasEnabled = mqttCfg.enabled;
-            if (wasEnabled && mqtt.connected()) mqttRestart();
-            mqttCfg = c; mqttSaveConfig(); mqttRestart();
-            json["result"] = "success";
-        }
+        else json["result"] = "success";
     } else if (wm.server->method() != HTTP_GET) { wm.server->send(405); return; }
     json["enabled"] = mqttCfg.enabled;
     json["host"] = mqttCfg.host;

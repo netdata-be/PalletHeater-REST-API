@@ -717,6 +717,44 @@ static String httpsPem()
 }
 
 // GET /api/https: state and certificate; ?cert=pem downloads the certificate
+// Settings, shared by /api/https and the telnet menu (who = client address or telnet session)
+static void httpsSetEnabled(bool on, const char* who)
+{
+    httpsEnabled = on; httpsTlsOn = on;
+    Preferences p; p.begin("https", false); p.putBool("enabled", on); p.end();
+    httpsReload = true;
+    LOGI("https", "HTTPS %s by %s", on ? "enabled" : "disabled", who);
+}
+static void httpsSetRedirect(bool on, const char* who)
+{
+    httpsRedirect = on;
+    Preferences p; p.begin("https", false); p.putBool("redirect", on); p.end();
+    LOGI("https", "HTTP -> HTTPS redirect %s by %s", on ? "on" : "off", who);
+}
+static void httpsRequestNewCert(const char* who) { httpsRegen = true; LOGI("https", "new key and certificate requested by %s", who); }
+// Extra subjectAltNames: comma-separated host names / IPv4 addresses, "" removes them all.
+// Returns an error text, "" = done.
+static String httpsSetAltNames(const String& in, const char* who)
+{
+    String list; int count = 0, from = 0;
+    while (from <= (int)in.length()) {
+        int comma = in.indexOf(',', from); if (comma < 0) comma = in.length();
+        String a = in.substring(from, comma); a.trim(); a.toLowerCase(); from = comma + 1;
+        if (!a.length()) continue;
+        if (!httpsValidAlt(a)) return "not a host name or IPv4 address: " + a;
+        if (("," + list + ",").indexOf("," + a + ",") >= 0) continue;   // duplicate
+        if (++count > HTTPS_MAX_ALT) return "at most 8 extra names";
+        list += (list.length() ? "," : "") + a;
+    }
+    if (list != httpsAlt) {
+        httpsAlt = list;
+        Preferences p; p.begin("https", false); p.putString("alt", httpsAlt); p.end();
+        httpsCheck = true;
+        LOGI("https", "extra alt names set to '%s' by %s - certificate is re-issued", httpsAlt.c_str(), who);
+    }
+    return "";
+}
+
 // POST /api/https: enabled=on|off, regenerate=true (new key and certificate)
 void handleRouteHttps()
 {
@@ -733,37 +771,14 @@ void handleRouteHttps()
         bool regen = pc::parseOnOff(wm.server->arg("regenerate").c_str()) == 1;
         bool alt = wm.server->hasArg("altNames");
         if (on < 0 && redir < 0 && !regen && !alt) { wm.server->send(400, "application/json", "{\"result\":\"failed - enabled, redirect (on / off), altNames or regenerate=true\"}"); return; }
+        String who = clientIp();
         if (alt) {
-            // comma-separated list; an empty value removes all extra names
-            String in = wm.server->arg("altNames"), list; int count = 0, from = 0;
-            while (from <= (int)in.length()) {
-                int comma = in.indexOf(',', from); if (comma < 0) comma = in.length();
-                String a = in.substring(from, comma); a.trim(); a.toLowerCase(); from = comma + 1;
-                if (!a.length()) continue;
-                if (!httpsValidAlt(a)) { wm.server->send(400, "application/json", "{\"result\":\"failed - not a host name or IPv4 address: " + a + "\"}"); return; }
-                if (("," + list + ",").indexOf("," + a + ",") >= 0) continue;   // duplicate
-                if (++count > HTTPS_MAX_ALT) { wm.server->send(400, "application/json", "{\"result\":\"failed - at most 8 extra names\"}"); return; }
-                list += (list.length() ? "," : "") + a;
-            }
-            if (list != httpsAlt) {
-                httpsAlt = list;
-                Preferences p; p.begin("https", false); p.putString("alt", httpsAlt); p.end();
-                httpsCheck = true;
-                LOGI("https", "extra alt names set to '%s' by %s - certificate is re-issued", httpsAlt.c_str(), clientIp().c_str());
-            }
+            String err = httpsSetAltNames(wm.server->arg("altNames"), who.c_str());
+            if (err.length()) { wm.server->send(400, "application/json", "{\"result\":\"failed - " + err + "\"}"); return; }
         }
-        if (redir >= 0) {
-            httpsRedirect = redir == 1;
-            Preferences p; p.begin("https", false); p.putBool("redirect", httpsRedirect); p.end();
-            LOGI("https", "HTTP -> HTTPS redirect %s by %s", httpsRedirect ? "on" : "off", clientIp().c_str());
-        }
-        if (on >= 0) {
-            httpsEnabled = on == 1; httpsTlsOn = httpsEnabled;
-            Preferences p; p.begin("https", false); p.putBool("enabled", httpsEnabled); p.end();
-            httpsReload = true;
-            LOGI("https", "HTTPS %s by %s", httpsEnabled ? "enabled" : "disabled", clientIp().c_str());
-        }
-        if (regen) { httpsRegen = true; LOGI("https", "new key and certificate requested by %s", clientIp().c_str()); }
+        if (redir >= 0) httpsSetRedirect(redir == 1, who.c_str());
+        if (on >= 0) httpsSetEnabled(on == 1, who.c_str());
+        if (regen) httpsRequestNewCert(who.c_str());
         json["result"] = regen ? "success - a new key and certificate are being made (a few seconds); the browser will warn again" : "success";
     } else if (wm.server->method() != HTTP_GET) { wm.server->send(405); return; }
     json["enabled"] = httpsEnabled;
