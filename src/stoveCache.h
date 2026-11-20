@@ -413,7 +413,11 @@ void getSlowStates()
     if (starts >= 0) cachedNumberOfStarts = starts;
     yield();
 
-    readKeep(cachedHoursSinceLastService, eeprom, hoursSinceLastServiceAddr);
+    {   // 16-bit: reading only the low byte showed 4 instead of 260 once it passed 255
+        int lo = stove.read(eeprom, hoursSinceLastServiceAddr);
+        int hi = stove.read(eeprom, hoursSinceLastServiceAddrHigh);
+        if (lo >= 0 && hi >= 0) cachedHoursSinceLastService = lo | (hi << 8);
+    }
     readKeep(cachedBrazierInterval, eeprom, brazierIntervalAddr);
     {
         int lo = stove.read(eeprom, totalRuntimeAddrLow);

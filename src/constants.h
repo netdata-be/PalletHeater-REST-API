@@ -250,7 +250,8 @@ long previousMillisNTP;
 #define combustionQualityAddr 0xc0  // Combustion quality setting
 #define pelletQualityAddr     0xBC  // Pellet quality setting
 #define errorMemoryBaseAddr   0xe0  // Error memory slots 0-4 (base address)
-#define hoursSinceLastServiceAddr 0xE7  // Hours since last service
+#define hoursSinceLastServiceAddr 0xE7  // Hours since last service, low byte (16-bit little-endian)
+#define hoursSinceLastServiceAddrHigh 0xE8  // high byte (20/11/2026: 0xE7 = 4, 0xE8 = 1 -> 260 h, = total runtime - 5400)
 #define totalRuntimeAddrLow       0xEA  // Total runtime low byte (16-bit little-endian)
 #define totalRuntimeAddrHigh      0xEB  // Total runtime high byte (16-bit little-endian)
 #define languageAddr          0x4F  // Language setting

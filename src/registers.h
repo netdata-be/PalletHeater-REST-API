@@ -126,8 +126,8 @@ static bool isKnownEepromAddr(byte addr)
         case 0x8B: case 0x8C: case 0x8D: case 0x8E: case 0x8F:
         case 0x90: case 0x91: case 0xBC: case 0xC0: case 0xC4:
         case 0xC6: case 0xE0: case 0xE1: case 0xE2: case 0xE3:
-        case 0xE4: case 0xE7: case 0xEA: case 0xEB: case 0xEC:
-        case 0xEE: case 0xEF:
+        case 0xE4: case 0xE7: case 0xE8: case 0xEA: case 0xEB: case 0xEC:
+        case 0xEE: case 0xEF: case 0xCD: case 0xCE: case 0xCF:
             return true;
         default: return false;
     }
@@ -246,7 +246,8 @@ static String getEepromValueTxt(byte addr, int val)
         case 0xE0: case 0xE1: case 0xE2: case 0xE3: case 0xE4:
             snprintf(buf, sizeof(buf), "%s - %s", getErrorCode(val).c_str(), getErrorDesc(val).c_str());
             return buf;
-        case 0xE7: snprintf(buf, sizeof(buf), "%d hours since last service", val); return buf;
+        case 0xE7: snprintf(buf, sizeof(buf), "%d (hours since last service, low byte)", val); return buf;
+        case 0xE8: snprintf(buf, sizeof(buf), "%d (hours since last service, high byte)", val); return buf;
         case 0xEA: snprintf(buf, sizeof(buf), "%d (total runtime low byte)", val); return buf;
         case 0xEB: snprintf(buf, sizeof(buf), "%d (total runtime high byte)", val); return buf;
         case 0xEC: snprintf(buf, sizeof(buf), "%d working hours", val); return buf;

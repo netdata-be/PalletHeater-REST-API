@@ -164,7 +164,8 @@ EEPROM (0x20)
 | 0x8E       | 142        | x       |        | Firmware minor version                 | 1                        |            |
 | 0x8F       | 143        | x       |        | Firmware patch version                 | 0                        |            |
 | 0xBC       | 188        | x       | id     | Pellet quality, see combustion quality lookup |                   |            |
-| 0xE7       | 231        | x       | hours  | Hours since last service               |                          |            |
+| 0xE7       | 231        | x       | hours  | Hours since last service low byte (16-bit LE) |                   |            |
+| 0xE8       | 232        | x       | hours  | Hours since last service high byte (16-bit LE) |                  |            |
 | 0xEA       | 234        | x       | hours  | Total runtime low byte (16-bit LE)     |                          |            |
 | 0xEB       | 235        | x       | hours  | Total runtime high byte (16-bit LE)    |                          |            |
 | 0xEC       | 236        | x       | hours  | Working hours ???                      |                          |            |
@@ -536,3 +537,16 @@ Read-only RAM dump, compared with the hypotheses:
 ### Serial number (EEPROM 0xCD – 0xCF)
 
 Checked 18/11/2026 against the nameplate of a P220 M and read again live: the **MATR** number is stored as 24 bits, high byte first, in EEPROM 0xCD – 0xCF (e.g. `0xBC 0x61 0x4E` = 12345678). The bytes before it (0xC7 – 0xCC) are 0xFF; 0xD0 changes over time and is not part of it. Not found anywhere in RAM or EEPROM (searched big / little endian, BCD and ASCII): ORD, N Body, DoP, build date, model, vendor and type from the nameplate. Exposed as `serialNumber` in `/api/state`, `serial_number` of the Home Assistant device and `stove_serial_number_info` in `/metrics`.
+
+### Hours since last service (EEPROM 0xE7 / 0xE8)
+
+A 16-bit little-endian value: 0xE7 is the low byte, 0xE8 the high byte. Observed on
+20/11/2026: 0xE7 = 4, 0xE8 = 1, so 260 hours. Earlier firmware read only 0xE7 and showed 4
+once the counter passed 255. In every dump from 16/11 to 20/11 the counter was exactly the
+total runtime (0xEA / 0xEB) minus 5400, so both count the same hours since the last service
+reset.
+
+Observations, not verified:
+- 0xE9 always held a value from 0 to 59 and changed between dumps; possibly the minutes of
+  one of these hour counters.
+- 0xEC / 0xED held the same values as 0xEA / 0xEB in every dump.
