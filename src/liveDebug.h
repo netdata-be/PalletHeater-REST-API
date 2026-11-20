@@ -65,24 +65,33 @@ static void jsonEscapeAppend(String& out, const char* s, size_t n)
 void handleRouteLog()
 {
     if (wm.server->method() != HTTP_GET) { wm.server->send(405); return; }
-    const size_t CHUNK = 4096;
-    char* chunk = (char*)malloc(CHUNK);
-    if (!logRing || !chunk) { free(chunk); wm.server->send(503, "application/json", "{\"error\":\"live log not available (memory)\"}"); return; }
-    uint32_t from; bool lost; size_t n;
-    portENTER_CRITICAL(&logMux);
-    n = logRing->read(argCursor(), chunk, CHUNK, from, lost);
-    portEXIT_CRITICAL(&logMux);
-    String out;
-    out.reserve(n + n / 8 + 96);
-    out += "{\"from\":"; out += from;
-    out += ",\"next\":"; out += (uint32_t)(from + n);
-    out += ",\"lost\":"; out += lost ? "true" : "false";
-    out += ",\"text\":\"";
-    jsonEscapeAppend(out, chunk, n);
-    free(chunk);
-    out += "\"}";
+    if (!logRing) { wm.server->send(503, "application/json", "{\"error\":\"live log not available (memory)\"}"); return; }
+    // Streamed in pieces of 512 bytes (at most 4 KB per answer): it used to take a 4 KB buffer and
+    // a 5 KB String at once, every second while the console is open; with a fragmented heap that
+    // left the WiFi driver without receive buffers (20/11/2026). "next" comes last.
     wm.server->sendHeader("Cache-Control", "no-store");
-    httpSendText(200, "application/json", out);
+    wm.server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+    wm.server->send(200, "application/json", "");
+    char piece[512];
+    String out; out.reserve(700);
+    uint32_t cur = argCursor(), from = cur; bool lost = false; size_t total = 0;
+    for (int i = 0; total < 4096 && !httpStalled; i++) {
+        uint32_t f; bool l; size_t n;
+        portENTER_CRITICAL(&logMux);
+        n = logRing->read(cur, piece, sizeof(piece), f, l);
+        portEXIT_CRITICAL(&logMux);
+        if (i == 0) {
+            from = f; lost = l;
+            out += "{\"from\":"; out += from; out += ",\"lost\":"; out += lost ? "true" : "false"; out += ",\"text\":\"";
+        } else if (f != cur) break;   // overwritten meanwhile: the rest comes with the next poll
+        if (!n) break;
+        jsonEscapeAppend(out, piece, n);
+        httpSendChunk(out);
+        cur = f + n; total += n;
+    }
+    out += "\",\"next\":"; out += (uint32_t)(from + total); out += "}";
+    httpSendChunk(out);
+    httpEndChunks();
 }
 
 void handleRouteBusmon()

@@ -1089,7 +1089,10 @@ function reqText(r) {
 // Over HTTPS the controller serves one TLS session at a time (memory): at most 2 requests at
 // once, so the browser keeps 1 - 2 keep-alive connections instead of opening up to 6, each
 // waiting in the controller's queue for its own handshake. Plain HTTP is not limited.
-const API_MAX = location.protocol === "https:" ? 2 : 99;
+// The controller answers one request at a time; more at once only hold memory on it (connections
+// waiting with their buffers). 2 over HTTP too: at most 99 let a page load push the heap so low that
+// the WiFi driver dropped packets (20/11/2026).
+const API_MAX = 2;
 let apiActive = 0; const apiQueue = [];
 async function apiSlot() {
   if (apiActive < API_MAX) { apiActive++; return; }
@@ -1647,7 +1650,7 @@ async function busSet(on) { try { await api("POST", "/api/busmon", { enabled: on
 async function liveTick() {
   if (!liveActive()) { if (busOn) busSet(false); liveSchedule(3000); return; }
   if (livePaused) { liveSchedule(1000); return; }
-  let again = 1000;
+  let again = 2000;   // every 2 s (each poll costs the controller memory and time)
   if (liveMode === "req") { renderLive(); liveSchedule(1000); return; }
   try {
     if (liveMode === "log") {
@@ -1664,7 +1667,7 @@ async function liveTick() {
       };
       for (const line of parts) logLines.push({ s: line, c: logClass(line) });
       if (logLines.length > LIVE_KEEP) logLines.splice(0, logLines.length - LIVE_KEEP);
-      logCur = d.next; if (d.text.length >= 4000) again = 150;   // still catching up
+      logCur = d.next; if (d.text.length >= 4000) again = 400;   // still catching up
     } else {
       let d = (await api(busOn ? "GET" : "POST", "/api/busmon", busOn ? { since: busCur } : { enabled: true, since: busCur })).data;
       if (!d.active) d = (await api("POST", "/api/busmon", { enabled: true, since: busCur })).data;   // stopped meanwhile (60 s without poll)
@@ -1683,7 +1686,7 @@ async function liveTick() {
         if (ok) busLast[key] = v;
       }
       if (busRows.length > LIVE_KEEP) busRows.splice(0, busRows.length - LIVE_KEEP);
-      busCur = d.next; if (d.events.length >= 250) again = 150;
+      busCur = d.next; if (d.events.length >= 250) again = 400;
     }
     liveNA = false;
   } catch (e) { liveNA = /404|not found/i.test(e.message); again = 3000; }

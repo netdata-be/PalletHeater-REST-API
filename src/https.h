@@ -54,7 +54,7 @@
 #define HTTPS_RENEW_DAYS 30
 
 static bool httpsEnabled = true;            // NVS "https"/"enabled", default on
-static bool httpsRedirect = true;           // NVS "https"/"redirect": web app pages on HTTP -> HTTPS
+static bool httpsRedirect = false;          // NVS "https"/"redirect": web app pages on HTTP -> HTTPS (default off)
 static String httpsAlt;                     // NVS "https"/"alt": extra subjectAltNames, comma-separated
 #define HTTPS_MAX_ALT 8
 static volatile bool httpsRegen = false;    // POST regenerate: new key + certificate
@@ -654,9 +654,10 @@ void httpsSetup()
 {
     Preferences p; p.begin("https", true);
     httpsEnabled = p.getBool("enabled", true);
-    httpsRedirect = p.getBool("redirect", true);
+    httpsRedirect = p.getBool("redirect", false);   // default off since 20/11/2026: HTTPS costs ~34 KB per session
     httpsAlt = p.getString("alt", "");
     p.end();
+    httpsTlsOn = httpsEnabled;
     // reserve the TLS buffers now, while the heap is still in one piece (the certificate is
     // added to the configuration once WiFi is up; the buffers do not depend on it)
     if (httpsEnabled) {
