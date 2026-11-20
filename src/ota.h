@@ -1,11 +1,22 @@
 #include <ArduinoOTA.h>
 #include <NimBLEDevice.h>
+#include <Preferences.h>
 #include "constants.h"
 
 // The OTA password is the controller's API key (auth.h, NVS; /api/auth shows it),
 // not a password in the source code: that one was public in the repository.
 void enableOTA(const String& password){
-    ArduinoOTA.setHostname("Pelletheater");
+    // same name as the web app (IP settings, default openpelletbridge). ArduinoOTA must not
+    // start mDNS itself: it did so with its own name ("Pelletheater"), which replaced
+    // openpelletbridge.local on the network. mdnsStart() (setupWifi.h) announces the OTA
+    // service (_arduino._tcp) together with the others.
+    {
+        Preferences p; p.begin("net", true);
+        String hn = p.getString("hostname", "openpelletbridge");
+        p.end();
+        ArduinoOTA.setHostname(hn.c_str());
+    }
+    ArduinoOTA.setMdnsEnabled(false);
     ArduinoOTA.setPort(3232);
     ArduinoOTA.setPassword(password.c_str());
     ArduinoOTA.onStart([](){

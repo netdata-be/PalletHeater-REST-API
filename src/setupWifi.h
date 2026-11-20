@@ -1,5 +1,28 @@
 #include <constants.h>
 #include <Preferences.h>
+#include <ESPmDNS.h>
+
+// mDNS: <hostname>.local with the web app (_http, _https) and the OTA service (_arduino,
+// for the Arduino IDE / PlatformIO network port). The one place that starts it: at boot,
+// after the config portal and after a network change.
+void mdnsStart(const char* hostname)
+{
+    MDNS.end();
+    if (!MDNS.begin(hostname)) { LOGE("wifi", "mDNS could not be started for %s.local", hostname); return; }
+    // DNS-SD: a readable name in service browsers (Finder, Home Assistant, Bonjour tools) and
+    // TXT records that tell what it is without opening it
+    String instance = String("OpenPelletBridge (") + BUILD_STOVE_MODEL + ")";
+    MDNS.setInstanceName(instance.c_str());
+    for (const char* svc : { "http", "https" }) {
+        MDNS.addService(svc, "tcp", strcmp(svc, "http") == 0 ? 80 : 443);
+        MDNS.addServiceTxt(svc, "tcp", "path", "/");
+        MDNS.addServiceTxt(svc, "tcp", "api", "/api");
+        MDNS.addServiceTxt(svc, "tcp", "version", BUILD_VERSION);
+        MDNS.addServiceTxt(svc, "tcp", "model", BUILD_STOVE_MODEL);
+    }
+    MDNS.enableArduino(3232, true);   // password = API key
+    LOGI("wifi", "mDNS: %s.local, DNS-SD '%s' (_http, _https, _arduino)", hostname, instance.c_str());
+}
 
 void saveConfigCallback() // Save params to SPIFFS
 {

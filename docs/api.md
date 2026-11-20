@@ -6,7 +6,7 @@ The HTTP REST API of the controller. The OpenAPI 3 specification is [openapi.jso
 
 ## API conventions
 
-- **Base URL:** `http://<device-ip>` or `http://openpelletbridge.local`. Port 80, plain HTTP. Only expose it on a trusted network.
+- **Base URL:** `http://<device-ip>` or `http://openpelletbridge.local` (port 80), or encrypted `https://openpelletbridge.local` (port 443, self-signed certificate, see [`/api/https`](#apihttps)). IPv4 and IPv6 (link-local, and SLAAC / ULA addresses where the network offers them; `/api/wifi` lists them under `ipv6`). Found on the network with mDNS / DNS-SD as "OpenPelletBridge (<model>)": `_http._tcp`, `_https._tcp` (TXT `path`, `api`, `version`, `model`) and `_arduino._tcp` (OTA). Only expose it on a trusted network.
 - **API key (optional):** see [Authentication](#authentication).
 - **Request parameters:** write operations take **query parameters** (form-encoded bodies also work), e.g. `POST /api/flame?power=3`. Only the timer endpoints take a **JSON body**.
 - **Responses:** always `application/json`, except `/metrics` (Prometheus text), `/`, `/api` (HTML) and `/restart` (plain text).

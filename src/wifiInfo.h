@@ -19,6 +19,7 @@
 // GET /api/wifi/scan lists the networks in range (asynchronous scan).
 #include <constants.h>
 #include <Preferences.h>
+#include <esp_netif.h>
 
 static const unsigned long NET_CONFIRM_MS = 300000;
 static bool          netPendingConfirm = false;
@@ -56,8 +57,25 @@ static void netRevertWifi(const char* why)
 // Registered before WiFi starts. A drop of a working connection is counted and
 // logged as a warning; the failed attempts while reconnecting only at debug level.
 // counters: liveLog.h (also used by metrics.h, which is included earlier)
+// IPv6 (SLAAC on networks that offer it, always a link-local address): mDNS then also
+// answers AAAA queries. Without it macOS waited 5 s for an AAAA answer on every new lookup
+// of openpelletbridge.local. Global addresses are kept as they arrive (max 3).
+static String ipv6Global[3];
 static void netEventsSetup()
 {
+
+    WiFi.onEvent([](WiFiEvent_t, WiFiEventInfo_t info) {
+        char a[48];
+        snprintf(a, sizeof(a), IPV6STR, IPV62STR(info.got_ip6.ip6_info.ip));
+        String s(a);
+        bool linkLocal = s.startsWith("fe80");
+        if (!linkLocal) {
+            bool known = false;
+            for (auto& g : ipv6Global) if (g == s) known = true;
+            if (!known) for (auto& g : ipv6Global) if (!g.length()) { g = s; break; }
+        }
+        LOGI("wifi", "got IPv6 %s%s", a, linkLocal ? " (link-local)" : "");
+    }, ARDUINO_EVENT_WIFI_STA_GOT_IP6);
     WiFi.onEvent([](WiFiEvent_t, WiFiEventInfo_t info) {
         uint8_t r = info.wifi_sta_disconnected.reason;
         const char* name = WiFi.disconnectReasonName((wifi_err_reason_t)r);
@@ -72,6 +90,11 @@ static void netEventsSetup()
     WiFi.onEvent([](WiFiEvent_t, WiFiEventInfo_t info) {
         wifiWasUp = true;
         LOGI("wifi", "got IP %s", IPAddress(info.got_ip.ip_info.ip.addr).toString().c_str());
+        // IPv6 link-local (and SLAAC global addresses after it): here, once the interface is
+        // surely up (at "connected" it was not ready yet: esp_netif refused)
+        esp_netif_t* nif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+        esp_err_t e = nif ? esp_netif_create_ip6_linklocal(nif) : ESP_ERR_NOT_FOUND;
+        if (e != ESP_OK) LOGW("wifi", "IPv6 could not be enabled: %s", esp_err_to_name(e));
     }, ARDUINO_EVENT_WIFI_STA_GOT_IP);
 }
 
@@ -110,7 +133,7 @@ static void netSwitchLoop()
         if (WiFi.status() == WL_CONNECTED) {
             LOGI("wifi", "connected to '%s', IP %s - waiting for an HTTP request", netNewSsid.c_str(), WiFi.localIP().toString().c_str());
             netSwitch = NS_CONFIRM; netSwitchAt = now; netHttpSeen = false;
-            MDNS.end(); MDNS.begin(WiFi.getHostname()); MDNS.addService("http", "tcp", 80);
+            mdnsStart(WiFi.getHostname());
         } else if (now - netSwitchAt >= NET_CONNECT_MS) netRevertWifi("could not connect to the new network");
         return;
     case NS_CONFIRM:
@@ -216,6 +239,12 @@ void handleRouteWifi()
     json["rssi"] = rssi;
     json["quality"] = pc::rssiQuality(rssi);
     json["ip"] = WiFi.localIP().toString();
+    {
+        JsonArray v6 = json.createNestedArray("ipv6");
+        String ll = WiFi.localIPv6().toString();
+        if (ll.length() && ll != "0000:0000:0000:0000:0000:0000:0000:0000") v6.add(ll);
+        for (auto& g : ipv6Global) if (g.length()) v6.add(g);
+    }
     json["netmask"] = WiFi.subnetMask().toString();
     json["gateway"] = WiFi.gatewayIP().toString();
     json["dns"] = WiFi.dnsIP().toString();

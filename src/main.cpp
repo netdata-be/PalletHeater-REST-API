@@ -73,6 +73,7 @@ void setupTelnet()
 #include "coreDump.h"   // core dump of the last crash, /api/coredump
 
 #include "https.h"      // HTTPS on port 443 in front of the HTTP server, self-signed certificate
+#include "http6.h"      // HTTP over IPv6 on port 80 (the Arduino web server is IPv4 only)
 
 // Serialise all stove bus access: HTTP handlers run on the loop task while the
 // sensor task polls the stove from the other core. Without the lock both talk
@@ -206,9 +207,8 @@ void setup()
         prefs.begin("net", true);
         String hn = prefs.getString("hostname", "openpelletbridge");
         prefs.end();
-        MDNS.begin(hn.c_str());
+        mdnsStart(hn.c_str());
     }
-    MDNS.addService("http", "tcp", 80);
     authInit();
     {
         Preferences prefs;
@@ -232,6 +232,7 @@ void setup()
     }
     enableOTA(apiKey);   // OTA password = API key
     httpsSetup();        // HTTPS task: waits for WiFi, makes the certificate the first time
+    http6Setup();        // IPv6 relay for plain HTTP
     if (spiffsMounted) {
         File configFile = SPIFFS.open("/config.txt", "r");
         if (configFile) {
@@ -316,9 +317,7 @@ void loop()
         authCollectHeaders();
         wm.server->begin();
         wifiConnected = true;
-        MDNS.end();
-        MDNS.begin(WiFi.getHostname());
-        MDNS.addService("http", "tcp", 80);
+        mdnsStart(WiFi.getHostname());
         if (telnetEnabled) setupTelnet();
         esp_task_wdt_init(WDT_TIMEOUT, true);
         esp_task_wdt_add(NULL);
