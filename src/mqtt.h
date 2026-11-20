@@ -157,8 +157,12 @@ static void mqttPublishStates(bool force)
     mqttState("fume_fan_rpm",   String(cachedFumeFanRPM), force);
     mqttState("auger",          String(cachedAugerSpeed, 1), force);
     mqttState("brazier_minutes", stoveState == 4 && cachedBrazierCountdown >= 0 ? String(cachedBrazierCountdown) : String(""), force);
-    if (stoveState != UNKNOWN) mqttState("error_active",   onOff(confirmedCurrentError != 0), force);
-    if (stoveState != UNKNOWN) mqttState("error",          confirmedCurrentError ? getErrorCode(confirmedCurrentError) + " " + getErrorDesc(confirmedCurrentError) : String("none"), force);
+    if (stoveState != UNKNOWN) {
+        bool empty = !confirmedCurrentError && pelletsEmptyOff();   // the controller's own error (stoveCache.h)
+        mqttState("error_active",   onOff(confirmedCurrentError != 0 || empty), force);
+        mqttState("error",          confirmedCurrentError ? getErrorCode(confirmedCurrentError) + " " + getErrorDesc(confirmedCurrentError)
+                                    : empty ? String("PELLETS ") + PELLETS_EMPTY_DESC : String("none"), force);
+    }
     mqttState("low_pellets",    onOff(cachedLowPallet != 0), force);
     {
         // estimate until the low pellet alarm (pellets.h); empty = not known yet

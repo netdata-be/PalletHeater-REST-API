@@ -133,7 +133,7 @@ int arePalletsLow()
     // Pellet reserve, phase 2: once RAM 0x89 reached 0, RAM 0x91 counts down in steps of
     // 30 s until the stove switches off (seen 17/11/2026, "PELLET RESERVE xx'" on the
     // remote). Only meaningful in that phase, so only read then.
-    if (cachedPelletSensor == 5 && cachedPelletCounter == 0) readKeep(cachedPelletShutdown, ram, 0x91);
+    if (pc::reserveSensorLow(cachedPelletSensor) && cachedPelletCounter == 0) readKeep(cachedPelletShutdown, ram, 0x91);
     else cachedPelletShutdown = -1;
     return pc::pelletsLow(cachedPelletSensor, cachedPelletCounter);
 }

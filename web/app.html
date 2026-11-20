@@ -793,7 +793,7 @@ const I18N = {
     cqN:"Combustion quality {0}", pqN:"Pellet quality {0}", beepOn:"Beep enabled", beepOff:"Beep disabled", synced:"Stove clock synced", off:"Off",
     tTime:"Time", stateLines:"Stove state", histNothing:"Select at least one series above.",
     histNote:"One point every 2 minutes, last 24 hours, stored on the controller (kept across restarts). Temperatures in 0.5 °C steps. State lines are drawn at the exact moment of each change.",
-    evtTitle:"State changes, errors and pellet reserve", pelSensor:"Reserve sensor", pelCounter:"Reserve counter",
+    evtTitle:"State changes, errors and pellet reserve", pelSensor:"Reserve sensor", pelCounter:"Reserve counter", pelV0:"pellets OK", pelV5:"pellets low (reserve)", aEmpty:"Error: pellets used up – stove switched off", aEmptySub:"The pellet reserve ran out and the stove switched itself off. Switching on is blocked until the hopper is refilled (the level sensor sees pellets again).", emptyBlocked:"Refill the pellet hopper first", emptyOff:"empty · stove off", pelVx:"value {0} (meaning unknown)",
 pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low pellet alarm, the estimate follows at the next alarm", pelAtAlarm:"at the low pellet alarm level", pelKg:"≈ {0} kg until the alarm", pelAtNow:"{0} at the current power", pelAlarmAt:"alarm expected {0}", pelRefill:"Refilled…", pelLastRefill:"refilled {0} ({1} kg)", pelRefillAsk:"How many kg of pellets did you add? (a refill at the alarm is also detected by itself, with the standard amount)", pelBadKg:"Enter a number of kg", pelRefillDone:"{0} kg added", pelCal:"Pellet use (measured)", pelCalVal:"{0} cycle(s) · {1} kg/h now · standard refill {2} kg", pelCalNone:"no full cycle yet · standard refill {0} kg", pelStd:"Standard…", pelStdAsk:"Standard amount of a refill at the low pellet alarm (kg):", pelStdDone:"Standard refill: {0} kg", h_pelLeft:"Estimate of the pellets left until the low pellet alarm (level sensor in the hopper). The controller counts the auger feed (auger value × time). Between two alarms exactly the pellets you added were burned: that calibrates kg per auger step. A refill is detected when the alarm clears again, with the standard amount (15 kg, change it under Pellet use). Topped up without an alarm, or another amount? Use Refilled… so the count stays right. The first estimate comes after one refill at the alarm and the next alarm; more refills make it more accurate. The time at the current power is only shown while the auger feeds; the expected alarm time uses your average use of the last 7 days.",
     pelReserve:"Pellet reserve", pelReserveVal:"On · sensor {0} · counter {1}", h_pelReserve:"PELLET RESERVE (installer menu, EEPROM 0xC6). How the stove decides the reserve is being investigated: when the level sensor (RAM 0xA4) sees low pellets it becomes 5 and the counter (RAM 0x89) counts down from 20 to 0, about one step per minute (seen 17/11/2026: 20 steps in 19 min); at 1 or lower the alarm is assumed. The warning shows the minutes left while it counts down. Every change of both is recorded in the state change list.", evtError:"Error", evtErrOn:"{0} occurred", evtErrOff:"Error cleared", errSeen:"occurred {0}", errSeenUnknown:"time unknown (before the log started)", evtWhen:"Time", evtFrom:"From", evtTo:"To", evtDur:"Duration", evtNone:"No state changes recorded yet.", evtNow:"now",
     syncBrowser:"Set to browser time", browserSet:"Stove clock set to {0}", esStartOff:"OFF (no restart)", esNoRestart:"No automatic restart",
@@ -963,7 +963,7 @@ pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low 
     cqN:"Verbrandingskwaliteit {0}", pqN:"Pelletkwaliteit {0}", beepOn:"Zoemer aan", beepOff:"Zoemer uit", synced:"Kachelklok gelijkgezet", off:"Uit",
     tTime:"Tijd", stateLines:"Toestand kachel", histNothing:"Kies hierboven minstens één reeks.",
     histNote:"Eén punt per 2 minuten, laatste 24 uur, opgeslagen op de controller (blijft bewaard na een herstart). Temperaturen in stappen van 0,5 °C. Lijnen voor de toestand staan op het exacte moment van elke wissel.",
-    evtTitle:"Toestandswissels, fouten en pelletreserve", pelSensor:"Reservesensor", pelCounter:"Reserveteller",
+    evtTitle:"Toestandswissels, fouten en pelletreserve", pelSensor:"Reservesensor", pelCounter:"Reserveteller", pelV0:"pellets OK", pelV5:"pellets laag (reserve)", aEmpty:"Fout: pellets op – kachel uitgeschakeld", aEmptySub:"De pelletreserve is opgebruikt en de kachel heeft zichzelf uitgeschakeld. Aanzetten is geblokkeerd tot de pellettank bijgevuld is (de niveausensor ziet weer pellets).", emptyBlocked:"Vul eerst de pellettank bij", emptyOff:"leeg · kachel uit", pelVx:"waarde {0} (betekenis onbekend)",
 pelLeft:"Pellets in de bak", pelLearning:"wordt gemeten: vul bij bij het pellet-laag-alarm, de schatting volgt bij het volgende alarm", pelAtAlarm:"op het niveau van het pellet-laag-alarm", pelKg:"≈ {0} kg tot het alarm", pelAtNow:"{0} bij het huidige vermogen", pelAlarmAt:"alarm verwacht {0}", pelRefill:"Bijgevuld…", pelLastRefill:"bijgevuld {0} ({1} kg)", pelRefillAsk:"Hoeveel kg pellets heb je toegevoegd? (bijvullen bij het alarm wordt ook vanzelf herkend, met de standaardhoeveelheid)", pelBadKg:"Geef een aantal kg in", pelRefillDone:"{0} kg toegevoegd", pelCal:"Pelletverbruik (gemeten)", pelCalVal:"{0} cyclus/cycli · nu {1} kg/u · standaard bijvullen {2} kg", pelCalNone:"nog geen volledige cyclus · standaard bijvullen {0} kg", pelStd:"Standaard…", pelStdAsk:"Standaardhoeveelheid bij bijvullen na het pellet-laag-alarm (kg):", pelStdDone:"Standaard bijvullen: {0} kg", h_pelLeft:"Schatting van de pellets tot het pellet-laag-alarm (niveausensor in de bak). De controller telt de toevoer van de schroef (schroefwaarde × tijd). Tussen twee alarmen is precies verbrand wat je hebt bijgevuld: zo wordt het aantal kg per schroefstap geijkt. Bijvullen wordt herkend als het alarm weer uitgaat, met de standaardhoeveelheid (15 kg, aan te passen bij Pelletverbruik). Bijgevuld zonder alarm, of een andere hoeveelheid? Gebruik Bijgevuld…, zodat de telling klopt. De eerste schatting komt na één keer bijvullen bij het alarm en het volgende alarm; elke volgende keer maakt ze nauwkeuriger. De tijd bij het huidige vermogen staat er alleen terwijl de schroef voedt; het verwachte alarm gebruikt je gemiddelde verbruik van de laatste 7 dagen.",
     pelReserve:"Pelletreserve", pelReserveVal:"Aan · sensor {0} · teller {1}", h_pelReserve:"PELLET RESERVE (installateursmenu, EEPROM 0xC6). Hoe de kachel de reserve bepaalt, wordt nog onderzocht: als de niveausensor (RAM 0xA4) weinig pellets ziet, wordt hij 5 en telt de teller (RAM 0x89) af van 20 naar 0, ongeveer één stap per minuut (gezien 17/11/2026: 20 stappen in 19 min); bij 1 of lager wordt het alarm verondersteld. De waarschuwing toont de resterende minuten tijdens het aftellen. Elke wijziging van beide wordt bijgehouden in de lijst met toestandswissels.", evtError:"Fout", evtErrOn:"{0} opgetreden", evtErrOff:"Fout opgelost", errSeen:"opgetreden op {0}", errSeenUnknown:"tijdstip onbekend (vóór de start van het logboek)", evtWhen:"Tijdstip", evtFrom:"Van", evtTo:"Naar", evtDur:"Duur", evtNone:"Nog geen toestandswissels geregistreerd.", evtNow:"nu",
     syncBrowser:"Gelijkzetten met browsertijd", browserSet:"Kachelklok gezet op {0}", esStartOff:"OFF (geen herstart)", esNoRestart:"Geen automatische herstart",
@@ -1052,6 +1052,9 @@ function setLang(l) {
   applyStatic(); applyExpert(); if (state) render(state); renderTimers(); renderNext(); renderHistory(); renderEvents(); renderRemote(); renderAlerts(); if (liveReady) renderLive(); renderParams();
 }
 function t(key, ...a) { let s = (I18N[lang][key] ?? I18N.en[key] ?? key); a.forEach((v, i) => s = s.replace("{" + i + "}", v)); return s; }
+// The stove switched itself off at the end of the pellet reserve (controller error PELLETS):
+// switching on is refused until the hopper is refilled
+function pelletsEmpty(s) { return !!(s && ((s.pelletReserve && s.pelletReserve.switchedOff) || (s.currentError && s.currentError.error === "PELLETS"))); }
 function errDesc(e) { return lang === "nl" && ERR_NL[e.id] ? ERR_NL[e.id] : e.desc; }
 
 let theme = (() => { try { const v = localStorage.getItem("theme"); return v === "light" || v === "dark" ? v : "auto"; } catch (_) { return "auto"; } })();
@@ -1316,6 +1319,7 @@ $("beep").onchange = e => write(e.target.checked ? t("beepOn") : t("beepOff"), "
 $("powerBtn").onclick = async () => {
   if (!state) return;
   const on = !state.stoveState.poweredOn;
+  if (on && pelletsEmpty(state)) return;   // blocked (also refused by the firmware: 409)
   if (!on && !confirm(t("confirmOff"))) return;
   $("powerBtn").disabled = true;
   try { await write(on ? t("powerOnSent") : t("powerOffSent"), "POST", "/api/power", { state: on ? "on" : "off" }); } catch (_) {}
@@ -2121,9 +2125,11 @@ function renderAlerts() {
   if (peShown) add([1, 2, 3, 5, 6].includes(code) ? "warning" : "critical", t("aPending", pe.error, pe.secondsLeft), t("aPendingSub", errDesc(pe)));
   // pellets: the level sensor (RAM 0xA4 = 5) starts a countdown (RAM 0x89, ~1 per minute) to the reserve alarm
   const pr = state.pelletReserve || {};
-  if (pr.shutdownMinutes != null) add("critical", t("aLow"), t("aLowOff", pr.shutdownMinutes));   // phase 2: the stove switches off
+  const prLow = pr.sensor === 5 || pr.sensor === 4;   // 4: seen briefly during the reserve, countdown goes on
+  if (pelletsEmpty(state)) add("critical", t("aEmpty"), t("aEmptySub"));                         // the stove switched itself off
+  else if (pr.shutdownMinutes != null) add("critical", t("aLow"), t("aLowOff", pr.shutdownMinutes));   // phase 2: the stove switches off
   else if (state.lowPalletAlarm) add("warning", t("aLow"), t("aLowSub"));
-  else if (pr.sensor === 5 && pr.minutesLeft > 0) add("warning", t("aLow"), t("aLowMin", pr.minutesLeft));
+  else if (prLow && pr.minutesLeft > 0) add("warning", t("aLow"), t("aLowMin", pr.minutesLeft));
   const age = state.dataAge ? state.dataAge.fastSeconds : null;
   if (age !== null && age !== undefined && age > 30) add("warning", t("aStale", age), t("aStaleSub"));
 }
@@ -2163,7 +2169,9 @@ function render(s) {
       : STATE_HINT[lang][code] || "";
   }
   const pb = $("powerBtn");
-  pb.disabled = code === -1; pb.textContent = st.poweredOn ? t("turnOff") : t("turnOn"); pb.className = "big " + (st.poweredOn ? "stop" : "go");
+  const emptyBlock = !st.poweredOn && pelletsEmpty(s);
+  pb.disabled = code === -1 || emptyBlock; pb.textContent = st.poweredOn ? t("turnOff") : t("turnOn"); pb.className = "big " + (st.poweredOn ? "stop" : "go");
+  pb.title = emptyBlock ? t("emptyBlocked") : "";
 
   // Which sensor does the room temperature (RAM 0x01) come from? The MULTICOMFORT
   // setting is not readable, so derive it from the readings.
@@ -2224,15 +2232,16 @@ function render(s) {
     [t("fumeFan"), (s.fumeFanRPM ?? "–") + " rpm", true],
     [t("auger"), (s.augerSpeed ?? "–") + " rpm", true],
     [withHelp(t("brazier"), "h_brazier"), brazierText(s.brazierCleaning), true],
-    [t("pelletLevel"), s.lowPalletAlarm == null ? "–" : s.pelletReserve && s.pelletReserve.shutdownMinutes != null ? pill(t("lowOff", s.pelletReserve.shutdownMinutes), "err")
+    [t("pelletLevel"), s.lowPalletAlarm == null ? "–" : s.pelletReserve && s.pelletReserve.switchedOff ? pill(t("emptyOff"), "err")
+      : s.pelletReserve && s.pelletReserve.shutdownMinutes != null ? pill(t("lowOff", s.pelletReserve.shutdownMinutes), "err")
       : s.lowPalletAlarm ? pill(t("low"), "err")
-      : s.pelletReserve && s.pelletReserve.sensor === 5 && s.pelletReserve.minutesLeft > 0 ? pill(t("lowSoon", s.pelletReserve.minutesLeft), "warn") : pill(t("ok"), "ok")],
+      : s.pelletReserve && [4, 5].includes(s.pelletReserve.sensor) && s.pelletReserve.minutesLeft > 0 ? pill(t("lowSoon", s.pelletReserve.minutesLeft), "warn") : pill(t("ok"), "ok")],
     [withHelp(t("pelLeft"), "h_pelLeft"), pelletsLeft(s.pellets)],
     [t("pelCal"), pelletsCal(s.pellets), true],
     [withHelp(t("pelReserve"), "h_pelReserve"), !s.pelletReserve ? "–" : (s.pelletReserve.enabled === false ? t("off")
       : t("pelReserveVal", s.pelletReserve.sensor ?? "–", s.pelletReserve.counter ?? "–")
-        + (s.pelletReserve.shutdownMinutes != null ? " · " + t("pelOffIn", s.pelletReserve.shutdownMinutes)
-           : s.pelletReserve.sensor === 5 && s.pelletReserve.minutesLeft != null ? " · " + t("pelMinLeft", s.pelletReserve.minutesLeft) : "")), "d"],
+        + (s.pelletReserve.switchedOff ? " · " + t("emptyOff") : s.pelletReserve.shutdownMinutes != null ? " · " + t("pelOffIn", s.pelletReserve.shutdownMinutes)
+           : [4, 5].includes(s.pelletReserve.sensor) && s.pelletReserve.minutesLeft != null ? " · " + t("pelMinLeft", s.pelletReserve.minutesLeft) : "")), "d"],
     [t("remoteSeen"), s.RemoteControlLastSeen != null && s.RemoteControlLastSeen >= 0 ? t("secAgo", s.RemoteControlLastSeen) : "–"],
   ];
   if (s.hydro) rows.push([t("waterPres"), s.hydro.Pressure], [t("waterTemp"), fmtTemp(s.hydro.Temp)]);
@@ -2689,7 +2698,7 @@ function renderLcd() {
 
   // ----- status screens -----
   if (code === -1) { lcd.append(lcdIcon("signal", 40), el("div", "msg", L("TOESTEL NIET GEVONDEN", "DEVICE NOT FOUND"))); lcd.firstChild.classList.add("cic"); return; }
-  if (state.currentError || [8, 10].includes(code)) {
+  if ((state.currentError && state.currentError.error !== "PELLETS") || [8, 10].includes(code)) {   // PELLETS: the controller's own, not on the remote
     const row = el("div", "row1"); row.append(lcdIcon("warn", 44), lcdBig(state.currentError ? state.currentError.error : "!", "huge"));
     lcd.appendChild(row); return;
   }
@@ -3077,9 +3086,13 @@ function renderEvents() {
     for (let j = i + 1; j < events.length; j++) { const n = events[j]; if ((n.type || "state") === kind && (kind !== "pellet" || n.register === e.register)) { next = n; break; } }
     const dur = fmtDur(Math.max(0, (next ? next.t : now) - e.t)) + (next ? "" : " (" + t("evtNow") + ")");
     const pelName = e.register === "0xA4" ? t("pelSensor") : t("pelCounter");
+    // RAM 0xA4: 0 = enough pellets, 5 = low (reserve countdown runs); 4 seen briefly
+    // (20/11/2026, ~40 s, twice during the reserve): meaning not known
+    const pelVal = (ev, to) => { const v = to ? ev.to : ev.from; return v == null ? "–" : ev.register !== "0xA4" ? String(v)
+                                 : v === 0 ? t("pelV0") : v === 5 ? t("pelV5") : t("pelVx", v); };
     const cells = kind === "link" ? [t("evtLink"), t(e.up ? "evLinkUp" : "evLinkDown"), e.up ? "" : dur]
                 : isErr ? [t("evtError"), e.id ? t("evtErrOn", e.error) : t("evtErrOff"), e.id ? dur : ""]
-                : kind === "pellet" ? [pelName + " " + (e.from ?? "–"), pelName + " " + e.to, dur]
+                : kind === "pellet" ? [pelName + ": " + pelVal(e), pelName + ": " + pelVal(e, true), dur]
                 : [name(e.from), name(e.to), dur];
     [fmtDate(d) + " " + fmtHM(d) + ":" + pad(d.getSeconds()), ...cells].forEach(x => tr.appendChild(el("td", "", x)));
     if ((isErr && e.id) || (kind === "link" && !e.up) || (kind !== "link" && [8, 9, 10].includes(e.to))) tr.style.color = "var(--err)";

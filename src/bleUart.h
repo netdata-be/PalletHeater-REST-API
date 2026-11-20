@@ -881,7 +881,8 @@ void bleLoop() {
             bool ok = true;
             if (job.kind == BW_POWER) {
                 const int cachedState = stoveState;
-                if      (v == 1 && cachedState == OFF)
+                if      (v == 1 && pelletsEmptyOff()) { ok = false; LOGW("stove", "switch on refused (Bluetooth app): pellets used up, refill the hopper first"); }
+                else if (v == 1 && cachedState == OFF)
                     ok = stove.write(ram, stoveStateAddr, 1);
                 else if (v == 0 && (cachedState == IGNITION || cachedState == WORKING || cachedState == ALARM))
                     ok = stove.write(ram, stoveStateAddr, 6);

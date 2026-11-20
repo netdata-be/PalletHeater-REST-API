@@ -106,6 +106,8 @@ static void test_pellets_low()
     TEST_ASSERT_EQUAL_INT(1, pc::pelletsLow(5, 0));
     TEST_ASSERT_EQUAL_INT(0, pc::pelletsLow(5, -1));   // counter not read
     TEST_ASSERT_EQUAL_INT(0, pc::pelletsLow(0, 0));
+    TEST_ASSERT_EQUAL_INT(1, pc::pelletsLow(4, 0));    // 4: seen briefly during the reserve
+    TEST_ASSERT_EQUAL_INT(0, pc::pelletsLow(4, 20));
 }
 static void test_error_confirm_prewarning_ignored()
 {

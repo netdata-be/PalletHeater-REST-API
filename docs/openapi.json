@@ -395,6 +395,16 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "description": "Switch on refused: pellets used up (the stove switched itself off at the end of the pellet reserve); refill the hopper first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PowerResult"
+                }
+              }
+            }
           }
         }
       }
@@ -4731,12 +4741,26 @@
               "sensor": {
                 "type": "integer",
                 "nullable": true,
-                "description": "RAM 0xA4, 5 = reserve sensor active"
+                "description": "RAM 0xA4: 0 = enough pellets, 5 = low; 4 seen briefly during a reserve (counts as low)"
               },
               "counter": {
                 "type": "integer",
                 "nullable": true,
                 "description": "RAM 0x89, alarm assumed at <= 1"
+              },
+              "minutesLeft": {
+                "type": "integer",
+                "nullable": true,
+                "description": "Minutes until the reserve alarm while the sensor reports low pellets (RAM 0x89)"
+              },
+              "shutdownMinutes": {
+                "type": "integer",
+                "nullable": true,
+                "description": "After the countdown: minutes until the stove switches itself off (RAM 0x91 / 2); the stove runs at flame power 1 meanwhile"
+              },
+              "switchedOff": {
+                "type": "boolean",
+                "description": "true once the stove switched itself off because the pellet reserve ran out"
               }
             }
           },

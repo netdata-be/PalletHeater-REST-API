@@ -55,6 +55,13 @@ void getStatus()
         ce["error"]  = "LINK";
         ce["desc"]   = "No answer from the stove (serial link down)";
         ce["source"] = "controller";
+    } else if (confirmedCurrentError == 0 && slowOk && pelletsEmptyOff()) {
+        // not a stove error code: the controller's own (id -2), see stoveCache.h
+        JsonObject ce = json.createNestedObject("currentError");
+        ce["id"]     = -2;
+        ce["error"]  = "PELLETS";
+        ce["desc"]   = PELLETS_EMPTY_DESC;
+        ce["source"] = "controller";
     } else if (confirmedCurrentError == 0) {
         json["currentError"] = false;
     } else {
@@ -111,9 +118,12 @@ void getStatus()
         if (cachedPelletCounter >= 0) pr["counter"] = cachedPelletCounter; else pr["counter"] = nullptr; // RAM 0x89
         // RAM 0x89 counts down 20 -> 0, about 1 per minute, from the moment the level sensor
         // (RAM 0xA4) reports low pellets (seen 17/11/2026): minutes until the reserve alarm
-        if (slowOk && cachedPelletSensor == 5 && cachedPelletCounter >= 0) pr["minutesLeft"] = cachedPelletCounter; else pr["minutesLeft"] = nullptr;
+        if (slowOk && pc::reserveSensorLow(cachedPelletSensor) && cachedPelletCounter >= 0) pr["minutesLeft"] = cachedPelletCounter; else pr["minutesLeft"] = nullptr;
         // phase 2: RAM 0x91 counts half minutes until the stove switches off
-        if (slowOk && cachedPelletShutdown >= 0) pr["shutdownMinutes"] = (cachedPelletShutdown + 1) / 2; else pr["shutdownMinutes"] = nullptr;
+        // after the switch-off (20/11/2026): 0x91 = 0 and the stove in final cleaning / off
+        bool reserveOff = slowOk && pelletsEmptyOff();
+        pr["switchedOff"] = reserveOff;   // the stove switched itself off: pellets used up
+        if (slowOk && cachedPelletShutdown >= 0 && !reserveOff) pr["shutdownMinutes"] = (cachedPelletShutdown + 1) / 2; else pr["shutdownMinutes"] = nullptr;
     }
     pelletsJson(json.createNestedObject("pellets"), false);   // estimate until the low pellet alarm (pellets.h)
     KNOWN(slowOk, json["stoveBeepEnabled"], cachedBeepEnabled);

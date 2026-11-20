@@ -550,3 +550,30 @@ Observations, not verified:
 - 0xE9 always held a value from 0 to 59 and changed between dumps; possibly the minutes of
   one of these hour counters.
 - 0xEC / 0xED held the same values as 0xEA / 0xEB in every dump.
+
+### Pellet reserve run to the end (20/11/2026)
+
+The stove was working at flame power 3 (auger 6.2, fume fan 2040 rpm). From the event log,
+the 2-minute history and RAM read after the switch-off:
+
+| Time     | What happened |
+|----------|---------------|
+| 07:51:24 | RAM 0xA4 0 → 5 (level sensor: pellets low); RAM 0x89 starts counting down from 20 |
+| 08:03:38 | RAM 0xA4 5 → 4, back to 5 at 08:04:15 (37 s) |
+| ~08:11   | 0x89 reaches 0 (20 min after the sensor), so phase 2 starts. In the same 2-minute sample the stove lowered the actual flame power from 3 to 1 by itself (auger 6.2 → 3.0, fume fan 2040 → 1590 rpm); the set flame power stayed 3 |
+| 08:34:46 | RAM 0xA4 5 → 4, back to 5 at 08:35:25 (39 s) |
+| 08:41:48 | State 4 → 6 (final cleaning): the stove switched itself off, 30 min after phase 2 started and 50 min 24 s after the sensor first went to 5 |
+
+Confirmed:
+- After the reserve countdown (0x89) reaches 0, the stove runs 30 more minutes and then
+  switches off (RAM 0x91 = half minutes until the switch-off).
+- During those 30 minutes the stove runs at actual flame power 1, whatever flame power is set.
+- The switch-off is not stored as an error: RAM 0x33 = 0 and the error memory did not change.
+  After it: 0x21 = 6, 0xA4 = 5, 0x89 = 0, 0x91 = 0, 0xC7 = 2.
+- The short 0xA4 = 4 episodes did not reset or pause the countdown. The switch-off came
+  exactly 20 + 30 min after the sensor first went to 5.
+
+Not known: what 0xA4 = 4 means. It lasted about 40 s twice, once in each phase. In binary,
+4 is 5 with bit 0 cleared; a hypothesis is that bit 0 is the sensor itself and bit 2 the
+reserve that stays latched, but this is not verified. 0xC7 was 1 → 0 during the countdown on
+17/11 and 2 after this switch-off; its meaning is not known.

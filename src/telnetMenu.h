@@ -928,7 +928,8 @@ static void telnetHandleConfigInput(const String& input)
         case CF_POWER:
             if (input == "on") {
                 getStoveState();
-                ok = (stoveState == OFF)
+                ok = pelletsEmptyOff() ? (tpl("Refused: pellets used up - refill the hopper first."), false)
+                   : (stoveState == OFF)
                     ? stove.write(ram, stoveStateAddr, 1)
                     : (tpl("Already on."), true);
             } else if (input == "off") {

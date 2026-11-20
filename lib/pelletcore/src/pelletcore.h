@@ -85,11 +85,15 @@ inline int roomFanIsRunning(int power, int flagD3)
 }
 
 // ── Pellet reserve ─────────────────────────────────────────────────────────
-// Not verified: alarm assumed when the sensor (RAM 0xA4) is 5 and the counter
+// RAM 0xA4: 0 = enough pellets, 5 = low (the reserve countdown in RAM 0x89 runs). 4 was seen
+// for ~40 s twice during a reserve (20/11/2026); the countdown went on unchanged, so 4 counts
+// as "reserve active" too (its own meaning is not known).
+inline bool reserveSensorLow(int sensor) { return sensor == 5 || sensor == 4; }
+// Not verified: alarm assumed when the sensor (RAM 0xA4) is low and the counter
 // (RAM 0x89) has run down to <= 1.
 inline int pelletsLow(int sensor, int counter)
 {
-    return sensor == 5 && counter >= 0 && counter <= 1 ? 1 : 0;
+    return reserveSensorLow(sensor) && counter >= 0 && counter <= 1 ? 1 : 0;
 }
 
 // ── Errors ─────────────────────────────────────────────────────────────────

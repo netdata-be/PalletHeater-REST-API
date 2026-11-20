@@ -149,7 +149,7 @@ static String stateChangeReason(int from, int to)
         if (recent && (lastStateWriteVal == 6 || lastStateWriteVal == 0)) snprintf(b, sizeof(b), "switched off by %s", lastStateWriteSrc);
         // pellet reserve phase 2 (level sensor 0xA4 = 5, countdown 0x89 at 0, 0x91 running):
         // the stove switches itself off when the PELLET RESERVE time is over
-        else if (cachedPelletSensor == 5 && cachedPelletCounter == 0)
+        else if (pc::reserveSensorLow(cachedPelletSensor) && cachedPelletCounter == 0)
             snprintf(b, sizeof(b), "pellet reserve finished: pellets used up (PELLET RESERVE countdown ended)");
         else if (t >= 0) snprintf(b, sizeof(b), "timer PR%d (off at %02d:%02d)", t + 1, cachedTimerOffVal[t] * 10 / 60, cachedTimerOffVal[t] * 10 % 60);
         else snprintf(b, sizeof(b), "on the remote control or by the stove itself");

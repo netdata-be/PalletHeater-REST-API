@@ -306,6 +306,12 @@ String doStoveOff(int &http_code)
 String doStoveOn(int &http_code)
 {
     http_code = 200;
+    if (pelletsEmptyOff())
+    {
+        http_code = 409;
+        LOGW("stove", "switch on refused (%s): pellets used up, refill the hopper first", cmdSource[0] ? cmdSource : clientIp().c_str());
+        return "Refused: pellets used up (the stove switched itself off at the end of the pellet reserve) - refill the hopper first";
+    }
     if (stoveState == OFF)
     {
         if (stove.write(ram, stoveStateAddr, 1)) return "Powered on sent";

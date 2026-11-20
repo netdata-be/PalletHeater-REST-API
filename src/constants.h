@@ -363,6 +363,16 @@ int cachedLowPallet = 0;
 int cachedPelletSensor = -1;      // RAM 0xA4, -1 = not read yet
 int cachedPelletCounter = -1;     // RAM 0x89
 int cachedPelletShutdown = -1;    // RAM 0x91: pellet reserve, half minutes until the stove switches off (only read in that phase)
+// The stove switched itself off because the pellet reserve ran out (20/11/2026: 30 min after
+// the countdown RAM 0x89 reached 0, RAM 0x91 = 0, then final cleaning and off). The stove
+// stores no error for it; the controller reports it as one (PELLETS) and refuses to switch
+// the stove on until the hopper is refilled (the level sensor RAM 0xA4 back to 0 clears it).
+static bool pelletsEmptyOff()
+{
+    return cachedPelletShutdown == 0 && (stoveState == 6 || stoveState == 0);
+}
+static const char* PELLETS_EMPTY_DESC = "Pellets used up: the stove switched itself off at the end of the pellet reserve - refill the hopper";
+
 int cachedPelletReserveOn = -1;   // EEPROM 0xC6
 bool cachedBeepEnabled = false;
 int cachedNumberOfStarts = 0;
