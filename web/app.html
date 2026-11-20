@@ -640,6 +640,12 @@ button.mini{padding:1px 8px;font-size:11px;font-weight:550;border-radius:7px;mar
     <h2><span><span data-i="parTitle"></span><span data-help="par"></span></span><span class="keybtns"><span class="muted" id="parAge" style="text-transform:none;letter-spacing:0;font-weight:400;align-self:center"></span><button id="parReload" data-i="reload"></button></span></h2>
     <div class="tsub" data-i="parPresets"></div>
     <div class="hypwrap"><table class="hyp" id="parPresetTable"></table></div>
+    <div class="tsub" data-i="parPhases" style="margin-top:14px"></div>
+    <div class="hypwrap"><table class="hyp" id="parPhaseTable"></table></div>
+    <div class="tsub" data-i="parUser" style="margin-top:14px"></div>
+    <div class="hypwrap"><table class="hyp" id="parUserTable"></table></div>
+    <div class="tsub" data-i="parTimers" style="margin-top:14px"></div>
+    <div class="hypwrap"><table class="hyp" id="parTimerTable"></table></div>
     <p class="muted" style="font-size:12px;margin:8px 0 0" data-i="parNote"></p>
   </section>
 </main>
@@ -720,9 +726,9 @@ const I18N = {
     mqttNone:"Not available (older firmware)", mqttOff:"Off", mqttConnected:"Connected to {0} – topics {1}/…", mqttDisconnected:"Not connected to {0}: {1}", mqttPassKeep:"unchanged", mqttSaved:"MQTT settings saved", cancel:"Cancel",
     h_mqtt:"Publishes the stove values to an MQTT broker and accepts commands. Values are plain text under <prefix>/state/… (e.g. room_temp = 21.5, power = ON), retained, on change and every 5 min. Commands go to <prefix>/set/…: power and energy_saving (ON / OFF or 1 / 0), mode (heat / off), setpoint (7 – 30), flame_power (1 – 4), fan_speed (off / 0 – 3), es_stop and es_start (0 – 3). <prefix>/status is online / offline. With Home Assistant discovery on, the stove appears in Home Assistant by itself (climate, switches, numbers, sensors). Other systems such as Loxone (through an MQTT gateway) or Node-RED use the same topics; discovery can stay off for them.",
     parTitle:"Parameters (EEPROM)", h_par:"Presets stored in the stove EEPROM, read live (GET /api/dump). 'Verified' = checked on this stove. The presets per power level are the values the stove uses at each flame power; the row of the current actual flame power is highlighted.",
-    parPresets:"Presets per power level", parLevel:"Level", parAuger:"Auger value", parFume:"Fume fan target", parNow:"now",
+    parPresets:"Presets per phase and power level", parPhases:"Start-up, cleaning and alarm (installer parameters Pr01 – Pr22 at EEPROM address Pr − 1, as in the Micronova L023 manual)", parCReg:"Register", parCManual:"In the manual", parCName:"Meaning", parCVal:"Value", parUser:"Settings (menu parameter id = EEPROM address + 1)", parCMenu:"Menu parameter", parTimers:"Timer programs (from /api/timers)", parCProg:"Program", parCOn:"On", parCOff:"Off", parCDays:"Days", parCSet:"Temp.", parCFlame:"Flame", parCFan:"Fan", parLevel:"Level", parAuger:"Auger value", parFume:"Fume fan target", parNow:"now",
     stOk:"verified",
-    parNote:"Read once when debug mode is turned on; 'Reload' reads them again (16 EEPROM reads, a few seconds). Fume fan rpm = (value + 25) × 10. The live fume fan target is RAM 0x36, 1 – 2 below the preset (possibly the combustion quality correction).",
+    parNote:"Read once when debug mode is turned on; 'Reload' reads them again (about 45 EEPROM reads, a few seconds). Fume fan rpm = (value + 25) × 10. The live fume fan target is RAM 0x36, 1 – 2 below the preset (possibly the combustion quality correction).",
     expert:"Expert", expertTitle:"Show technical details: sensors, brazier cleaning, controller info, firmware upload, API links",
     debug:"Debug", debugTitle:"Show research and diagnostics: raw RAM / EEPROM registers, the parameter table, serial errors, telnet",
     stHyp:"hypothesis", stUnk:"unknown",
@@ -890,9 +896,9 @@ pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low 
     mqttNone:"Niet beschikbaar (oudere firmware)", mqttOff:"Uit", mqttConnected:"Verbonden met {0} – topics {1}/…", mqttDisconnected:"Niet verbonden met {0}: {1}", mqttPassKeep:"ongewijzigd", mqttSaved:"MQTT-instellingen bewaard", cancel:"Annuleren",
     h_mqtt:"Publiceert de waarden van de kachel naar een MQTT-broker en aanvaardt commando's. Waarden staan als gewone tekst onder <prefix>/state/… (bv. room_temp = 21.5, power = ON), retained, bij elke wijziging en elke 5 min. Commando's gaan naar <prefix>/set/…: power en energy_saving (ON / OFF of 1 / 0), mode (heat / off), setpoint (7 – 30), flame_power (1 – 4), fan_speed (off / 0 – 3), es_stop en es_start (0 – 3). <prefix>/status is online / offline. Met Home Assistant discovery aan verschijnt de kachel vanzelf in Home Assistant (thermostaat, schakelaars, getallen, sensoren). Andere systemen zoals Loxone (via een MQTT-gateway) of Node-RED gebruiken dezelfde topics; discovery mag voor hen uit.",
     parTitle:"Parameters (EEPROM)", h_par:"Presets in het EEPROM van de kachel, live gelezen (GET /api/dump). 'Bevestigd' = nagekeken op deze kachel. De presets per vermogen zijn de waarden die de kachel per vlamvermogen gebruikt; de rij van het huidige werkelijke vlamvermogen is gemarkeerd.",
-    parPresets:"Presets per vermogen", parLevel:"Niveau", parAuger:"Schroefwaarde", parFume:"Doeltoerental rookgasventilator", parNow:"nu",
+    parPresets:"Presets per fase en vermogen", parPhases:"Opstart, reiniging en alarm (installateursparameters Pr01 – Pr22 op EEPROM-adres Pr − 1, zoals in de Micronova L023-handleiding)", parCReg:"Register", parCManual:"In de handleiding", parCName:"Betekenis", parCVal:"Waarde", parUser:"Instellingen (menuparameter-id = EEPROM-adres + 1)", parCMenu:"Menuparameter", parTimers:"Timerprogramma's (uit /api/timers)", parCProg:"Programma", parCOn:"Aan", parCOff:"Uit", parCDays:"Dagen", parCSet:"Temp.", parCFlame:"Vlam", parCFan:"Ventilator", parLevel:"Niveau", parAuger:"Schroefwaarde", parFume:"Doeltoerental rookgasventilator", parNow:"nu",
     stOk:"bevestigd",
-    parNote:"Eén keer gelezen als debug aangezet wordt; 'Herladen' leest ze opnieuw (16 EEPROM-lezingen, enkele seconden). Toerental rookgasventilator = (waarde + 25) × 10. Het live doeltoerental is RAM 0x36, 1 – 2 lager dan de preset (mogelijk de correctie van de verbrandingskwaliteit).",
+    parNote:"Eén keer gelezen als debug aangezet wordt; 'Herladen' leest ze opnieuw (±45 EEPROM-lezingen, enkele seconden). Toerental rookgasventilator = (waarde + 25) × 10. Het live doeltoerental is RAM 0x36, 1 – 2 lager dan de preset (mogelijk de correctie van de verbrandingskwaliteit).",
     expert:"Expert", expertTitle:"Toon technische details: sensoren, branderreiniging, controllerinfo, firmware-upload, API-links",
     debug:"Debug", debugTitle:"Toon onderzoek en diagnose: ruwe RAM- / EEPROM-registers, de parametertabel, seriële fouten, telnet",
     stHyp:"vermoeden", stUnk:"onbekend",
@@ -2507,7 +2513,7 @@ function renderTimers() {
   for (const [name, tm] of Object.entries(timersData)) wrap.appendChild(timerCard(name, tm));
 }
 async function loadTimers() {
-  try { const { data } = await api("GET", "/api/timers"); timersData = data.timers; renderTimers(); renderNext(); if (hist) renderHistory(); }   // timer bands
+  try { const { data } = await api("GET", "/api/timers"); timersData = data.timers; renderTimers(); renderNext(); if (hist) renderHistory(); renderParams(); }   // timer bands
   catch (e) { $("timers").innerHTML = ""; $("timers").appendChild(el("p", "muted", t("timersErr", e.message))); }
 }
 $("reloadTimers").onclick = () => { timersData = null; renderTimers(); loadTimers(); };
@@ -3356,49 +3362,114 @@ function applyReach() {
 // st: ok = verified on this stove, h = hypothesis, u = unknown meaning.
 const rpmOf = v => (v + 25) * 10;   // fume fan encoding, same as RAM 0x36 / 0x37
 const PRESET_ROWS = [   // [label, auger addr, fume fan addr, 0x86-0x89 addr, flame level]
-  [() => L("Ontsteking", "Ignition"), 0x04, 0x10, null, null],
+  [() => L("Pellets laden (start fase I)", "Pellet load (start phase I)"), 0x03, 0x0F, null, null],
+  [() => L("Start fase II", "Start phase II"), 0x04, 0x10, null, null],
   [() => L("Vlam 1", "Flame 1"), 0x05, 0x11, 0x86, 1],
   [() => L("Vlam 2", "Flame 2"), 0x06, 0x12, 0x87, 2],
   [() => L("Vlam 3", "Flame 3"), 0x07, 0x13, 0x88, 3],
   [() => L("Vlam 4", "Flame 4"), 0x08, 0x14, 0x89, 4],
   [() => L("Niveau 5 (ongebruikt)", "Level 5 (unused)"), 0x09, 0x15, null, null],
 ];
+// Installer parameters at EEPROM address Pr - 1, with the name from the Micronova L023 manual
+// (English parameter table; Pr40 / Pr41 sit at other addresses on this stove). 0x0C / 0x0E do
+// not fit the manual's range (unit not known): shown as stored.
+const PHASE_PARAMS = [   // [address, name in the manual, our description, value format]
+  [0x21, "Pr40 · Feeder screw motor ON time during pre-loading phase", () => L("Pellets voorladen", "Pellet pre-load"), v => v + " s"],
+  [0x20, "Pr41 · Wait time after pre-loading", () => L("Wachten na het voorladen", "Wait after the pre-load"), v => v + " s"],
+  [0x00, "Pr01 · Maximum time for ignition cycle", () => L("Maximale ontstekingstijd", "Max. ignition time"), v => v + " min"],
+  [0x01, "Pr02 · Time for start up", () => L("Duur start fase II", "Duration of start phase II"), v => v + " min"],
+  [0x0C, "Pr13 · Minimum flue temperature to consider stove on", () => L("Rookgastemperatuur 'kachel aan'", "Fume temperature 'stove on'"), null],
+  [0x0D, "Pr14 · Flue temperature to pass to ECO-MODULA mode", () => L("Rookgastemperatuur die moduleren afdwingt", "Fume temperature that forces modulation"), v => v + " °C"],
+  [0x0E, "Pr15 · Flue temperature threshold for exchanger switch-on", () => L("Rookgastemperatuur voor de ventilator", "Fume temperature for the room fan"), null],
+  [0x02, "Pr03 · Interval of time between two ashpan cleanings", () => L("Interval branderreiniging", "Brazier cleaning interval"), v => v + " min"],
+  [0x0B, "Pr12 · Duration ashpan cleaning", () => L("Duur branderreiniging", "Brazier cleaning time"), v => v + " s"],
+  [0x0A, "Pr11 · Alarm delay", () => L("Alarmvertraging", "Alarm delay"), v => v + " s"],
+];
+// User settings in EEPROM (docs/discovered-values.md); the menu parameter id is address + 1
+// (verified 16/11/2026), except pellet quality: id 198 is read from 0xBC
+const USER_PARAMS = [   // [address, menu id, description, value format]
+  [0x7D, 126, () => L("Gewenste temperatuur", "Set point"), v => v + " °C"],
+  [0x7F, 128, () => L("Vlamvermogen", "Flame power"), v => String(v)],
+  [0x81, 130, () => L("Ventilator (Multifuoco)", "Room fan (Multifuoco)"), v => v ? String(v) : L("uit", "off")],
+  [0x90, 145, () => "Energy saving stop", v => "+" + v + " °C"],
+  [0x91, 146, () => L("Energy saving herstart", "Energy saving restart"), v => v ? "−" + v + " °C" : L("geen herstart", "no restart")],
+  [0xC0, 193, () => L("Verbrandingskwaliteit", "Combustion quality"), v => CQ_RAW[v] || "#" + v],
+  [0xBC, 198, () => L("Pelletkwaliteit", "Pellet quality"), v => (v - 5 > 0 ? "+" : "") + (v - 5)],
+  [0xC6, 199, () => L("Pelletreserve", "Pellet reserve"), v => v ? L("aan", "on") : L("uit", "off")],
+  [0xC4, 197, () => L("Contact pellet", "Pellet contact"), v => v ? "N.C." : "N.O."],
+  [0x48, 73, () => L("Externe thermostaat: werking", "External thermostat: action"), v => v ? "Stop" : L("Moduleren", "Modulate")],
+  [0x49, 74, () => L("Externe thermostaat: contact", "External thermostat: contact"), v => v ? "N.C." : "N.O."],
+  [0x4B, 76, () => L("Zoemer", "Beep"), v => v ? L("aan", "on") : L("uit", "off")],
+  [0x4F, 80, () => L("Taal afstandsbediening", "Remote language"), v => LCD_LANG[v] || "#" + v],
+];
+const TIMER_BASE = { PR1: 0x3C, PR2: 0x50, PR3: 0x58, PR4: 0x60, PR5: 0x68, PR6: 0x70 };   // enabled at base, then on / off / temp / flame / fan
 let parVals = {}, parAt = 0, parBusy = false;
 const hx = a => "0x" + a.toString(16).toUpperCase().padStart(2, "0");
-function stPill(st) {
-  const lbl = { ok: "stOk", h: "stHyp", u: "stUnk" }[st];
-  return pill(t(lbl), st === "ok" ? "ok" : st === "h" ? "warn" : "");
-}
 function renderParams() {
   if (!debug) return;
-  const get = a => parVals[a];
+  const get = a => parVals[a] === undefined || parVals[a] < 0 ? undefined : parVals[a];   // -1 = read failed
   // presets per power level
   const pt = $("parPresetTable"); pt.innerHTML = "";
   const head = el("tr");
-  [t("parLevel"), t("parAuger") + " (0x04 – 0x09)", t("parFume") + " (0x10 – 0x15)", "0x86 – 0x89"].forEach(h => head.appendChild(el("th", "", h)));
+  [t("parLevel"), t("parAuger") + " (0x03 – 0x09 · Pr04 – Pr10)", t("parFume") + " (0x0F – 0x15 · Pr16 – Pr22)", "0x86 – 0x89"].forEach(h => head.appendChild(el("th", "", h)));
   const th = el("thead"); th.appendChild(head); pt.appendChild(th);
   const tb = el("tbody"), cur = state && state.flame ? state.flame.actual : null;
   for (const [lbl, aAug, aFan, aX, lvl] of PRESET_ROWS) {
     const tr = el("tr", lvl && lvl === cur ? "cur" : "");
     const va = get(aAug), vf = get(aFan), vx = aX !== null ? get(aX) : undefined;
     tr.append(el("td", "", lbl() + (lvl && lvl === cur ? " ← " + t("parNow") : "")),
-      el("td", "n", va === undefined ? "–" : (va / 10).toFixed(1)),
+      el("td", "n", va === undefined ? "–" : (va / 10).toFixed(1) + " s · " + augerPct(va / 10) + " %"),
       el("td", "n", vf === undefined ? "–" : rpmOf(vf) + " rpm (" + vf + ")"),
       el("td", "n", aX === null ? "" : vx === undefined ? "–" : String(vx)));
     tb.appendChild(tr);
   }
-  const st = el("tr"), stc = el("td"); stc.textContent = t("status");
-  const c1 = el("td", "n"), c2 = el("td", "n"), c3 = el("td", "n");
-  // auger: verified for flame 1 - 3 (RAM 0x0D), ignition and flame 4 by analogy
-  c1.appendChild(pill(t("stOk") + " " + L("vlam 1 – 3", "flame 1 – 3"), "ok")); c2.appendChild(stPill("h")); c3.appendChild(stPill("u"));
-  st.append(stc, c1, c2, c3); tb.appendChild(st);
   pt.appendChild(tb);
+  // start-up, cleaning and alarm parameters
+  const ph = $("parPhaseTable"); ph.innerHTML = "";
+  const h2 = el("tr"); [t("parCReg"), t("parCManual"), t("parCName"), t("parCVal")].forEach(h => h2.appendChild(el("th", "", h)));
+  const th2 = el("thead"); th2.appendChild(h2); ph.appendChild(th2);
+  const tb2 = el("tbody");
+  for (const [a, manual, name, fmt] of PHASE_PARAMS) {
+    const v = get(a), tr = el("tr");
+    tr.append(el("td", "mono", "EEPROM " + hx(a)), el("td", "", manual), el("td", "", name()),
+      el("td", "n", v === undefined ? "–" : fmt ? fmt(v) : String(v)));
+    tb2.appendChild(tr);
+  }
+  ph.appendChild(tb2);
+  // user settings
+  const ut = $("parUserTable"); ut.innerHTML = "";
+  const h3 = el("tr"); [t("parCReg"), t("parCMenu"), t("parCName"), t("parCVal")].forEach(h => h3.appendChild(el("th", "", h)));
+  const th3 = el("thead"); th3.appendChild(h3); ut.appendChild(th3);
+  const tb3 = el("tbody");
+  for (const [a, id, name, fmt] of USER_PARAMS) {
+    const v = get(a), tr = el("tr");
+    tr.append(el("td", "mono", "EEPROM " + hx(a)), el("td", "", String(id)), el("td", "", name()), el("td", "n", v === undefined ? "–" : fmt(v)));
+    tb3.appendChild(tr);
+  }
+  ut.appendChild(tb3);
+  // timer programs: already read by the timer card (/api/timers), shown here with their addresses
+  const tt = $("parTimerTable"); tt.innerHTML = "";
+  const h4 = el("tr"); [t("parCReg"), t("parCProg"), t("parCOn"), t("parCOff"), t("parCDays"), t("parCSet"), t("parCFlame"), t("parCFan")].forEach(h => h4.appendChild(el("th", "", h)));
+  const th4 = el("thead"); th4.appendChild(h4); tt.appendChild(th4);
+  const tb4 = el("tbody"), DN = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+  const DS = lang === "nl" ? ["ma", "di", "wo", "do", "vr", "za", "zo"] : ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+  for (const [prog, base] of Object.entries(TIMER_BASE)) {
+    const p = timersData && timersData[prog], tr = el("tr");
+    const days = p && p.enabled_on ? DN.map((d, i) => p.enabled_on[d] ? DS[i] : null).filter(Boolean).join(" ") : "–";
+    const set = p && p.settings ? p.settings : {};
+    tr.append(el("td", "mono", "EEPROM " + hx(base) + " – " + hx(base + 7)), el("td", "", prog + (p ? (p.enabled ? "" : " (" + L("uit", "off") + ")") : "")),
+      el("td", "", p ? (p.on === "off" ? "–" : p.on) : "–"), el("td", "", p ? (p.off === "off" ? "–" : p.off) : "–"), el("td", "", days || "–"),
+      el("td", "n", set.setpoint != null ? set.setpoint + " °C" : "–"), el("td", "n", set.flame_power ?? "–"), el("td", "n", set.RoomFanSpeed ?? "–"));
+    if (p && !p.enabled) tr.style.opacity = 0.55;
+    tb4.appendChild(tr);
+  }
+  tt.appendChild(tb4);
   $("parAge").textContent = parAt ? t("updated", new Date(parAt).toLocaleTimeString(lang === "nl" ? "nl-BE" : "en-GB")) : "";
 }
 // EEPROM settings hardly change: read once when debug mode is turned on, and on "Reload".
 async function loadParams(force) {
   if (!debug || offline || parBusy || (parAt && !force)) return;
-  const want = [...new Set(PRESET_ROWS.flatMap(r => [r[1], r[2], r[3]]).filter(a => a !== null))];
+  const want = [...new Set(PRESET_ROWS.flatMap(r => [r[1], r[2], r[3]]).concat(PHASE_PARAMS.map(r => r[0]), USER_PARAMS.map(r => r[0])).filter(a => a !== null))];
   parBusy = true; $("parReload").disabled = true;
   try {
     const r = await api("GET", "/api/dump", { register: "eeprom", address: want.map(hx).join(",") });
