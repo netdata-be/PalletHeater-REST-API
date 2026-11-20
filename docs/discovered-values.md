@@ -740,3 +740,21 @@ Pr01 minutes (probably E9); after a power cut shorter than Pr48 seconds the stov
 otherwise final cleaning; modulation to minimum when the fumes pass Pr14; a restart after final
 cleaning only once the fumes are below Pr13. Not in the manual: the pellet level sensor and the
 pellet reserve (0xA4, 0x89, 0x91), which are specific to this stove.
+
+### The older Micronova I023 manual (2007) compared with EEPROM 0x16 – 0x3B
+
+[I023 ACAN_02 v1.0, 29/03/2007](https://www.solarweb.net/forosolar/attachments/usuarios-biomasa/31133-nuevo-menu-micronova-manual-aire-io043-led.pdf)
+(auger period T = 6 s) has the same Pr01 – Pr22 as L023. After that its layout does not fit this
+stove either:
+- Pr23 – Pr27 (room fan / exchanger speed per power, 1 – 35): EEPROM 0x16 – 0x1A are 55 each,
+  out of that range.
+- Pre-load and wait are Pr45 / Pr46 there (EEPROM 0x2C / 0x2D would hold 30 / 19); on this stove
+  they are 0x21 / 0x20 (120 / 170 s, confirmed by the start-up).
+- Pr56 – Pr65 (pellet load / draught trim per set, −5 … 5) would be 0x37 – 0x40, where this stove
+  has 15, 20, 250, 240, 33 and the timer PR1 from 0x3C.
+
+Speculation only (no measurement): EEPROM 0x2F – 0x33 = 12 / 14 / 17 / 21 / 21 looks like a
+per-power row with the 5th level equal to the 4th, the same shape as the I023 exchanger speeds
+(defaults 12 / 15 / 17 / 19 / 21); 0x1B / 0x1E / 0x1F = 165 / 145 / 140 would read as fume fan
+speeds 1900 / 1700 / 1650 rpm in the (x + 25) × 10 encoding; 0x25 – 0x2A = 0 / 144 / 144 / 0 / 0 / 0
+has the shape of a disabled timer block (144 = no time).
