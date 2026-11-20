@@ -109,7 +109,7 @@ static bool isKnownRamAddr(byte addr)
         case 0x27: case 0x36: case 0x81: case 0x82:
         case 0x21: case 0x31: case 0x32: case 0x33: case 0x34:
         case 0x37: case 0x3E: case 0x44: case 0x48: case 0x4D:
-        case 0x50: case 0x7A: case 0x7B: case 0x7C: case 0x7D: case 0x89: case 0xA4:
+        case 0x50: case 0x7A: case 0x7B: case 0x7C: case 0x7D: case 0x89: case 0xA4: case 0x91: case 0xAC: case 0xB7: case 0xB8:
         case 0x7E: case 0x7F: case 0x80: case 0x8F: case 0xD0:
         case 0xD3: case 0xDF:
             return true;
@@ -183,9 +183,13 @@ static String getRamValueTxt(byte addr, int val)
         case 0x48: if (!val) return "0 rpm (fume fan stopped)"; snprintf(buf, sizeof(buf), "%d rpm (fume fan)", (val + 25) * 10); return buf;
         case 0x4D: return val ? "1 (flip)" : "0 (flop)";
         case 0x50: snprintf(buf, sizeof(buf), "%d (unknown; stayed 0 during the pellet reserve countdown)", val); return buf;
-        case 0x91: snprintf(buf, sizeof(buf), "%d (pellet reserve phase 2: x 30 s until the stove switches off = %d min)", val, (val + 1) / 2); return buf;
+        case 0x91: snprintf(buf, sizeof(buf), "%d (reserve phase 2: off in %d min)", val, (val + 1) / 2); return buf;
         case 0x89: snprintf(buf, sizeof(buf), "%d min until the pellet reserve alarm (counts down while RAM 0xA4 = 5, 20 = full)", val); return buf;
-        case 0xA4: return val == 5 ? "5 (level sensor: pellets low)" : "0 (level sensor: pellets OK)";
+        case 0xA4: snprintf(buf, sizeof(buf), "%d (level sensor: %s)", val, val == 5 ? "pellets low" : val == 0 ? "pellets OK" : val >= 1 && val <= 4 ? "between low and OK (seen briefly)" : "unknown value"); return buf;
+        case 0xAC: snprintf(buf, sizeof(buf), "%d (copy of the level sensor 0xA4)", val); return buf;
+        case 0xB7: snprintf(buf, sizeof(buf), "%d (hours since last service, low byte; copy of EEPROM 0xE7)", val); return buf;
+        case 0xB8: snprintf(buf, sizeof(buf), "%d (hours since last service, high byte; copy of EEPROM 0xE8)", val); return buf;
+        case 0x39: snprintf(buf, sizeof(buf), "%d (status bits? 0x80 reserve, 0x20 pellets used up)", val); return buf;
         case 0x7A: snprintf(buf, sizeof(buf), "%d sec", val);  return buf;
         case 0x7B: {
             const char* days[] = {"", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"};

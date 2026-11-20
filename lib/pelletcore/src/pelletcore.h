@@ -86,11 +86,11 @@ inline int roomFanIsRunning(int power, int flagD3)
 
 // ── Pellet reserve ─────────────────────────────────────────────────────────
 // RAM 0xA4: 0 = enough pellets, 5 = low (the reserve countdown in RAM 0x89 runs). 4 was seen
-// for ~40 s twice during a reserve (20/11/2026); the countdown went on unchanged, so 4 counts
-// as "reserve active" too (its own meaning is not known).
-inline bool reserveSensorLow(int sensor) { return sensor == 5 || sensor == 4; }
-// Not verified: alarm assumed when the sensor (RAM 0xA4) is low and the counter
-// (RAM 0x89) has run down to <= 1.
+// for ~40 s during a reserve (20/11/2026) without the countdown changing, and at the refill
+// it went 5 -> 3 -> 0 within seconds: every value 1 - 5 counts as "reserve active".
+inline bool reserveSensorLow(int sensor) { return sensor >= 1 && sensor <= 5; }
+// Alarm (the remote shows PELLET RESERVE) when the sensor (RAM 0xA4) is low and the 20 min
+// countdown (RAM 0x89) has run down (confirmed 17/11 and 20/11/2026; <= 1 is one minute early).
 inline int pelletsLow(int sensor, int counter)
 {
     return reserveSensorLow(sensor) && counter >= 0 && counter <= 1 ? 1 : 0;

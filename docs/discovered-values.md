@@ -59,7 +59,11 @@ RAM (0x00)
 | 0x80       | 128        | x         | year   | Current year                                | 22                       |   0 -  99  |
 | 0x81       | 129        | x         |        | Low byte of the stove clock as seconds since midnight / 2 (16-bit LE with 0x82; +1 every 2 s). Verified 17/11/2026: 0x82/0x81 = 4/247 -> 1271 × 2 s = 00:42:22, stove clock 00:42:22. Also matches the 16/11 16:32 dump (116/46 -> 16:31:24) | | 0 - 255 |
 | 0x82       | 130        | x         |        | High byte of the seconds-since-midnight / 2 counter (see 0x81); 0 – 168, back to 0 at midnight | | 0 - 168 |
-| 0x89       | 137        | x         | Min    | Countdown till low pellet alarm starts (hypothesis). 16/11/2026, while working: dropped 20 -> 19 and back after ~35 s, first at 19:02, then about every 9.5 – 13.5 min until shutdown; never while off. Possibly the hopper level sensor briefly seeing no pellets (unconfirmed; 0xA4 did not change in the log) | 20 | 20 - 0 |
+| 0x89       | 137        | x         | Min    | Pellet reserve, phase 1: minutes until PELLET RESERVE, counting down while the level sensor (0xA4) reports low pellets (confirmed 17/11 and 20/11/2026, see "Pellet reserve run to the end"). 20 with a full hopper; short dips 20 -> 19 -> 20 are the sensor briefly seeing low pellets | 20 | 20 - 0 |
+| 0x91       | 145        | x/2       | Min    | Pellet reserve, phase 2: half minutes until the stove switches itself off; counts once 0x89 is 0 (confirmed 17/11 and 20/11/2026). 62 (= 31 min) with a full hopper, 0 after the switch-off | 62 | 62 - 0 |
+| 0xAC       | 172        |           |        | Copy of 0xA4 (0 with a full hopper, 5 during the reserve and after the switch-off; all dumps 16/11 – 20/11/2026) | 0 | 0, 5 |
+| 0xB7       | 183        | x         | hours  | Hours since the last service, low byte (16-bit LE with 0xB8): the same value as EEPROM 0xE7 / 0xE8 in every dump 16/11 – 20/11/2026 (226 … 243, then 4 / 1 = 260) | | |
+| 0xB8       | 184        | x         | hours  | Hours since the last service, high byte (see 0xB7) | | |
 | 0x8F       | 143        | x/2       | °C     | Remote control temp                         |                          |            |
 | 0x96       | 150        |           |        | Unknown 84 - 89                              |                          |            |
 | 0xAB       | 171        |           |        | Looks random                                |                          |            |
@@ -392,10 +396,10 @@ Verified 16/11/2026 on the remote (menu shows ON): RAM 0x1A = 40, 0x18 = 199, 0x
 
 Parameter ids in RAM 0x18 map to EEPROM address = id − 1 for all settings checked so far (CHRONO verified 16/11/2026: PR1 on/off = parameter 61 = EEPROM 0x3C, so program n field f = parameter timerBase[n] + f + 1, i.e. PR1 61–68, PR2 81–88, PR3 89–96, PR4 97–104, PR5 105–112, PR6 113–120): 76 beep → 0x4B, 80 language → 0x4F, 128 flame → 0x7F, 130 MultiFuoco → 0x81, 145 / 146 energy saving → 0x90 / 0x91, 193 combustion quality → 0xC0, 197 pellet contact → 0xC4, 199 pellet reserve → 0xC6. Exception: 198 pellet quality is read from 0xBC (0xC5 holds 137, meaning unknown).
 
-`lowPalletAlarm` is computed from RAM 0xA4 (5 = reserve sensor active) and RAM 0x89 (≤ 1 = alarm). With the hopper not empty: 0xA4 = 0, 0x89 = 20. Whether 0x89 is a remaining-time counter that starts when the sensor triggers is not verified. It is not a copy of the set point: it stayed 20 when the set point was changed to 21 (17/11/2026).
+`lowPalletAlarm` is computed from RAM 0xA4 (5 = reserve sensor active; 4 counts as well) and RAM 0x89 (≤ 1 = alarm). With the hopper not empty: 0xA4 = 0, 0x89 = 20. That 0x89 is a remaining-time counter that starts when the sensor triggers is confirmed (17/11 and 20/11/2026). It is not a copy of the set point: it stayed 20 when the set point was changed to 21 (17/11/2026).
 | Room fan in standby (superseded: power 9 is the reduced power, see "Modulation when the set point is reached") | At 17:27, 13 min after standby started, with fumes at 108 °C: 0x0A 21 → 9, 0xA7 86 → 104, 0xD3 2 → 1, 0x04 2 → 1, 0x66 21 → 5 | The stove keeps the room fan running at a low cooling power (9) after the flame is out. 0xD3 = 1 / 0x04 = 1 probably mean "cooling run" (2 = normal run). The app shows this as "running at low power" |
 | RAM 0x09, 0x43 | 10 while working, 0 in standby | Follow the burning phase |
-| RAM 0x39 | 16 while working, 80 in standby | Unknown, changes with the phase |
+| RAM 0x39 | 16 while working and off, 80 in standby; 129 in pellet reserve phase 2 (17/11), 160 off after the reserve ran out (20/11) | Probably status bits: 0x10 normal, 0x40 standby, 0x80 pellet reserve, 0x20 pellets used up (PELLET BESTEED on the remote), 0x01 burning; seen once each, not verified |
 
 Update 16/11/2026 ~17:50 (the "cooling" name was later replaced by "reduced", see below): in standby with the fan stopped (0x0A = 0, 0xA7 = 0, 0x04 = 0) RAM 0xD3 still reads 1, so 0xD3 = 1 does not mean "cooling run". The firmware derives `roomFan.mode` from the power 0x0A instead (0 = off, 21/23/25 = normal, other = low-power run after the flame is out) and the web app shows a cooling run as "Afkoelen" in the status and in the chart (drawn at 0.5 in the fan lane when the fan has power but no mapped speed).
 
@@ -577,3 +581,118 @@ Not known: what 0xA4 = 4 means. It lasted about 40 s twice, once in each phase. 
 4 is 5 with bit 0 cleared; a hypothesis is that bit 0 is the sensor itself and bit 2 the
 reserve that stays latched, but this is not verified. 0xC7 was 1 → 0 during the countdown on
 17/11 and 2 after this switch-off; its meaning is not known.
+
+### Off after the pellet reserve ran out (20/11/2026 ~09:35)
+
+The remote showed **OFF** with **PELLET BESTEED** ("pellets used up") at the bottom, the
+chrono icon and "E". Two full dumps 20 s apart, compared with the dumps of an ordinary off
+state (17/11/2026, ram_off_a / ram_off_b) and with the reserve phase 2 dumps of 17/11. Only
+registers that were stable within each pair:
+
+| RAM | Off (17/11) | Phase 2 (17/11) | Off, pellets used up (20/11) | Reading |
+|-----|-------------|-----------------|------------------------------|---------|
+| 0x21 | 0 | 4 | 0 | Stove state: off |
+| 0xA4 / 0xAC | 0 / 0 | 5 / 5 | 5 / 5 | Level sensor and its copy: stay 5 until the refill |
+| 0x89 | 20 | 0 | 0 | Phase 1 countdown done |
+| 0x91 | 62 | 35 … 25 | 0 | Phase 2 countdown done |
+| 0x39 | 16 | 129 | 160 | See the hypothesis table (status bits) |
+| 0x8D / 0x97 / 0xBB | 3 / 3 / 30 | 0 / 0 / 0 | 0 / 0 / 0 | 3 / 3 / 30 with a full hopper (every dump since 16/11), 0 from reserve phase 2 on; meaning not known (0xBB = 30 could be the 30 min of phase 2) |
+| 0xB7 / 0xB8 | 234 / 0 | 243 / 0 | 4 / 1 | Hours since the last service (copy of EEPROM 0xE7 / 0xE8) |
+
+The stove went from final cleaning (state 6, from 08:41:48) to off (state 0); the error
+memory and RAM 0x33 stayed without an error. The controller reports this state itself as the
+error PELLETS (`/api/state`) and refuses to switch the stove on until the sensor clears.
+
+EEPROM addresses that changed between 17/11 22:13 and now, meaning not known: 0x5A 138 → 132,
+0x7B 255 → 0, 0xD0 158 → 169, 0xD4 166 → 170, 0xDA – 0xDC 37 / 3 / 15 → 0 / 5 / 35,
+0xE9 11 → 39, 0xF0 7 → 0, 0xF6 8 → 0, 0xF8 / 0xF9 2 / 34 → 5 / 9, 0xFB 23 → 32. 0xF8 equals
+the day of the week of both dumps (17/11 Tuesday = 2, 20/11 Friday = 5), the same numbering as
+RAM 0x7B; possibly the time of a last event, not verified.
+
+Still open: what the remote shows during phase 1 (the 20 minutes of 0x89), what 0xA4 = 4
+means, and whether the refill alone (sensor back to 0) clears PELLET BESTEED on the remote.
+
+### Refill after the switch-off (20/11/2026 10:03 – 10:05, stove off)
+
+A register poller read 32 RAM addresses every ~3 – 4 s while the hopper was opened, filled
+and closed; a full dump before (09:35) and after (10:08). Order of events:
+
+| Time | Change |
+|------|--------|
+| 10:03:06 – 10:03:13 | 0xA4 / 0xAC 5 → 4 → 5 (about 7 s) |
+| 10:03:45 | 0x97 0 → 3; 0x8D 0 → 1 |
+| 10:04:16 | 0x8D 1 → 2 |
+| 10:04:21 | 0xA4 / 0xAC 5 → 3; 0x39 160 → 176 (0xA0 → 0xB0) |
+| 10:04:24 | 0xA4 / 0xAC 3 → 0; 0x89 0 → 20; 0x91 0 → 62; 0xBB 0 → 30; 0x39 → 16; 0x24 0 → 2 for ~7 s |
+| 10:04:43 | 0x8D 2 → 3 |
+
+Confirmed:
+- The refill alone resets the reserve while the stove is off: level sensor back to 0, both
+  countdowns back to their start values (20 min, 62 half minutes), 0x8D / 0x97 / 0xBB back to
+  3 / 3 / 30 and 0x39 back to 16. No key press or restart needed.
+- With the stove off, opening the hopper lid did not show up in RAM 0x33 / 0x30 (no E1, unlike
+  17/11 when the stove was working); either the lid is not checked while off, or it shows up in
+  a register that was not polled.
+
+Observations, not verified:
+- 0xA4 takes the values 0, 3, 4 and 5 (5 → 3 → 0 at the refill): rather a level / debounce
+  value than a plain flag. The controller treats every value 1 – 5 as low.
+- **RAM 0x96** was 193 during the whole reserve (17/11) and while empty (20/11), 74 right after
+  the refill, 42 off with a full hopper (17/11) and 84 – 89 while working (16/11): a candidate
+  for the raw value of the pellet level sensor (high = no pellets).
+- 0x8D counted 0 → 1 → 2 → 3 in steps of ~30 s after pellets were detected: possibly a
+  confirmation timer.
+- RAM 0x24 = 2 for ~7 s at the reset: earlier seen around key presses; possibly a signal to the
+  remote (beep / display update).
+- RAM 0xFA 32 → 69 ("E" in ASCII) after the refill, the same as off on 17/11 (working: 32).
+- **EEPROM 0x7B** was 255 on 17/11, 0 while the pellets were used up and 255 again after the
+  refill: possibly a flag in EEPROM that keeps the "pellets used up" state over a power cut.
+  EEPROM 0xF9 9 → 16 at the same time, meaning not known.
+- Final cleaning after the switch-off lasted from 08:41:48 to 09:14:14 (32.5 min, state 6 → 0).
+- The controller's pellet tracker detected the refill (10:05:02) and booked the default 15 kg;
+  enter the real amount in the web app when it differs.
+
+### Start-up (20/11/2026 11:25 – 11:38) and the auger while working
+
+Full RAM dumps every ~32 s from START PHASE I (state 2, already running at 11:25:00; the CHECK
+UP phase was missed) through START PHASE II (state 3, 11:34:03) to working (state 4, 11:37:46),
+then a 60 s key watch (~18 reads per second) while working at flame power 3. Fume temperature
+(0x3E) stayed 25 °C until 11:30 and rose from 11:30:30 (pellets igniting) to 45 °C at 11:37.
+
+| Time | 0x0D auger | 0x6F | 0x70 | 0x29 / 0x75 | 0x43 | 0x36 fume fan target |
+|------|------------|------|------|-------------|------|----------------------|
+| 11:25 – 11:26:30 | 200 | 109 → 0 (~1 per s) | 170 | 5 | 10 | 119 |
+| 11:27 – 11:30 | 0 | 0 | 170 → 0 (~1 per s) | 5 | 10 | 119 |
+| 11:30 – 11:33:30 | 25 | 0 | 0 | 5 | 10 | 149 |
+| state 3 (11:34 – 11:37) | 27 | 0 | 0 | 3 | 0 | 164 |
+| working | 62 | 0 | 0 | 0 | 10 | 178 |
+
+Confirmed with the key watch:
+- **RAM 0xB2 follows the auger motor**: about 200 – 215 while the auger runs, 0 while it
+  stands still. At auger value 6.2 (0x0D = 62) it ran 6.4 s and stood still 5.6 s, a 12.0 s
+  cycle (three cycles, read 2.5 times per second). So **0x0D is the auger on-time per cycle in
+  tenths of a second** (6.2 s), not rpm; 200 at the start = 20 s, i.e. running the whole time
+  (pre-loading pellets). Checked at two flame powers (key watch, ~20 reads per second):
+  flame 3, 0x0D = 62: on 6.0 – 6.4 s, off 5.6 – 6.0 s (9 cycles); flame 2, 0x0D = 46: on
+  4.6 – 4.8 s, off 7.2 – 7.5 s (7 cycles). Both cycles 12.06 s: a fixed cycle of about 12 s
+  with the on-time from 0x0D (the read interval makes the steps ~0.2 – 0.4 s).
+- While working RAM 0x29 / 0x75 stayed 0 for minutes (glow plug candidate: off, as expected).
+- RAM 0x96 varied 72 – 77 around 74 with no relation to the auger (average 74.15 while it ran,
+  74.03 while it stood still).
+
+Observations, not verified:
+- RAM 0x6F counted ~120 → 0 s while the auger pre-loaded pellets (0x0D = 200), then RAM 0x70
+  counted 170 → 0 s while the auger stood still: probably the pre-load time and the wait after
+  it (both in seconds).
+- **RAM 0x29 (copy 0x75)**: 5 in START PHASE I, 3 in START PHASE II, 0 while working (and 0 / 5
+  in earlier dumps of other states). Read as bits: bit 0 set in both start phases and cleared
+  when working, which is when the ignition glow plug (210 in the wiring diagram) should be on.
+  Candidate for the glow plug output; to check: the value during CHECK UP (state 1), and
+  whether bit 0 drops at the moment the fumes pass the ignition threshold.
+- RAM 0x43: 10 in state 2 and while working, 0 in state 3.
+- RAM 0x8C toggles 78 / 68 (bits 0x02 and 0x08) every ~1.2 / 0.8 s in every state, also off:
+  a blink pattern (display?), not a sensor.
+- RAM 0x96 (candidate raw pellet level) stayed 72 – 74 during the start, with pellets in the
+  hopper.
+- No register was seen to follow the vacuum switch (160 in the wiring diagram) when the fume
+  fan started; with dumps 32 s apart a short change can be missed.

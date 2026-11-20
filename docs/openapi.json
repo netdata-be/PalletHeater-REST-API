@@ -4731,7 +4731,7 @@
           },
           "pelletReserve": {
             "type": "object",
-            "description": "PELLET RESERVE (installer menu). How the stove decides the reserve is not verified.",
+            "description": "PELLET RESERVE (installer menu). Seen on this stove: sensor low -> 20 min countdown (counter) -> PELLET RESERVE on the remote, 30 min at flame power 1 (shutdownMinutes) -> the stove switches itself off (switchedOff, error PELLETS).",
             "properties": {
               "enabled": {
                 "type": "boolean",
@@ -4746,7 +4746,7 @@
               "counter": {
                 "type": "integer",
                 "nullable": true,
-                "description": "RAM 0x89, alarm assumed at <= 1"
+                "description": "RAM 0x89: minutes of the 20 min countdown after the sensor reports low pellets; alarm at <= 1"
               },
               "minutesLeft": {
                 "type": "integer",

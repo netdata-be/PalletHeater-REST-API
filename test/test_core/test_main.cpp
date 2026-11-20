@@ -108,6 +108,8 @@ static void test_pellets_low()
     TEST_ASSERT_EQUAL_INT(0, pc::pelletsLow(0, 0));
     TEST_ASSERT_EQUAL_INT(1, pc::pelletsLow(4, 0));    // 4: seen briefly during the reserve
     TEST_ASSERT_EQUAL_INT(0, pc::pelletsLow(4, 20));
+    TEST_ASSERT_EQUAL_INT(1, pc::pelletsLow(3, 0));    // 3: seen during the refill (5 -> 3 -> 0)
+    TEST_ASSERT_EQUAL_INT(0, pc::pelletsLow(6, 0));    // never seen: not low
 }
 static void test_error_confirm_prewarning_ignored()
 {

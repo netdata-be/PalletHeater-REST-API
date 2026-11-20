@@ -356,9 +356,11 @@ float cachedAugerSpeed = 0.0;
 char cachedFirmwareVersion[32] = "Unknown";
 long cachedSerialNumber = -1;   // EEPROM 0xCD - 0xCF, -1 = not read yet
 int cachedLowPallet = 0;
-// Pellet reserve (installer menu PELLET RESERVE, EEPROM 0xC6). How the stove decides
-// the reserve is not verified: the alarm is taken as sensor (RAM 0xA4) = 5 and
-// counter (RAM 0x89) <= 1. Changes of both are logged in /api/events to find out.
+// Pellet reserve (installer menu PELLET RESERVE, EEPROM 0xC6), confirmed 17/11 and 20/11/2026:
+// the level sensor (RAM 0xA4) goes to 5, RAM 0x89 counts down 20 min, then the remote shows
+// PELLET RESERVE and RAM 0x91 counts 30 min (half minutes) at flame power 1, then the stove
+// switches itself off (remote: OFF / PELLET BESTEED). lowPalletAlarm = sensor low and
+// counter <= 1. Changes of the sensor are logged in /api/events.
 #define pelletReserveEnabledAddr 0xc6
 int cachedPelletSensor = -1;      // RAM 0xA4, -1 = not read yet
 int cachedPelletCounter = -1;     // RAM 0x89
