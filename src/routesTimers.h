@@ -207,8 +207,7 @@ void handleRouteTimers()
         JsonObject timers = json.createNestedObject("timers");
         for (int i = 0; i < 6; i++)
             serializeTimerToJson(i, timers.createNestedObject(prNames[i]));
-        serializeJson(json, buffer);
-        wm.server->send(200, "application/json", buffer);
+        sendJson(200, json);
         return;
     }
 

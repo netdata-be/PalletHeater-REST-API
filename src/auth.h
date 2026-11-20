@@ -138,6 +138,7 @@ static const char* httpMethodName(HTTPMethod m)
 static void crumbRequest()
 {
     httpStalled = false;
+    httpReqStart = millis();
     crumbf("http %s %s", httpMethodName(wm.server->method()), wm.server->uri().c_str());
 }
 // Wrap a route handler so the breadcrumb shows its request (public routes; authed() does it too)

@@ -194,8 +194,10 @@ void getStatus()
 
 #undef KNOWN
     if (json.overflowed()) LOGE("http", "getStatus: JSON document too small");
-    serializeJson(json, buffer);
-    httpSendLarge(200, "application/json", (const uint8_t*)buffer, strlen(buffer));
+    String out;
+    out.reserve(measureJson(json) + 1);
+    serializeJson(json, out);
+    httpSendLarge(200, "application/json", (const uint8_t*)out.c_str(), out.length());
     } else{
         wm.server->send(405);
     }

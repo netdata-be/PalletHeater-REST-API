@@ -47,8 +47,7 @@ void handleRouteFanspeed()
         return;
     }
 
-    serializeJson(json, buffer);
-    wm.server->send(http_code, "application/json", buffer);
+    sendJson(http_code, json);
 }
 
 static bool isKnownErrorId(const String& arg, int& out)
@@ -78,8 +77,7 @@ void handleRouteErrors()
             {
                 StaticJsonDocument<192> err;
                 err["result"] = "failed - " + wm.server->argName(i) + " must be a known error id (see /api docs), e.g. 0 to clear";
-                serializeJson(err, buffer);
-                wm.server->send(400, "application/json", buffer);
+                sendJson(400, err);
                 return;
             }
         }
@@ -152,8 +150,7 @@ void handleRouteErrors()
         return;
     }
 
-    serializeJson(json, buffer);
-    wm.server->send(200, "application/json", buffer);
+    sendJson(200, json);
 }
 
 void handleRouteSetError()
@@ -192,8 +189,7 @@ void handleRouteSetError()
 
     json["action"] = "ok";
 
-    serializeJson(json, buffer);
-    wm.server->send(200, "application/json", buffer);
+    sendJson(200, json);
 }
 
 void handleRouteHealth()
@@ -219,8 +215,7 @@ void handleRouteHealth()
         return;
     }
 
-    serializeJson(json, buffer);
-    wm.server->send(http_code, "application/json", buffer);
+    sendJson(http_code, json);
 }
 
 void handleRouteFlamePower()
@@ -268,8 +263,7 @@ void handleRouteFlamePower()
         return;
     }
 
-    serializeJson(json, buffer);
-    wm.server->send(http_code, "application/json", buffer);
+    sendJson(http_code, json);
 }
 
 // Core power helpers — return the result message and set http_code by reference.
@@ -365,8 +359,7 @@ void handleRoutePower()
     json["state"] = StoveStateStr;
     json["poweredOn"] = StoveIsOn;
 
-    serializeJson(json, buffer);
-    wm.server->send(http_code, "application/json", buffer);
+    sendJson(http_code, json);
 }
 
 void setStoveOn()
@@ -384,8 +377,7 @@ void setStoveOn()
     obj_stove["state"] = StoveStateStr;
     obj_stove["poweredOn"] = StoveIsOn;
 
-    serializeJson(json, buffer);
-    wm.server->send(http_code, "application/json", buffer);
+    sendJson(http_code, json);
 }
 
 void setStoveOff()
@@ -403,8 +395,7 @@ void setStoveOff()
     obj_stove["state"] = StoveStateStr;
     obj_stove["poweredOn"] = StoveIsOn;
 
-    serializeJson(json, buffer);
-    wm.server->send(http_code, "application/json", buffer);
+    sendJson(http_code, json);
 }
 
 void getParams()

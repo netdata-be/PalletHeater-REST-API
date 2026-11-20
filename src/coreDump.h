@@ -70,13 +70,11 @@ void handleRouteCoreDump()
         wm.server->sendHeader("Content-Disposition", "attachment; filename=\"coredump.bin\"");
         wm.server->setContentLength(size);
         wm.server->send(200, "application/octet-stream", "");
-        static uint8_t buf[1024];
-        WiFiClient c = wm.server->client();
+        uint8_t buf[1024];   // on the stack, only during the download
         for (size_t done = 0; done < size && !httpStalled; ) {
             size_t n = size - done < sizeof(buf) ? size - done : sizeof(buf);
-            if (spi_flash_read(addr + done, buf, n) != ESP_OK) { c.stop(); break; }
-            if (!httpClientWritable(3000)) { httpStall(); break; }
-            if (c.write(buf, n) != n) { c.stop(); break; }
+            if (spi_flash_read(addr + done, buf, n) != ESP_OK) { wm.server->client().stop(); break; }
+            if (!httpWriteRaw(buf, n)) { httpStall(); break; }
             done += n;
             esp_task_wdt_reset();
         }

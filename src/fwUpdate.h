@@ -178,7 +178,7 @@ static String fwDoInstall()
         return e;
     }
     WiFiClient* s = http.getStreamPtr();
-    static uint8_t buf[2048];
+    uint8_t buf[2048];   // on the stack of the update task (12 KB), not 2 KB of RAM all the time
     unsigned long lastData = millis();
     String err;
     while (fwDone < fwTotal) {

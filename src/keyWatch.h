@@ -33,7 +33,7 @@ static uint8_t  kwAddrs[KW_MAX_ADDRS];
 static uint8_t  kwN = 0;
 static int      kwBase[KW_MAX_ADDRS];   // first value read, -1 = not read yet
 static int      kwLast[KW_MAX_ADDRS];
-static KwEvent  kwLog[KW_LOG_SIZE];
+static KwEvent* kwLog = nullptr;        // KW_LOG_SIZE entries, allocated at the first watch (4.8 KB only for who uses it)
 static volatile uint16_t kwCount = 0;
 static bool     kwOverflow = false;
 static uint32_t kwReads = 0, kwErrors = 0;
@@ -53,7 +53,7 @@ bool keyWatchTick()
         if (kwLast[i] < 0) { kwBase[i] = kwLast[i] = v; continue; }
         if (v != kwLast[i])
         {
-            if (kwCount < KW_LOG_SIZE) { kwLog[kwCount] = { (uint32_t)(millis() - kwStartMs), kwAddrs[i], (uint8_t)kwLast[i], (uint8_t)v }; kwCount++; }
+            if (kwLog && kwCount < KW_LOG_SIZE) { kwLog[kwCount] = { (uint32_t)(millis() - kwStartMs), kwAddrs[i], (uint8_t)kwLast[i], (uint8_t)v }; kwCount++; }
             else kwOverflow = true;
             kwLast[i] = v;
         }
@@ -125,6 +125,8 @@ void handleRouteKeyWatch()
         long secs = wm.server->hasArg("seconds") ? wm.server->arg("seconds").toInt() : 60;
         if (secs < 1) secs = 1;
         if (secs > KW_MAX_SECONDS) secs = KW_MAX_SECONDS;
+        if (!kwLog) kwLog = (KwEvent*)malloc(KW_LOG_SIZE * sizeof(KwEvent));
+        if (!kwLog) { wm.server->send(503, "application/json", "{\"result\":\"failed - not enough memory\"}"); return; }
         for (uint8_t i = 0; i < KW_MAX_ADDRS; i++) { kwBase[i] = -1; kwLast[i] = -1; }
         kwCount = 0; kwOverflow = false; kwReads = 0; kwErrors = 0;
         kwStartEpoch = time(nullptr);

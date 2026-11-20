@@ -19,6 +19,7 @@
 #include <SPIFFS.h>
 #include "esp_log.h"
 #include <esp_task_wdt.h>
+#include <lwip/sockets.h>   // send() / select() for httpWriteRaw
 #define RESET_PIN 13
 #define ENABLE_RX 18
 #define ONBOARD_LED 2
@@ -104,6 +105,15 @@ WiFiManager wm;
 // Wait until the web client of the current request can take more data, feeding
 // the task watchdog meanwhile. A write to a client that stopped reading blocks in
 // WiFiClient::write() for up to 10 s; check first and give up after maxMs.
+// Upper limit for one answer, however slowly the client keeps reading: a client that takes a
+// few bytes now and then would otherwise hold the loop task (the waits below feed the watchdog
+// as long as there is progress). Counted from the start of the request (crumbRequest, auth.h).
+#define HTTP_ANSWER_MAX_MS 120000UL
+static uint32_t httpReqStart = 0;
+static bool httpAnswerTooLong()
+{
+    return httpReqStart && millis() - httpReqStart > HTTP_ANSWER_MAX_MS;
+}
 static bool httpClientWritable(uint32_t maxMs = 3000)
 {
     WiFiClient c = wm.server->client();
@@ -122,27 +132,80 @@ static bool httpClientWritable(uint32_t maxMs = 3000)
         if (r < 0) return false;
         if (r > 0 && FD_ISSET(fd, &set)) return true;
         esp_task_wdt_reset();
-        if (millis() - t0 >= maxMs) return false;
+        if (millis() - t0 >= maxMs || httpAnswerTooLong()) return false;
     }
 }
 
 // The client of the current request stopped taking data (reset at the start of every
 // request, auth.h): the rest of the answer is dropped instead of blocking the loop task.
 static bool httpStalled = false;
+// Write to the client of the current request without WiFiClient::write(): that one waits up
+// to 10 x 1 s per attempt and starts counting again after every partial send, so a client
+// that reads slowly (weak WiFi) kept the loop task in it past the task watchdog (core dump
+// 19/11/2026: task_wdt -> abort, loop task in WebServer::sendContent -> WiFiClient::write).
+// Here: send what fits (non-blocking), wait for room in steps of 200 ms while feeding the
+// watchdog, give up after maxStallMs without any progress (10 s through HTTPS, 127.0.0.1).
+static bool httpWriteRaw(const uint8_t* p, size_t n, uint32_t maxStallMs = 3000)
+{
+    WiFiClient c = wm.server->client();
+    int fd = c.fd();
+    if (fd < 0) return false;
+    if (c.remoteIP() == IPAddress(127, 0, 0, 1) && maxStallMs < 10000) maxStallMs = 10000;
+    uint32_t last = millis();
+    while (n) {
+        int r = send(fd, p, n, MSG_DONTWAIT);
+        if (r > 0) { p += r; n -= r; last = millis(); continue; }
+        if (r < 0 && errno != EAGAIN && errno != EWOULDBLOCK) return false;
+        if (millis() - last >= maxStallMs || httpAnswerTooLong()) return false;
+        fd_set set; FD_ZERO(&set); FD_SET(fd, &set);
+        struct timeval tv = { 0, 200000 };
+        select(fd + 1, nullptr, &set, nullptr, &tv);
+        esp_task_wdt_reset();
+    }
+    return true;
+}
+// The WebServer decides chunked encoding itself (HTTP/1.1 and an unknown length) and keeps
+// it in a protected member; read it through a derived type with the same layout
+struct WebServerPeek : public WebServer {
+    bool chunked() const { return _chunked; }
+    void chunkedDone() { _chunked = false; }
+};
+static bool httpChunked() { return static_cast<WebServerPeek*>(wm.server.get())->chunked(); }
+
 static void httpStall()
 {
     httpStalled = true;
-    LOGW("http", "%s: the client took no data for 3 s - answer stopped", wm.server->uri().c_str());
+    if (httpAnswerTooLong())
+        LOGW("http", "%s: answer took longer than %lu s - stopped", wm.server->uri().c_str(), HTTP_ANSWER_MAX_MS / 1000);
+    else
+        LOGW("http", "%s: the client took no data for %d s - answer stopped", wm.server->uri().c_str(),
+             wm.server->client().remoteIP() == IPAddress(127, 0, 0, 1) ? 10 : 3);
     wm.server->client().stop();
 }
 // Part of a chunked answer (after setContentLength(CONTENT_LENGTH_UNKNOWN)); clears out
+static void httpSendBytes(const uint8_t* p, size_t n)   // one piece of the answer (chunk framing when chunked)
+{
+    if (httpStalled || !n) return;
+    bool ok = true;
+    if (httpChunked()) {
+        char h[12]; int hl = snprintf(h, sizeof(h), "%x\r\n", (unsigned)n);
+        ok = httpWriteRaw((const uint8_t*)h, hl);
+    }
+    ok = ok && httpWriteRaw(p, n);
+    if (ok && httpChunked()) ok = httpWriteRaw((const uint8_t*)"\r\n", 2);
+    if (!ok) httpStall();
+}
 static void httpSendChunk(String& out)
 {
-    if (!httpStalled && !httpClientWritable(3000)) httpStall();
-    if (!httpStalled && out.length()) wm.server->sendContent(out);
+    httpSendBytes((const uint8_t*)out.c_str(), out.length());
     out = "";
 }
-static void httpEndChunks() { if (!httpStalled) wm.server->sendContent(""); }
+static void httpEndChunks()
+{
+    if (!httpChunked()) return;
+    if (!httpStalled && !httpWriteRaw((const uint8_t*)"0\r\n\r\n", 5)) httpStall();
+    static_cast<WebServerPeek*>(wm.server.get())->chunkedDone();
+}
 // A large body from flash (web app, spec, icons) in pieces, each after checking the
 // client takes data. Headers added before with sendHeader() are sent along.
 static void httpSendLarge(int code, const char* type, const uint8_t* data, size_t len);
@@ -151,15 +214,11 @@ static void httpSendLarge(int code, const char* type, const uint8_t* data, size_
 {
     wm.server->setContentLength(len);
     wm.server->send(code, type, "");
-    WiFiClient c = wm.server->client();
-    size_t done = 0;
-    while (done < len && !httpStalled) {
-        if (!httpClientWritable(3000)) { httpStall(); break; }
+    for (size_t done = 0; done < len && !httpStalled; ) {
         size_t n = len - done;
         if (n > 1436) n = 1436;
-        size_t w = c.write(data + done, n);
-        if (!w) { c.stop(); break; }
-        done += w;
+        if (!httpWriteRaw(data + done, n)) { httpStall(); break; }
+        done += n;
         esp_task_wdt_reset();
     }
 }
@@ -183,7 +242,6 @@ int int_hydro_mode;
 // Init the Serial Stove with Hardware UART 2
 Stove stove(2);
 
-char buffer[9000];
 
 bool StoveIsOn = false;
 char StoveStateStr[32] = "Unknown";

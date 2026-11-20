@@ -323,15 +323,8 @@ void handleRouteDump()
     bool aborted = false;
     auto flushOut = [&out, &aborted](bool force) {
         if (aborted || !(force || out.length() > 1500)) return;
-        if (!httpClientWritable(3000)) {
-            aborted = true;
-            out = "";
-            LOGW("http", "/api/dump: the client took no data for 3 s - dump stopped");
-            wm.server->client().stop();
-            return;
-        }
-        wm.server->sendContent(out);
-        out = "";
+        httpSendChunk(out);   // non-blocking, stops the answer when the client takes no data
+        if (httpStalled) aborted = true;
     };
     out += "{";
     bool firstReg = true;
@@ -382,7 +375,7 @@ void handleRouteDump()
     if (aborted) return;
     out += "}";
     flushOut(true);
-    if (!aborted) wm.server->sendContent("");  // terminate the chunked response
+    httpEndChunks();  // terminate the chunked response
 }
 
 void handleRouteRemote()
@@ -400,8 +393,7 @@ void handleRouteRemote()
     if (menuId < 0)
     {
         json["error"] = "Failed to read remote menu - RS232 error";
-        serializeJson(json, buffer);
-        wm.server->send(500, "application/json", buffer);
+        sendJson(500, json);
         return;
     }
 
@@ -437,6 +429,5 @@ void handleRouteRemote()
         }
     }
 
-    serializeJson(json, buffer);
-    wm.server->send(200, "application/json", buffer);
+    sendJson(200, json);
 }

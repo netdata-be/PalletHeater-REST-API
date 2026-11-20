@@ -145,8 +145,7 @@ void handleRouteTime()
     }
 
 
-    serializeJson(json, buffer);
-    wm.server->send(http_code, "application/json", buffer);
+    sendJson(http_code, json);
 }
 
 void handleRouteEnergysaving()
@@ -220,8 +219,7 @@ void handleRouteEnergysaving()
         return;
     }
 
-    serializeJson(json, buffer);
-    wm.server->send(http_code, "application/json", buffer);
+    sendJson(http_code, json);
 }
 
 void handleRouteBeep()
@@ -234,8 +232,7 @@ void handleRouteBeep()
         if (val != "true" && val != "false" && val != "1" && val != "0")
         {
             json["result"] = "failed - expected enabled=true/false";
-            serializeJson(json, buffer);
-            wm.server->send(400, "application/json", buffer);
+            sendJson(400, json);
             return;
         }
         bool enable = (val == "true" || val == "1");
@@ -243,15 +240,13 @@ void handleRouteBeep()
         if (!ok)
         {
             json["result"] = "failed - RS232 error";
-            serializeJson(json, buffer);
-            wm.server->send(500, "application/json", buffer);
+            sendJson(500, json);
             return;
         }
         cachedBeepEnabled = enable;
         json["result"]  = "success";
         json["enabled"] = cachedBeepEnabled;
-        serializeJson(json, buffer);
-        wm.server->send(200, "application/json", buffer);
+        sendJson(200, json);
         return;
     }
 
@@ -259,8 +254,7 @@ void handleRouteBeep()
     {
         cachedBeepEnabled = stoveBeepIsEnabled();
         json["enabled"] = cachedBeepEnabled;
-        serializeJson(json, buffer);
-        wm.server->send(200, "application/json", buffer);
+        sendJson(200, json);
         return;
     }
 
@@ -282,16 +276,14 @@ void handleRouteSetpoint()
         if (sp < 7 || sp > 30)
         {
             json["result"] = "failed - value must be 7-30";
-            serializeJson(json, buffer);
-            wm.server->send(400, "application/json", buffer);
+            sendJson(400, json);
             return;
         }
         bool ok = stove.write(eeprom, TempSetpointAddr, (byte)sp);
         if (!ok)
         {
             json["result"] = "failed - RS232 error";
-            serializeJson(json, buffer);
-            wm.server->send(500, "application/json", buffer);
+            sendJson(500, json);
             return;
         }
         setPointTemp = sp;
@@ -299,6 +291,5 @@ void handleRouteSetpoint()
     }
     getTempSetpoint();
     json["setpoint"] = (int)setPointTemp;
-    serializeJson(json, buffer);
-    wm.server->send(200, "application/json", buffer);
+    sendJson(200, json);
 }

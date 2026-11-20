@@ -156,8 +156,19 @@ String getMetrics() {
   setCounter(&p, "esp32_boot_count",           "Starts of the controller",                         String(diagBoots));
   setCounter(&p, "esp32_crash_count",          "Starts after a crash, watchdog or brown-out",      String(diagCrashes));
   setCounter(&p, "esp32_wifi_disconnects_total", "Drops of a working WiFi connection since start", String((uint32_t)wifiDisconnects));
+  setCounter(&p, "esp32_wifi_watchdog_repairs_total", "Network watchdog repairs (reconnect, WiFi driver restart) since start", String(netwdRepairs));
   p += String("# HELP esp32_reset_info Reason of the last start\n# TYPE esp32_reset_info gauge\nesp32_reset_info{reason=\"") + resetReasonName(diagReason) + "\"} 1\n";
   setMetric(&p,  "esp32_max_alloc_heap",       "Largest allocatable heap block in bytes",          String(ESP.getMaxAllocHeap()));
+  // never used part of each task's stack: shows how far a stack can safely be made smaller
+  {
+    p += "# HELP esp32_task_stack_free_bytes Stack bytes never used since boot, per task\n";
+    p += "# TYPE esp32_task_stack_free_bytes gauge\n";
+    static const char* const tasks[] = { "loopTask", "SensorTask", "https", "http6", "fwUpdate" };
+    for (const char* name : tasks) {
+      TaskHandle_t h = xTaskGetHandle(name);
+      if (h) p += String("esp32_task_stack_free_bytes{task=\"") + name + "\"} " + String(uxTaskGetStackHighWaterMark(h)) + "\n";
+    }
+  }
 
   // ESP32 flash metrics
   setMetric(&p,  "esp32_flash_chip_size",      "Total flash chip size in bytes",                   String(ESP.getFlashChipSize()));

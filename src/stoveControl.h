@@ -147,8 +147,7 @@ void handleRouteCQ()
 
     json["action"] = "ok";
 
-    serializeJson(json, buffer);
-    wm.server->send(200, "application/json", buffer);
+    sendJson(200, json);
 }
 
 void handleRouteDisplay()
@@ -167,8 +166,7 @@ void handleRouteDisplay()
 
     json["action"] = "ok";
 
-    serializeJson(json, buffer);
-    wm.server->send(200, "application/json", buffer);
+    sendJson(200, json);
 }
 
 const char* getCombustionQualityLabel(int val) { return pc::combustionQualityLabel(val); }
@@ -246,6 +244,5 @@ void handleRouteBurn()
     const char* pqLabel = getPelletQualityLabel(pq);
     json["pelletQuality"] = pqLabel ? pqLabel : "Unknown";
 
-    serializeJson(json, buffer);
-    wm.server->send(http_code, "application/json", buffer);
+    sendJson(http_code, json);
 }

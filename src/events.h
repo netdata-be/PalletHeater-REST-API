@@ -72,7 +72,8 @@ static void eventsLoad()
     // ERROR_CONFIRM_MS, see updateConfirmedError), together with their "cleared" entry
     bool dropped = false;
     {
-        static StateEvent keep[EVT_SIZE];
+        StateEvent* keep = (StateEvent*)malloc(EVT_SIZE * sizeof(StateEvent));   // only while loading
+        if (!keep) return;
         int n = 0, start = (evtHead - evtCount + EVT_SIZE) % EVT_SIZE;
         bool skipClear = false;
         for (int i = 0; i < evtCount; i++) {
@@ -92,6 +93,7 @@ static void eventsLoad()
             keep[n++] = e;
         }
         if (dropped) { evtHead = 0; evtCount = 0; for (int i = 0; i < n; i++) evtPush(keep[i]); }
+        free(keep);
     }
     if (ver == 1 || dropped) evtWriteAll();   // convert / rewrite the file
     bool gotState = false, gotError = false;

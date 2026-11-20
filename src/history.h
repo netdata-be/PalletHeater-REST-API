@@ -8,7 +8,9 @@
 // History: 24 h ring buffer of the cached values, one sample every 2 min.
 // Kept in RAM only (lost on reboot). Served on GET /api/history.
 // ─────────────────────────────────────────────
-struct HistSample {
+// Packed: 22 bytes instead of 24 (720 samples: 1.4 KB less RAM). The fields keep the
+// offsets of format v6, which only had 2 bytes of padding at the end.
+struct __attribute__((packed)) HistSample {
     uint32_t t;          // unix time (UTC)
     int16_t  room10;     // °C x10
     int16_t  stove10;
@@ -71,7 +73,8 @@ static int histHead = 0, histCount = 0;
 // per day). Each file starts with a small header so a changed sample layout
 // in a future firmware is detected and ignored instead of read as garbage.
 static const char* HIST_FILES[2] = { "/hist_a.bin", "/hist_b.bin" };
-static const uint8_t HIST_MAGIC[4] = { 'P', 'H', 'H', '6' };   // v2: + flameActual, v3: + auger10, v4: + fumeRpm, v5: + fanActual, v6: + fanPower
+static const uint8_t HIST_MAGIC[4] = { 'P', 'H', 'H', '7' };   // v2: + flameActual, v3: + auger10, v4: + fumeRpm, v5: + fanActual, v6: + fanPower, v7: packed (22 bytes)
+static const size_t HIST_V6_SIZE = 24;                           // v6: the same fields + 2 padding bytes
 // v1 samples (PHH1) were 16 bytes without flameActual; the padding byte is now
 // flameActual, so v1 records are read with flameActual forced to -1 (unknown).
 static const size_t  HIST_HDR = sizeof(HIST_MAGIC) + 1;   // magic + sizeof(HistSample)
@@ -80,13 +83,14 @@ static int  histActiveCount = 0;                           // samples in the act
 
 static int histFileVersion[2] = { 0, 0 };
 
-// Returns the file format version (1..6), or 0 when the header is not valid
+// Returns the file format version (1..7), or 0 when the header is not valid
 static int histHeaderVersion(File& f)
 {
     uint8_t hdr[HIST_HDR];
     if (f.read(hdr, HIST_HDR) != HIST_HDR) return 0;
     if (memcmp(hdr, HIST_MAGIC, 3) != 0) return 0;
-    if (hdr[3] == '6' && hdr[4] == sizeof(HistSample))   return 6;
+    if (hdr[3] == '7' && hdr[4] == sizeof(HistSample))   return 7;
+    if (hdr[3] == '6' && hdr[4] == HIST_V6_SIZE)         return 6;
     if (hdr[3] == '5' && hdr[4] == sizeof(HistSampleV5)) return 5;
     if (hdr[3] == '4' && hdr[4] == sizeof(HistSampleV4)) return 4;
     if (hdr[3] == '3' && hdr[4] == sizeof(HistSampleV3)) return 3;
@@ -94,12 +98,18 @@ static int histHeaderVersion(File& f)
     if (hdr[3] == '1' && hdr[4] == sizeof(HistSampleV2)) return 1;
     return 0;
 }
-static size_t histRecordSize(int ver) { return ver >= 6 ? sizeof(HistSample) : ver == 5 ? sizeof(HistSampleV5) : ver == 4 ? sizeof(HistSampleV4) : ver == 3 ? sizeof(HistSampleV3) : sizeof(HistSampleV2); }
+static size_t histRecordSize(int ver) { return ver >= 7 ? sizeof(HistSample) : ver == 6 ? HIST_V6_SIZE : ver == 5 ? sizeof(HistSampleV5) : ver == 4 ? sizeof(HistSampleV4) : ver == 3 ? sizeof(HistSampleV3) : sizeof(HistSampleV2); }
 
 // Read one record of the given file version into the current layout
 static bool histReadRecord(File& f, int ver, HistSample& out)
 {
-    if (ver >= 6) return f.read((uint8_t*)&out, sizeof(out)) == sizeof(out);
+    if (ver >= 7) return f.read((uint8_t*)&out, sizeof(out)) == sizeof(out);
+    if (ver == 6) {   // same fields, 2 padding bytes at the end
+        uint8_t b[HIST_V6_SIZE];
+        if (f.read(b, sizeof(b)) != sizeof(b)) return false;
+        memcpy(&out, b, sizeof(out));
+        return true;
+    }
     if (ver == 5) {
         HistSampleV5 o;
         if (f.read((uint8_t*)&o, sizeof(o)) != sizeof(o)) return false;
@@ -302,7 +312,7 @@ static void historyAppend(const HistSample& s)
     if (!spiffsMounted) return;
     // After a format change: rewrite everything in RAM (already converted, includes s)
     // in the new format to the other file, so no history is lost on an upgrade.
-    if (histActiveCount > 0 && histFileVersion[histActiveFile] != 6) {
+    if (histActiveCount > 0 && histFileVersion[histActiveFile] != 7) {
         int target = 1 - histActiveFile;
         SPIFFS.remove(HIST_FILES[target]);
         File f = SPIFFS.open(HIST_FILES[target], FILE_WRITE);
@@ -313,7 +323,7 @@ static void historyAppend(const HistSample& s)
         f.close();
         SPIFFS.remove(HIST_FILES[histActiveFile]);   // its samples are in the new file now
         histFileVersion[histActiveFile] = 0;
-        histFileVersion[target] = 6;
+        histFileVersion[target] = 7;
         histActiveFile = target;
         histActiveCount = histCount;
         return;
@@ -326,7 +336,7 @@ static void historyAppend(const HistSample& s)
     bool fresh = !SPIFFS.exists(HIST_FILES[histActiveFile]);
     File f = SPIFFS.open(HIST_FILES[histActiveFile], fresh ? FILE_WRITE : FILE_APPEND);
     if (!f) return;
-    if (fresh) { f.write(HIST_MAGIC, sizeof(HIST_MAGIC)); uint8_t sz = sizeof(HistSample); f.write(&sz, 1); histFileVersion[histActiveFile] = 6; }
+    if (fresh) { f.write(HIST_MAGIC, sizeof(HIST_MAGIC)); uint8_t sz = sizeof(HistSample); f.write(&sz, 1); histFileVersion[histActiveFile] = 7; }
     if (f.write((const uint8_t*)&s, sizeof(s)) == sizeof(s)) histActiveCount++;
     else LOGE("history", "append to %s failed (SPIFFS %u of %u bytes used)", HIST_FILES[histActiveFile], (unsigned)SPIFFS.usedBytes(), (unsigned)SPIFFS.totalBytes());
     f.close();

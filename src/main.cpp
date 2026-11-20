@@ -280,7 +280,8 @@ void setup()
     netSetup();    // waits for confirmation of a new static IP
     fwSetup();     // update check from GitHub Releases (fwUpdate.h)
     stoveMutex = xSemaphoreCreateRecursiveMutex();
-    xTaskCreatePinnedToCore(sensorTask, "SensorTask", 8192, NULL, 1, NULL, 0);
+    // 5 KB stack: it used 2.3 KB at most (measured, esp32_task_stack_free_bytes)
+    xTaskCreatePinnedToCore(sensorTask, "SensorTask", 5120, NULL, 1, NULL, 0);
     getStates();
 }
 

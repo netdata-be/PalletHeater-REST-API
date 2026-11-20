@@ -309,6 +309,8 @@ static void mqttCallback(char* topic, byte* payload, unsigned int len)
 
 static void mqttConnect()
 {
+    // 1 KB buffer (discovery messages are ~600 bytes), only once MQTT is used
+    if (mqtt.getBufferSize() < 1024) mqtt.setBufferSize(1024);
     mqtt.setServer(mqttCfg.host.c_str(), mqttCfg.port);
     String will = mqttCfg.prefix + "/status";
     bool ok = mqttCfg.user.length()
@@ -338,7 +340,6 @@ void mqttSetup()
     uint64_t mac = ESP.getEfuseMac();
     char id[32]; snprintf(id, sizeof(id), "openpelletbridge_%06x", (uint32_t)(mac >> 24) & 0xFFFFFF);
     mqttClientId = id;
-    mqtt.setBufferSize(1024);     // discovery messages are ~600 bytes
     mqtt.setSocketTimeout(2);     // do not block the loop long when the broker is down
     mqtt.setKeepAlive(30);
     mqtt.setCallback(mqttCallback);
