@@ -22,7 +22,8 @@
 #define FW_REPO "netdata-be/PalletHeater-REST-API"
 #endif
 #define FW_ASSET PC_FW_ASSET   // the old name PC_FW_ASSET_OLD (up to v1.0.0) is the fallback, see pc::firmwareAssetRank
-static const unsigned long FW_FIRST_CHECK_MS = 2UL * 60UL * 1000UL;
+static const unsigned long FW_FIRST_CHECK_MS = 2UL * 60UL * 1000UL;   // HTTPS off: first check after start-up
+static const unsigned long FW_BOOT_WAIT_MS = 90UL * 1000UL;           // HTTPS on: start-up check only within this time
 static const unsigned long FW_CHECK_EVERY_MS = 24UL * 3600UL * 1000UL;
 
 extern const uint8_t caBundle[] asm("_binary_certs_x509_crt_bundle_bin_start");
@@ -282,6 +283,10 @@ void fwSetup()
     fwLastInstall = p.getString("last", "");
     fwLastAttempt = p.getString("prog", "");
     p.end();
+    // HTTPS on: the automatic check runs right at start-up, before HTTPS reserves its buffers
+    // (constants.h); the HTTPS setting is read here as well, fwSetup() runs first
+    Preferences h; h.begin("https", true); bool httpsOn = h.getBool("enabled", true); h.end();
+    fwBootCheckPending = fwAutoCheck && httpsOn;
     if (fwLastAttempt.length() && !fwLastAttempt.startsWith("failed"))
         LOGW("update", "the previous GitHub install did not finish (controller restarted or powered off during it), last step: %s", fwLastAttempt.c_str());
 }
@@ -289,8 +294,25 @@ void fwSetup()
 // From loop(): the automatic check.
 void fwLoop()
 {
-    if (!fwAutoCheck || fwBusy || otaActive || httpsSessionActive || WiFi.status() != WL_CONNECTED || !fwTimeValid()) return;
     static unsigned long lastTry = 0;
+    if (fwBootCheckPending) {
+        static bool started = false;
+        if (fwBusy) return;                                   // running
+        if (started) { fwBootCheckPending = false; return; }  // done (result logged by the task)
+        if (millis() > FW_BOOT_WAIT_MS) {
+            fwBootCheckPending = false;
+            LOGW("update", "no update check at start-up: no network or clock within %lu s (with HTTPS on there is no daily check; use the button)", FW_BOOT_WAIT_MS / 1000);
+            return;
+        }
+        if (otaActive || WiFi.status() != WL_CONNECTED || !fwTimeValid()) return;
+        started = fwStart(false);
+        lastTry = millis();
+        if (!started) fwBootCheckPending = false;
+        return;
+    }
+    // HTTPS on: no daily check (it would take the HTTPS buffers, see constants.h); by hand only
+    if (httpsTlsOn) return;
+    if (!fwAutoCheck || fwBusy || otaActive || httpsSessionActive || WiFi.status() != WL_CONNECTED || !fwTimeValid()) return;
     unsigned long now = millis();
     unsigned long wait = fwCheckedAt ? FW_CHECK_EVERY_MS : (lastTry ? 60UL * 60UL * 1000UL : FW_FIRST_CHECK_MS);
     unsigned long since = fwCheckedAt ? now - fwCheckedAt : (lastTry ? now - lastTry : now);

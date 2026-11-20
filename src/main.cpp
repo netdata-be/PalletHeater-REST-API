@@ -231,6 +231,7 @@ void setup()
         LOGI("sys", "Bluetooth disabled (setting) - BLE not started");
     }
     enableOTA(apiKey);   // OTA password = API key
+    fwSetup();           // update check from GitHub Releases (fwUpdate.h); before HTTPS: the start-up check goes first
     httpsSetup();        // HTTPS task: waits for WiFi, makes the certificate the first time
     http6Setup();        // IPv6 relay for plain HTTP
     if (spiffsMounted) {
@@ -279,7 +280,6 @@ void setup()
     }
     mqttSetup();   // connects from loop() once enabled and WiFi is up
     netSetup();    // waits for confirmation of a new static IP
-    fwSetup();     // update check from GitHub Releases (fwUpdate.h)
     stoveMutex = xSemaphoreCreateRecursiveMutex();
     // 5 KB stack: it used 2.3 KB at most (measured, esp32_task_stack_free_bytes)
     xTaskCreatePinnedToCore(sensorTask, "SensorTask", 5120, NULL, 1, NULL, 0);

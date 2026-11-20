@@ -433,6 +433,12 @@ volatile bool otaActive = false;   // set while an OTA firmware update is runnin
 // Only one TLS connection at a time fits in memory (~35 - 40 KB each): the HTTPS server
 // (https.h) and the GitHub update (fwUpdate.h) wait for each other with these two flags
 volatile bool httpsSessionActive = false;
+// The GitHub update check needs the memory of the HTTPS buffers, and after a check the heap was
+// sometimes too fragmented to reserve them again (20/11/2026: largest block 32 KB, then 9 KB;
+// HTTPS refused every connection). So with HTTPS on, the automatic check runs once at
+// start-up, before HTTPS reserves its buffers (fwUpdate.h), and not daily.
+volatile bool httpsTlsOn = false;            // HTTPS enabled (mirror of httpsEnabled, https.h)
+volatile bool fwBootCheckPending = false;    // start-up check not done yet: HTTPS waits with its buffers
 volatile bool httpsHoldsTls = false;   // the HTTPS server holds its reserved TLS buffers (~34 KB)
 // Telnet debug menu on port 23, stored in NVS ("telnet"/"enabled"), switchable at runtime
 bool telnetEnabled = true;

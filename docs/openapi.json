@@ -3096,7 +3096,7 @@
     "/api/firmware": {
       "get": {
         "summary": "Firmware update status (GitHub releases)",
-        "description": "Running version and the latest GitHub release of netdata-be/PalletHeater-REST-API. Checked 2 min after start-up and then daily when autoCheck is on. Never installs on its own.",
+        "description": "Running version and the latest GitHub release of netdata-be/PalletHeater-REST-API. Checked automatically when autoCheck is on: right at start-up, before HTTPS reserves its buffers; daily only while HTTPS is off (the check needs the memory of the HTTPS buffers, and the heap could be too fragmented afterwards to reserve them again). Never installs on its own.",
         "responses": {
           "200": {
             "description": "Update status",
@@ -3142,7 +3142,7 @@
             "schema": {
               "type": "boolean"
             },
-            "description": "Daily automatic check on / off"
+            "description": "Automatic check on / off (at start-up; daily while HTTPS is off)"
           }
         ],
         "responses": {

@@ -353,7 +353,7 @@ static bool httpsConfigure()
         r = mbedtls_ssl_conf_own_cert(&httpsConf, &httpsCert, &httpsKey);
     }
     if (r) { httpsMsg = "TLS setup failed"; LOGE("https", "TLS setup failed (-0x%04X)", -r); httpsUnconfigure(); return false; }
-    httpsReserve();
+    if (!fwBootCheckPending && !fwBusy) httpsReserve();   // else the task reserves them after the GitHub check
     return true;
 }
 
@@ -616,6 +616,8 @@ static void httpsTask(void*)
         // the GitHub update check / install has its own TLS connection: do not accept now, the
         // browser's connection waits in the listen queue and is served right after
         if (fwBusy) { httpsRelease("GitHub update needs the memory"); vTaskDelay(pdMS_TO_TICKS(200)); continue; }
+        // start-up: the GitHub check first (at most ~90 s), then the buffers; connections wait
+        if (fwBootCheckPending) { vTaskDelay(pdMS_TO_TICKS(250)); continue; }
         if (!httpsSslReady && !httpsReserve()) {
             // could not get the buffers (fragmented heap): try again in 5 s; connections wait
             if (millis() - lastRefuseLog > 60000) {
@@ -661,7 +663,8 @@ void httpsSetup()
         mbedtls_ssl_config_init(&httpsConf);
         mbedtls_ssl_config_defaults(&httpsConf, MBEDTLS_SSL_IS_SERVER, MBEDTLS_SSL_TRANSPORT_STREAM, MBEDTLS_SSL_PRESET_DEFAULT);
         mbedtls_ssl_conf_rng(&httpsConf, httpsRng, nullptr);
-        if (!httpsReserve()) LOGW("https", "TLS buffers could not be reserved at start-up");
+        if (fwBootCheckPending) LOGI("https", "TLS buffers are reserved after the GitHub update check at start-up");
+        else if (!httpsReserve()) LOGW("https", "TLS buffers could not be reserved at start-up");
     }
     // 9 KB stack: the ECDSA handshake used 6.7 KB at most (measured, esp32_task_stack_free_bytes)
     // Priority 0 = the idle task's: a full TLS handshake is 1.5 - 7 s of pure computation, and
@@ -754,7 +757,7 @@ void handleRouteHttps()
             LOGI("https", "HTTP -> HTTPS redirect %s by %s", httpsRedirect ? "on" : "off", clientIp().c_str());
         }
         if (on >= 0) {
-            httpsEnabled = on == 1;
+            httpsEnabled = on == 1; httpsTlsOn = httpsEnabled;
             Preferences p; p.begin("https", false); p.putBool("enabled", httpsEnabled); p.end();
             httpsReload = true;
             LOGI("https", "HTTPS %s by %s", httpsEnabled ? "enabled" : "disabled", clientIp().c_str());
