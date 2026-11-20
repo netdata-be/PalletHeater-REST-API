@@ -350,6 +350,9 @@ body.dtopen{padding-bottom:var(--dth,340px)}
 .devtools .livelegend{margin:0}
 .xbtn.alert{border-color:var(--err);color:var(--err)}
 button.mini{padding:1px 8px;font-size:11px;font-weight:550;border-radius:7px;margin-left:8px;vertical-align:1px}
+.histnav{display:flex;align-items:center;gap:8px;margin-top:4px}
+.histnav .sp{flex:1}
+.histnav button.mini{margin-left:0}
 .liveout .warn{color:var(--warn)}
 .livewrap{margin:10px 0 6px}
 .livewrap .liveout{margin:0}
@@ -459,6 +462,7 @@ button.mini{padding:1px 8px;font-size:11px;font-weight:550;border-radius:7px;mar
     <div id="histEmpty" class="muted" style="display:none"></div>
     <div id="histCharts">
       <div class="chart" id="histChart"><svg role="img"></svg><div class="tip"></div></div>
+      <div class="histnav"><button class="mini" id="histPrev" type="button"></button><button class="mini" id="zoomReset" type="button" hidden></button><span class="sp"></span><button class="mini" id="histNext" type="button"></button></div>
       <p class="muted" style="font-size:12px;margin:6px 0 0" id="histNote"></p>
       <details class="tbl x"><summary data-i="showTable"></summary><div class="scroll"><table id="histTable"></table></div></details>
     </div>
@@ -731,7 +735,7 @@ const I18N = {
     logLevels:"Log levels per module", logLevelSaved:"Log level {0} = {1}",
     ghLastUnfinished:"The previous install did not finish; last step: {0}.", ghLastFailed:"The previous install failed: {0}.",
     updBadge:"Update", updBadgeTitle:"New firmware {0} available – show it under Device", helpFor:"Explanation",
-    histWeekNote:"Hourly averages, last 7 days (burning = share of the hour the stove was heating), stored on the controller.", burnPct:"Burning", fumeMax:"Fume max.",
+    pelMarkLow:"Pellets low", pelMarkOut:"Pellets used up", pelMarkRefill:"Refilled", pelMarkRefillKg:"Refilled {0} kg", esStopL:"energy saving stop {0}°", esStartL:"restart {0}°", timerBand:"Timer on", timerNote:"Light band: a timer program has the stove on.", noDataWin:"No data in this period.", zoomOut:"Zoom out", histPrev:"‹ Earlier", histNext:"Later ›", zoomHint:"Drag across the chart to zoom in; scroll sideways (or Shift + wheel) to move in time.", zoomedTo:"Showing {0} – {1}: double-click the chart or use Zoom out to go back.", histWeekNote:"Hourly averages, last 7 days (burning = share of the hour the stove was heating), stored on the controller.", burnPct:"Burning", fumeMax:"Fume max.",
     liveTitle:"Live debugging", liveLog:"Firmware log", liveBus:"Stove bus", livePause:"Pause", liveResume:"Resume", liveClear:"Clear", liveDl:"Download",
     liveFilterLog:"Filter on text", liveFilterBus:"Addresses (0x21, 0x6E) or text", busChanges:"Changes only", busWrites:"Writes only", busErrors:"Errors only",
     liveLost:"… older output was overwritten …", liveLines:"{0} lines", liveRate:"{0} transactions · {1}/s", livePaused:"paused", liveNA:"Not available (older firmware)",
@@ -901,7 +905,7 @@ pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low 
     logLevels:"Logniveaus per module", logLevelSaved:"Logniveau {0} = {1}",
     ghLastUnfinished:"De vorige installatie is niet afgerond; laatste stap: {0}.", ghLastFailed:"De vorige installatie is mislukt: {0}.",
     updBadge:"Update", updBadgeTitle:"Nieuwe firmware {0} beschikbaar – toon ze bij Toestel", helpFor:"Uitleg",
-    histWeekNote:"Uurgemiddelden, laatste 7 dagen (brandt = deel van het uur dat de kachel verwarmde), opgeslagen op de controller.", burnPct:"Brandt", fumeMax:"Rookgas max.",
+    pelMarkLow:"Pellets laag", pelMarkOut:"Pellets op", pelMarkRefill:"Bijgevuld", pelMarkRefillKg:"Bijgevuld {0} kg", esStopL:"energy saving stop {0}°", esStartL:"herstart {0}°", timerBand:"Timer aan", timerNote:"Lichte band: een timerprogramma heeft de kachel aan.", noDataWin:"Geen gegevens in deze periode.", zoomOut:"Uitzoomen", histPrev:"‹ Eerder", histNext:"Later ›", zoomHint:"Sleep over de grafiek om in te zoomen; scroll opzij (of Shift + muiswiel) om in de tijd te schuiven.", zoomedTo:"Getoond: {0} – {1}: dubbelklik op de grafiek of gebruik Uitzoomen om terug te gaan.", histWeekNote:"Uurgemiddelden, laatste 7 dagen (brandt = deel van het uur dat de kachel verwarmde), opgeslagen op de controller.", burnPct:"Brandt", fumeMax:"Rookgas max.",
     liveTitle:"Live debugging", liveLog:"Firmware-log", liveBus:"Kachelbus", livePause:"Pauze", liveResume:"Hervat", liveClear:"Wissen", liveDl:"Download",
     liveFilterLog:"Filter op tekst", liveFilterBus:"Adressen (0x21, 0x6E) of tekst", busChanges:"Enkel wijzigingen", busWrites:"Enkel schrijven", busErrors:"Enkel fouten",
     liveLost:"… oudere uitvoer werd overschreven …", liveLines:"{0} regels", liveRate:"{0} transacties · {1}/s", livePaused:"gepauzeerd", liveNA:"Niet beschikbaar (oudere firmware)",
@@ -1071,6 +1075,7 @@ function errDesc(e) { return lang === "nl" && ERR_NL[e.id] ? ERR_NL[e.id] : e.de
 let theme = (() => { try { const v = localStorage.getItem("theme"); return v === "light" || v === "dark" ? v : "auto"; } catch (_) { return "auto"; } })();
 let liveReady = false;   // the live debug block is initialised (its variables are declared further down)
 let state = null, remote = null, timersData = null, hist = null, events = null, histHours = 24, offline = false;
+let histZoom = null;   // [t0, t1] (Unix s) after dragging across the chart, null = the whole range
 let busy = 0, spPending = null, spTimer = null;
 let loadedBuild = null;   // controller.built of the firmware this page came from
 let expert = (() => { try { return localStorage.getItem("expert") === "1"; } catch (_) { return false; } })();
@@ -1283,7 +1288,34 @@ buildSeg($("flameSeg"), [1, 2, 3, 4], v => v, async v => { markSeg($("flameSeg")
 async function pickFan(v) { markSeg($("fanSeg"), v); try { await write(v === 0 ? t("fanOff") : t("fanN", v), "POST", "/api/fan", { speed: v }); } catch (_) {} }
 for (const v of CQ) $("cq").add(new Option(v === "+G" || v.startsWith("-") || v === "0" ? v : "+" + v, v));
 for (const v of PQ) $("pq").add(new Option(v.startsWith("-") || v === "0" ? v : "+" + v, v));
-for (const b of $("rangeSeg").children) b.onclick = () => { histHours = Number(b.dataset.h); markSeg2(); loadHistory(); };
+for (const b of $("rangeSeg").children) b.onclick = () => { histHours = Number(b.dataset.h); histZoom = null; markSeg2(); loadHistory(); };
+// zoom out: back to the chosen range (and to its data: 7 d may have loaded the 2-min samples)
+function zoomOut() { histZoom = null; histShow(); }
+$("zoomReset").onclick = zoomOut;
+// move the shown window in time (keeps its width), within the loaded data; back at "now" with
+// the width of the chosen range it follows the live data again
+let panAcc = 0, panRaf = 0;
+// which data the shown window needs: the 2-minute samples (last 24 h) or the hourly averages (7 d)
+function histWantFine() {
+  const day = Date.now() / 1000 - 24 * 3600 + 120;
+  return histZoom ? histZoom[0] >= day : histHours <= 24;
+}
+const histIsFine = () => !!(hist && hist.samples && hist.interval !== 3600);
+let histView = null, histDataStart = null;   // shown [t0, t1] and the oldest loaded sample (set by renderHistory)
+function histPan(sec) {
+  if (!histView) return;
+  const now = Math.floor(Date.now() / 1000), w = histView[1] - histView[0];
+  let a = histView[0] + sec, b = histView[1] + sec;
+  // further back than the loaded data: the hourly week data goes back 7 days, then stop
+  const oldest = histIsFine() ? now - 7 * 24 * 3600 : (histDataStart ?? now - 7 * 24 * 3600);
+  if (a < oldest) { a = oldest; b = a + w; }
+  if (b >= now) { b = now; a = now - w; if (Math.abs(w - histHours * 3600) < 60) { histZoom = null; histShow(); return; } }
+  histZoom = [Math.floor(a), Math.ceil(b)]; histShow();
+}
+// draw, or load first when the window needs the other kind of data (2-min / hourly)
+function histShow() { if (hist && hist.samples && histWantFine() !== histIsFine()) loadHistory(); else renderHistory(); }
+$("histPrev").onclick = () => histView && histPan(-(histView[1] - histView[0]) / 2);
+$("histNext").onclick = () => histView && histPan((histView[1] - histView[0]) / 2);
 function markSeg2() { for (const b of $("rangeSeg").children) { const on = Number(b.dataset.h) === histHours; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on); } }
 
 // ---------- set point (debounced) ----------
@@ -2474,7 +2506,7 @@ function renderTimers() {
   for (const [name, tm] of Object.entries(timersData)) wrap.appendChild(timerCard(name, tm));
 }
 async function loadTimers() {
-  try { const { data } = await api("GET", "/api/timers"); timersData = data.timers; renderTimers(); renderNext(); }
+  try { const { data } = await api("GET", "/api/timers"); timersData = data.timers; renderTimers(); renderNext(); if (hist) renderHistory(); }   // timer bands
   catch (e) { $("timers").innerHTML = ""; $("timers").appendChild(el("p", "muted", t("timersErr", e.message))); }
 }
 $("reloadTimers").onclick = () => { timersData = null; renderTimers(); loadTimers(); };
@@ -2905,12 +2937,23 @@ function fmtVal(s, v) {
 }
 function renderHistory() {
   markSeg2(); renderToggles();
-  $("histNote").textContent = t(histHours > 24 ? "histWeekNote" : "histNote");
+  const weekData = hist && hist.interval === 3600;
+  const zd = z => fmtDate(new Date(z * 1000)) + " " + fmtHM(new Date(z * 1000));
+  $("histNote").textContent = t(weekData ? "histWeekNote" : "histNote") + (timersData ? " " + t("timerNote") : "") + " " + (histZoom ? t("zoomedTo", zd(histZoom[0]), zd(histZoom[1])) : t("zoomHint"));
+  $("zoomReset").hidden = !histZoom; $("zoomReset").textContent = t("zoomOut");
+  $("histPrev").textContent = t("histPrev"); $("histNext").textContent = t("histNext");
   const empty = $("histEmpty"), charts = $("histCharts");
   // the server works in whole hours: cut shorter ranges (30 min) here
   const now = Math.floor(Date.now() / 1000), fT = hist && hist.fields ? hist.fields.indexOf("t") : 0;
   const tEnd = hist && hist.samples && hist.samples.length ? Math.max(now, hist.samples[hist.samples.length - 1][fT]) : now;
-  const samples = hist && hist.samples ? hist.samples.filter(r => r[fT] >= tEnd - histHours * 3600) : null;
+  const samples = hist && hist.samples ? hist.samples.filter(r => histZoom ? r[fT] >= histZoom[0] && r[fT] <= histZoom[1] : r[fT] >= tEnd - histHours * 3600) : null;
+  if ((!samples || samples.length < 2) && histZoom && hist && hist.samples) {   // moved to a period without data
+    empty.style.display = "none"; charts.style.display = "";
+    const svg0 = $("histChart").querySelector("svg"); svg0.setAttribute("viewBox", "0 0 400 40"); svg0.innerHTML = "";
+    svg0.appendChild(svgEl("text", { x: 34, y: 24 }, t("noDataWin")));
+    histView = histZoom.slice(); $("histNext").disabled = false; $("histPrev").disabled = !histIsFine() && histDataStart !== null && histZoom[0] <= histDataStart + 60;
+    return;
+  }
   if (!samples || samples.length < 2) {
     charts.style.display = "none"; empty.style.display = ""; empty.textContent = hist && hist.error ? t("histErr", hist.error) : t("histEmpty"); return;
   }
@@ -2937,19 +2980,28 @@ function renderHistory() {
   const lanes = LANES.filter(l => series.some(s => s.lane === l.id));
   const host = $("histChart"), svg = host.querySelector("svg"), tip = host.querySelector(".tip");
   const W = Math.max(280, host.clientWidth), m = { l: 34, r: 58, t: 6, b: 22 }, gap = 26, titleH = 14;
-  let H = m.t + (histVis.state ? 14 : 0);
+  let H = m.t + (histVis.state ? 26 : 0);   // two label rows for the state / pellet lines
   const laneGeo = lanes.map(l => { const top = H + titleH; H = top + l.h + gap; return { ...l, top }; });
   H = H - gap + m.b;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.innerHTML = "";
   if (!lanes.length) { svg.setAttribute("viewBox", `0 0 ${W} 40`); svg.appendChild(svgEl("text", { x: m.l, y: 24 }, t("histNothing"))); return; }
   // the x axis always spans the selected range (6/12/24 h), also when less history is stored
-  const t1 = Math.max(times[times.length - 1], Math.floor(Date.now() / 1000)), t0 = t1 - histHours * 3600;
+  // zoomed: exactly the dragged window
+  const t1 = histZoom ? histZoom[1] : Math.max(times[times.length - 1], Math.floor(Date.now() / 1000)), t0 = histZoom ? histZoom[0] : t1 - histHours * 3600;
   const X = tm => m.l + (tm - t0) / (t1 - t0 || 1) * (W - m.l - m.r);
+  histView = [t0, t1]; histDataStart = hist.samples.length ? hist.samples[0][fT] : null;
+  $("histPrev").disabled = histDataStart === null || (!histIsFine() && t0 <= histDataStart + 60);
+  $("histNext").disabled = !histZoom;
   const plotTop = laneGeo[0].top, plotBottom = laneGeo[laneGeo.length - 1].top + laneGeo[laneGeo.length - 1].h;
 
+  // timer programs: a light band where a program has the stove on (switch-on / switch-off
+  // moments of the enabled programs walked in order; the week before t0 sets the start state)
+  const timerIv = timerOnIntervals(t0, t1);
+  for (const [a, b] of timerIv)
+    svg.appendChild(svgEl("rect", { x: X(a), y: plotTop, width: Math.max(0, X(b) - X(a)), height: plotBottom - plotTop, fill: "var(--accent)", opacity: 0.06 }));
   // state change lines first, so data draws on top
   if (histVis.state) {
-    let lastLabelX = -999;   // right end of the last label
+    const labelRowX = [-999, -999];   // right end of the last label per row
     // exact changes from the state log (/api/events); older firmware: derive them from the samples
     // Before the log starts (or without it) the changes are derived from the 2-min samples.
     // The first log entry with from = null only marks the start of the log, not a change.
@@ -2961,27 +3013,74 @@ function renderHistory() {
     const errs = (Array.isArray(events) ? events : []).filter(e => e.type === "error" && e.id && e.t >= t0 && e.t <= t1).map(e => ({ t: e.t, err: e.error }));
     // serial link to the stove lost (red) / back (green)
     const links = (Array.isArray(events) ? events : []).filter(e => e.type === "link" && e.t >= t0 && e.t <= t1).map(e => ({ t: e.t, link: !!e.up }));
-    const changes = sampled.concat(logged, errs, links).sort((a, b) => a.t - b.t);
+    // pellet reserve: level sensor low (0 -> 1..5), refilled (-> 0), and the switch-off at the
+    // end of the reserve (state -> final cleaning / off at least 45 min after the sensor went
+    // low: 20 + 30 min, seen 17/11 and 20/11/2026)
+    const pelEv = (Array.isArray(events) ? events : []).filter(e => e.type === "pellet" && e.register === "0xA4");
+    const isLow = v => v >= 1 && v <= 5, lowIv = []; let lowStart = null;
+    const pelMarks = [];
+    for (const e of pelEv) {
+      if (lowStart === null && isLow(e.to) && !isLow(e.from)) { lowStart = e.t; pelMarks.push({ t: e.t, pel: "low" }); }
+      else if (lowStart !== null && e.to === 0) { lowIv.push([lowStart, e.t]); lowStart = null; pelMarks.push({ t: e.t, pel: "refill" }); }
+    }
+    if (lowStart !== null) lowIv.push([lowStart, Infinity]);
+    const emptyAt = tm => lowIv.some(([a, b]) => tm >= a + 45 * 60 && tm <= b);
+    for (const c of logged) if ((c.s === 6 || c.s === 0) && emptyAt(c.t)) c.empty = true;
+    const pl = state && state.pellets;
+    const pels = pelMarks.filter(c => c.t >= t0 && c.t <= t1).map(c => ({ ...c,
+      kg: c.pel === "refill" && pl && pl.lastRefillAt && Math.abs(pl.lastRefillAt - c.t) < 300 ? pl.lastRefillKg : null }));
+    const changes = sampled.concat(logged, errs, links, pels).sort((a, b) => a.t - b.t);
     for (const c of changes) {
-      const x = X(c.t), isLink = c.link !== undefined, alarm = (isLink && !c.link) || c.err !== undefined || [8, 9, 10, -1].includes(c.s);
-      const col = isLink ? (c.link ? "var(--ok)" : "var(--err)") : alarm ? "var(--err)" : "var(--muted)";
-      svg.appendChild(svgEl("line", { x1: x, x2: x, y1: m.t + 10, y2: plotBottom, stroke: col, "stroke-width": isLink ? 1.5 : 1, "stroke-dasharray": isLink ? "6 3" : "2 3", opacity: isLink || alarm ? 0.9 : 0.55 }));
+      const x = X(c.t), isLink = c.link !== undefined, isPel = c.pel !== undefined;
+      const alarm = (isLink && !c.link) || c.err !== undefined || [8, 9, 10, -1].includes(c.s) || c.empty;
+      const col = isPel ? (c.pel === "refill" ? "var(--ok)" : "var(--warn)") : isLink ? (c.link ? "var(--ok)" : "var(--err)") : alarm ? "var(--err)" : "var(--muted)";
+      svg.appendChild(svgEl("line", { x1: x, x2: x, y1: m.t + 10, y2: plotBottom, stroke: col, "stroke-width": isLink || isPel ? 1.5 : 1, "stroke-dasharray": isLink || isPel ? "6 3" : "2 3", opacity: isLink || isPel || alarm ? 0.9 : 0.55 }));
       // label only when it fits after the previous one (≈6.5 px per character at 11 px)
-      const label = String(c.link !== undefined ? t(c.link ? "evLinkUp" : "evLinkDown") : c.err !== undefined ? c.err : STATE_NAME[lang][c.s] ?? c.s);
-      if (x > lastLabelX && x + 3 + label.length * 6.5 < W - 4) { svg.appendChild(svgEl("text", { x: x + 3, y: m.t + 9, style: c.link ? "fill:var(--ok)" : alarm ? "fill:var(--err)" : "" }, label)); lastLabelX = x + 3 + label.length * 6.5 + 8; }
+      const label = String(isPel ? (c.pel === "low" ? t("pelMarkLow") : c.kg ? t("pelMarkRefillKg", c.kg) : t("pelMarkRefill"))
+        : c.empty ? t("pelMarkOut") : c.link !== undefined ? t(c.link ? "evLinkUp" : "evLinkDown") : c.err !== undefined ? c.err : STATE_NAME[lang][c.s] ?? c.s);
+      const lcol = isPel ? (c.pel === "refill" ? "fill:var(--ok)" : "fill:var(--warn)") : c.link ? "fill:var(--ok)" : alarm ? "fill:var(--err)" : "";
+      // a label where it fits: right of the line, else left of it; important marks (pellets,
+      // errors, link down, pellets used up) may use a second row when the first one is taken
+      const lw = label.length * 6.5, rows = isPel || alarm ? [0, 1] : [0];
+      for (const row of rows) {
+        const y = m.t + 9 + row * 12, prev = labelRowX[row];
+        if (x > prev && x + 3 + lw < W - m.r) { svg.appendChild(svgEl("text", { x: x + 3, y, style: lcol }, label)); labelRowX[row] = x + 3 + lw + 8; break; }
+        if (x - 3 - lw > prev && x + 3 + lw >= W - m.r) { svg.appendChild(svgEl("text", { x: x - 3, y, "text-anchor": "end", style: lcol }, label)); labelRowX[row] = x + 8; break; }
+      }
     }
   }
   const scales = {}, gapS = (hist.interval || 120) * 5;
+  // energy saving: stop at set point + stop, restart at set point + start (start 0 = no restart),
+  // along the set point; the offsets are today's settings (not stored per sample)
+  const es = state && state.energySaving, spSer = series.find(s => s.key === "setpoint");
+  const esLines = es && es.enabled && spSer ? [["stop", es.stop], ["start", es.start]].filter(([, o]) => o)
+    .map(([k, o]) => ({ k, values: spSer.values.map(v => v === null || isNaN(v) ? null : v + o) })) : [];
   for (const l of laneGeo) {
     const ls = series.filter(s => s.lane === l.id);
-    const vals = ls.flatMap(s => s.values).filter(v => v !== null && !isNaN(v));
-    const y = l.fixed ? { lo: l.fixed[0], hi: l.fixed[1], ticks: l.ticks } : !vals.length ? { lo: 0, hi: 1, ticks: [] } : niceTicks(Math.min(...vals), Math.max(...vals), l.h > 100 ? 4 : 2);
+    const vals = ls.flatMap(s => s.values).concat(l.id === "temp" ? esLines.flatMap(e => e.values) : []).filter(v => v !== null && !isNaN(v));
+    // temperatures: 1 degree of room below the lowest and above the highest value (easier to read
+    // than lines on the edge of the lane)
+    const pad = l.id === "temp" || l.id === "fume" ? 1 : 0;
+    const y = l.fixed ? { lo: l.fixed[0], hi: l.fixed[1], ticks: l.ticks } : !vals.length ? { lo: 0, hi: 1, ticks: [] } : niceTicks(Math.min(...vals) - pad, Math.max(...vals) + pad, l.h > 100 ? 4 : 2);
     const Y = v => l.top + (1 - (v - y.lo) / (y.hi - y.lo || 1)) * l.h;
     scales[l.id] = Y;
     svg.appendChild(svgEl("text", { x: m.l, y: l.top - 4, class: "lane" }, l.title()));
     for (const v of y.ticks) {
       svg.appendChild(svgEl("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: "var(--grid)", "stroke-width": 1 }));
       svg.appendChild(svgEl("text", { x: m.l - 6, y: Y(v) + 4, "text-anchor": "end" }, l.id === "temp" || l.id === "fume" ? v + "°" : v));
+    }
+    if (l.id === "temp") for (const e of esLines) {
+      let d = "", prevT = null;
+      e.values.forEach((v, i) => {
+        if (v === null) { prevT = null; return; }
+        const brk = prevT === null || times[i] - prevT > gapS;
+        d += brk ? `M${X(times[i]).toFixed(1)},${Y(v).toFixed(1)}` : `H${X(times[i]).toFixed(1)}V${Y(v).toFixed(1)}`;
+        prevT = times[i];
+      });
+      svg.appendChild(svgEl("path", { d, fill: "none", stroke: "var(--muted)", "stroke-width": 1, "stroke-dasharray": "1 3", opacity: 0.8 }));
+      // label at the right end, inside the plot (the left end has the lane title)
+      let last = null; for (let i = e.values.length - 1; i >= 0 && last === null; i--) last = e.values[i];
+      if (last !== null) svg.appendChild(svgEl("text", { x: W - m.r - 4, y: Y(last) + (e.k === "stop" ? -3 : 11), "text-anchor": "end", style: "font-size:10px" }, t(e.k === "stop" ? "esStopL" : "esStartL", last)));
     }
     for (const s of ls) {
       let d = "", prevT = null;
@@ -3016,8 +3115,10 @@ function renderHistory() {
       svg.appendChild(svgEl("text", { x: X(m0), y: H - 6, "text-anchor": "middle" }, d.toLocaleDateString(lang === "nl" ? "nl-BE" : "en-GB", { weekday: "short", day: "numeric" })));
     }
   } else {
+    // walk in steps of at most an hour from the first full hour and keep the multiples of the
+    // step (stepping by the step itself from an odd hour skipped every label of a 2 / 4 h step)
     const first = new Date(t0 * 1000); first.setMinutes(0, 0, 0);
-    for (let m0 = first.getTime() / 1000; m0 < t1; m0 += stepMin * 60) {
+    for (let m0 = first.getTime() / 1000; m0 < t1; m0 += Math.min(stepMin, 60) * 60) {
       if (m0 <= t0) continue;
       const d = new Date(m0 * 1000); if ((d.getHours() * 60 + d.getMinutes()) % stepMin) continue;
       svg.appendChild(svgEl("text", { x: X(m0), y: H - 6, "text-anchor": "middle" }, fmtHM(d)));
@@ -3034,7 +3135,8 @@ function renderHistory() {
     let i = 0, best = Infinity; times.forEach((x, k) => { const dd = Math.abs(x - tm); if (dd < best) { best = dd; i = k; } });
     const cx = X(times[i]); cross.setAttribute("x1", cx); cross.setAttribute("x2", cx); cross.setAttribute("visibility", "visible");
     tip.innerHTML = ""; const dd = new Date(times[i] * 1000);
-    tip.appendChild(el("div", "tt", fmtDate(dd) + " " + fmtHM(dd) + " · " + (STATE_NAME[lang][stateAt(times[i], states[i])] ?? "–")));
+    const inTimer = timerIv.some(([a, b]) => times[i] >= a && times[i] < b);
+    tip.appendChild(el("div", "tt", fmtDate(dd) + " " + fmtHM(dd) + " · " + (STATE_NAME[lang][stateAt(times[i], states[i])] ?? "–") + (inTimer ? " · " + t("timerBand") : "")));
     series.forEach((s, k) => {
       const v = s.values[i], ok = v !== null && !isNaN(v);
       dots[k].setAttribute("visibility", ok ? "visible" : "hidden");
@@ -3046,7 +3148,46 @@ function renderHistory() {
     const left = (cx / W) * r.width; tip.style.left = Math.min(Math.max(0, left + 12), r.width - tip.offsetWidth) + "px"; tip.style.top = "20px";
   };
   const leave = () => { cross.setAttribute("visibility", "hidden"); dots.forEach(d => d.setAttribute("visibility", "hidden")); tip.style.display = "none"; };
-  hit.addEventListener("pointermove", move); hit.addEventListener("pointerdown", move); hit.addEventListener("pointerleave", leave);
+  // drag across the chart: zoom in on that window (horizontal drags; vertical ones scroll the page)
+  const sel = svgEl("rect", { y: plotTop, height: plotBottom - plotTop, fill: "var(--accent)", opacity: 0.15, visibility: "hidden", "pointer-events": "none" });
+  svg.insertBefore(sel, hit);
+  const pxOf = ev => { const r = svg.getBoundingClientRect(); return Math.min(Math.max((ev.clientX - r.left) * (W / r.width), m.l), W - m.r); };
+  const tOf = px => t0 + (px - m.l) / (W - m.l - m.r) * (t1 - t0);
+  let drag = null;
+  hit.addEventListener("pointerdown", ev => {
+    move(ev);
+    if (ev.button !== 0) return;
+    drag = { x: pxOf(ev) };
+    try { hit.setPointerCapture(ev.pointerId); } catch (_) {}
+  });
+  hit.addEventListener("pointermove", ev => {
+    move(ev);
+    if (!drag) return;
+    const x = pxOf(ev), a = Math.min(x, drag.x), w = Math.abs(x - drag.x);
+    sel.setAttribute("x", a); sel.setAttribute("width", w); sel.setAttribute("visibility", w > 4 ? "visible" : "hidden");
+  });
+  hit.addEventListener("pointerup", ev => {
+    if (!drag) return;
+    const x = pxOf(ev), a = tOf(Math.min(x, drag.x)), b = tOf(Math.max(x, drag.x));
+    drag = null; sel.setAttribute("visibility", "hidden");
+    // at least 3 sample intervals wide (a click or a tiny drag does nothing)
+    if (b - a >= 3 * (hist.interval || 120) && X(b) - X(a) > 8) {
+      histZoom = [Math.floor(a), Math.ceil(b)]; leave();
+      histShow();
+    }
+  });
+  hit.addEventListener("pointercancel", () => { drag = null; sel.setAttribute("visibility", "hidden"); });
+  hit.addEventListener("dblclick", () => { if (histZoom) zoomOut(); });
+  // sideways scroll (trackpad, or Shift + wheel) moves in time; vertical scroll stays the page's
+  hit.addEventListener("wheel", ev => {
+    const dx = ev.shiftKey && !ev.deltaX ? ev.deltaY : ev.deltaX;
+    if (!dx || Math.abs(dx) < Math.abs(ev.shiftKey ? 0 : ev.deltaY)) return;
+    ev.preventDefault();
+    const r = svg.getBoundingClientRect();
+    panAcc += dx / r.width * (t1 - t0);   // one redraw per frame, not per wheel event
+    if (!panRaf) panRaf = requestAnimationFrame(() => { const d = panAcc; panAcc = 0; panRaf = 0; histPan(d); });
+  }, { passive: false });
+  hit.addEventListener("pointerleave", () => { if (!drag) leave(); });
   svg.setAttribute("aria-label", t("history") + ": " + series.map(s => s.label()).join(", "));
 
   // table view (accessible alternative), newest first, all fields
@@ -3066,6 +3207,32 @@ function renderHistory() {
   }
 }
 // state at a moment according to the change log (falls back to the sampled state)
+// Periods in [t0, t1] where the timer programs have the stove on: every enabled program gives a
+// switch-on and / or switch-off moment on its days ("off" = none); walked in time order from a
+// week before t0 (local time, the stove clock follows it)
+function timerOnIntervals(t0, t1) {
+  if (!timersData) return [];
+  const DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"], evs = [];
+  const d = new Date((t0 - 7 * 86400) * 1000); d.setHours(0, 0, 0, 0);
+  for (; d.getTime() / 1000 <= t1; d.setDate(d.getDate() + 1)) {
+    for (const p of Object.values(timersData)) {
+      if (!p || !p.enabled || !p.enabled_on || !p.enabled_on[DAYS[d.getDay()]]) continue;
+      for (const [k, on] of [["on", true], ["off", false]]) {
+        const v = p[k]; if (!v || v === "off" || !/^\d{1,2}:\d{2}$/.test(v)) continue;
+        const [h, m] = v.split(":").map(Number), x = new Date(d); x.setHours(h, m, 0, 0);
+        evs.push([x.getTime() / 1000, on]);
+      }
+    }
+  }
+  evs.sort((a, b) => a[0] - b[0] || (a[1] ? 1 : -1));   // same minute: switch-off first
+  const out = []; let onAt = null;
+  for (const [tm, on] of evs) {
+    if (on && onAt === null) onAt = tm;
+    else if (!on && onAt !== null) { if (tm > t0 && onAt < t1) out.push([Math.max(onAt, t0), Math.min(tm, t1)]); onAt = null; }
+  }
+  if (onAt !== null && onAt < t1) out.push([Math.max(onAt, t0), t1]);
+  return out;
+}
 function stateEvents() { return Array.isArray(events) ? events.filter(e => !e.type || e.type === "state") : []; }
 function stateAt(tm, fallback) {
   const ev = stateEvents(); if (!ev.length || tm < ev[0].t) return fallback;
@@ -3124,7 +3291,7 @@ function renderEvents() {
 let histTimer = null;
 async function loadHistory() {
   clearTimeout(histTimer);
-  const [h, ev] = await Promise.allSettled([api("GET", "/api/history", { hours: Math.max(1, Math.ceil(histHours)) }), api("GET", "/api/events")]);
+  const [h, ev] = await Promise.allSettled([api("GET", "/api/history", { hours: histWantFine() ? 24 : 168 }), api("GET", "/api/events")]);
   hist = h.status === "fulfilled" ? h.value.data : { error: h.reason && h.reason.message };
   events = ev.status === "fulfilled" && ev.value.data && Array.isArray(ev.value.data.events) ? ev.value.data.events.slice().sort((a, b) => a.t - b.t) : null;   // null: firmware without the log
   // brazier cleaning (state 5) is a short periodic step while working: not shown as an event
