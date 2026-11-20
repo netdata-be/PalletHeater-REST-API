@@ -65,6 +65,23 @@ xtensa-esp32-elf-addr2line -pfiaC -e firmware.elf 0x400d1234 0x400d5678   # only
 
 **Restart reason.** `/api/state` → `controller.resetReason` says why the controller last started: the ESP32 reset reason (`power on`, `software restart`, `crash (panic)`, `task watchdog`, `brown-out (supply voltage dropped)`, …) plus, for a restart the firmware did itself, what caused it (`firmware update from GitHub`, `restart requested (web app / API)`, `WiFi switch reverted`, …). After a crash or watchdog reset it also says where the loop task was (a breadcrumb in RTC memory: the step of the main loop, or the web request being handled) and, for the task watchdog, how long that step had been running and which task was running on each CPU, e.g. `task watchdog – loop task was in: http GET /api/dump (for 5.2 s); running: CPU0 IDLE0, CPU1 loopTask`. `controller.bootCount` and `controller.crashCount` (starts after a crash, watchdog or brown-out) are kept in NVS. Metrics: `esp32_boot_count`, `esp32_crash_count`, `esp32_reset_info{reason="…"}`, `esp32_wifi_disconnects_total`. `/api/wifi` has `disconnects` (drops of a working connection since the start) and `lastDisconnect` (`reason`, `code`, `secondsAgo`).
 
+## Network watchdog
+
+Every 10 s the controller sends a round of 3 pings (1 s apart) to the gateway. One lost ping
+does nothing: the network counts as down after 2 rounds in a row without any answer (6 lost
+pings, about 20 s), or when WiFi has not been connected for that long. Then it repairs the
+connection without restarting the controller (a restart cannot help when the network itself
+is down and would only repeat):
+
+1. at once: leave and join the network again (new DHCP lease)
+2. 30 s later: restart the WiFi driver and join again
+3. then restart the driver again after 1, 2, 5, 10, 10 … min
+
+Gateways that never answer ping are ignored (the ping only counts after a first answer).
+Every step is logged in the module `wifi` with the heap at that moment; the rounds without
+answer before that only at debug level. `/api/wifi` (`watchdogRepairs`) and the metric
+`esp32_wifi_watchdog_repairs_total` count the repairs.
+
 ## Finding a bug with the core dump
 
 The summary in the log already names the crashing task and the program counters of its call stack; the ELF file of the same build turns those into function names and source lines.

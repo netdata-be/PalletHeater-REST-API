@@ -153,27 +153,39 @@ static void netSwitchLoop()
 // ── Network watchdog ──────────────────────────────────────────────────
 // 20/11/2026 the controller was unreachable all night (no ping, no mDNS) while the loop kept
 // running (history without gaps): only the network side was gone, and nothing repaired it.
-// Every minute: is WiFi connected and does the gateway answer a ping? (The ping only counts
-// once the gateway answered at least once: some do not answer ping.) When not, repair the
-// connection step by step - never a restart of the controller: when the network itself is
-// down, a restart cannot help and would only repeat (restart loop):
-//   1. after 2 min: reconnect (leave and join the network again, new DHCP lease)
-//   2. 3 min later: restart the WiFi driver (esp_wifi_stop / start) and join again
-//   3. then restart the driver again with a growing pause: 10, 20, 30, 30 ... min
+// Every 10 s a round of 3 pings (1 s apart) goes to the gateway; a round fails when none of
+// them is answered (the ping only counts once the gateway answered at least once: some do not
+// answer ping). One lost ping is no reason to act: the network counts as down after
+// NETWD_DOWN_ROUNDS failed rounds in a row (6 lost pings, ~20 s), or WiFi not connected for
+// that long. Then the connection is repaired step by step - never by restarting the
+// controller: when the network itself is down, a restart cannot help and would only repeat
+// (restart loop):
+//   1. at once: reconnect (leave and join the network again, new DHCP lease)
+//   2. 30 s later: restart the WiFi driver (esp_wifi_stop / start) and join again
+//   3. then restart the driver again after 1, 2, 5, 10, 10 ... min
 // Every step is logged with the heap (a full heap leaves the WiFi driver and lwIP without
 // buffers: incoming packets are dropped silently - then the log shows it).
 #include <ping/ping_sock.h>
-#define NETWD_CHECK_MS     60000UL
-#define NETWD_FIRST_MS    120000UL    // network down this long: first repair
-#define NETWD_DRIVER_MS   180000UL    // after the reconnect: restart the driver
-#define NETWD_MAX_PAUSE_MS 1800000UL  // longest pause between driver restarts
+#define NETWD_CHECK_MS     10000UL    // one ping round per check
+#define NETWD_DOWN_ROUNDS  2          // failed rounds in a row before the network counts as down
+#define NETWD_DRIVER_MS    30000UL    // after the reconnect: restart the driver
+// With a heap this fragmented the WiFi driver cannot allocate receive buffers (~1.6 KB): every
+// packet, the ping answers too, is dropped while the network itself is fine (20/11/2026: largest
+// block 1 - 5 KB at each "outage", always while the web app was loading). Then wait: the web
+// connections end and give the memory back. Only when it lasts NETWD_MEM_WAIT_MS is it repaired.
+#define NETWD_MEM_LOW      6144       // largest free block below this: memory, not the network
+#define NETWD_MEM_WAIT_MS  60000UL
+static const uint32_t NETWD_PAUSE_MS[] = { 60000UL, 120000UL, 300000UL, 600000UL };   // between driver restarts, the last repeats
 static esp_ping_handle_t netwdPing = nullptr;
-static volatile uint32_t netwdPingOkAt = 0;    // millis() of the last answer from the gateway
+static volatile bool netwdRoundOk = false, netwdRoundDone = true;   // the running ping round
 static volatile bool netwdPingEverOk = false;
-static uint32_t netwdDownAt = 0;               // since when the network is down (0 = fine)
+static uint8_t  netwdMisses = 0;               // failed checks in a row
+static uint32_t netwdDownAt = 0;               // since when the network counts as down (0 = fine)
+static uint32_t netwdFirstMissAt = 0;          // first failed check of this outage
 static uint32_t netwdCheckAt = 0;
 static uint32_t netwdNextAt = 0;               // next repair step (millis() since netwdDownAt)
 static uint8_t  netwdStep = 0;                 // repairs done in this outage
+static uint32_t netwdMemLowAt = 0;             // since when the silence comes with low memory (0 = not)
 
 static void netwdHeapText(char* out, size_t n)
 {
@@ -188,7 +200,7 @@ static void netwdPingGateway()
     if (!gw) return;
     if (netwdPing) {   // gateway changed (other network / DHCP): new session
         ip_addr_t cur; esp_ping_get_profile(netwdPing, ESP_PING_PROF_IPADDR, &cur, sizeof(cur));
-        if (cur.u_addr.ip4.addr != (uint32_t)gw) { esp_ping_delete_session(netwdPing); netwdPing = nullptr; }
+        if (cur.u_addr.ip4.addr != (uint32_t)gw) { esp_ping_stop(netwdPing); esp_ping_delete_session(netwdPing); netwdPing = nullptr; }
     }
     if (!netwdPing) {
         esp_ping_config_t cfg = ESP_PING_DEFAULT_CONFIG();
@@ -197,44 +209,59 @@ static void netwdPingGateway()
         cfg.target_addr.type = IPADDR_TYPE_V4;
         cfg.target_addr.u_addr.ip4.addr = (uint32_t)gw;
         esp_ping_callbacks_t cb = {};
-        cb.on_ping_success = [](esp_ping_handle_t, void*) { netwdPingOkAt = millis(); netwdPingEverOk = true; };
+        cb.on_ping_success = [](esp_ping_handle_t, void*) { netwdRoundOk = true; netwdPingEverOk = true; };
+        cb.on_ping_end = [](esp_ping_handle_t, void*) { netwdRoundDone = true; };
         if (esp_ping_new_session(&cfg, &cb, &netwdPing) != ESP_OK) { netwdPing = nullptr; return; }
     }
-    esp_ping_start(netwdPing);   // runs in the ping task; the answer arrives via the callback
+    netwdRoundOk = false; netwdRoundDone = false;
+    if (esp_ping_start(netwdPing) != ESP_OK) netwdRoundDone = true;   // the answers arrive via the callbacks
 }
 
 static void netWatchdogLoop()
 {
-    if (!wifiConnected) { netwdDownAt = 0; return; }   // config portal / first connection: not ours
+    if (!wifiConnected) { netwdDownAt = 0; netwdMisses = 0; return; }   // config portal / first connection: not ours
     if (millis() - netwdCheckAt < NETWD_CHECK_MS) return;
     netwdCheckAt = millis();
     bool wifiUp = WiFi.status() == WL_CONNECTED;
-    // the ping of the previous check (3 tries) had a minute to answer
-    bool gwOk = !netwdPingEverOk || millis() - netwdPingOkAt < NETWD_CHECK_MS + 5000;
+    // the previous round (3 pings, ~3 s) had 10 s; one still running counts as not answered
+    bool gwOk = !netwdPingEverOk || (netwdRoundDone && netwdRoundOk);
+    if (!netwdPing && wifiUp) gwOk = true;   // no round sent yet
     char h[80];
     if (wifiUp && gwOk) {
         if (netwdDownAt) {
             netwdHeapText(h, sizeof(h));
             LOGI("wifi", "network watchdog: network back after %lu s (%u repair step(s); %s)",
-                 (millis() - netwdDownAt) / 1000, netwdStep, h);
-        }
-        netwdDownAt = 0; netwdStep = 0;
+                 (millis() - netwdFirstMissAt) / 1000, netwdStep, h);
+        } else if (netwdMisses) LOGD("wifi", "network watchdog: gateway answers again (%u round(s) without answer)", netwdMisses);
+        netwdDownAt = 0; netwdStep = 0; netwdMisses = 0; netwdMemLowAt = 0;
     } else {
         const char* what = wifiUp ? "WiFi connected, gateway does not answer" : "WiFi not connected";
-        if (!netwdDownAt) {
-            netwdDownAt = millis(); netwdNextAt = NETWD_FIRST_MS; netwdStep = 0;
-            netwdHeapText(h, sizeof(h));
-            LOGW("wifi", "network watchdog: %s (%s, RSSI %d dBm)", what, h, (int)WiFi.RSSI());
-        } else if (millis() - netwdDownAt >= netwdNextAt) {
+        size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+        if (wifiUp && largest < NETWD_MEM_LOW && !netwdDownAt) {
+            if (!netwdMemLowAt) {
+                netwdMemLowAt = millis(); netwdHeapText(h, sizeof(h));
+                LOGW("wifi", "network watchdog: gateway does not answer while memory is low (%s): the WiFi driver has no receive buffers - waiting, no repair", h);
+            }
+            if (millis() - netwdMemLowAt < NETWD_MEM_WAIT_MS) { if (wifiUp && netwdRoundDone) netwdPingGateway(); return; }
+        }
+        if (!netwdMisses) netwdFirstMissAt = millis();
+        if (netwdMisses < 255) netwdMisses++;
+        if (!netwdDownAt && netwdMisses < NETWD_DOWN_ROUNDS) {
+            LOGD("wifi", "network watchdog: %s (round %u)", what, netwdMisses);
+        } else if (!netwdDownAt) {
+            // down: first repair at once
+            netwdDownAt = millis(); netwdNextAt = 0; netwdStep = 0;
+        }
+        if (netwdDownAt && millis() - netwdDownAt >= netwdNextAt) {
             netwdHeapText(h, sizeof(h));
             netwdStep++; netwdRepairs++;
-            uint32_t down = (millis() - netwdDownAt) / 1000;
+            uint32_t down = (millis() - netwdFirstMissAt) / 1000;
             if (netwdStep == 1) {
-                LOGW("wifi", "network watchdog: %s for %lu s - reconnecting (%s)", what, down, h);
+                LOGW("wifi", "network watchdog: %s for %lu s - reconnecting (%s, RSSI %d dBm)", what, down, h, (int)WiFi.RSSI());
                 WiFi.disconnect(false, false);   // keep the stored network
                 delay(100);
                 WiFi.reconnect();
-                netwdNextAt += NETWD_DRIVER_MS;
+                netwdNextAt = NETWD_DRIVER_MS;
             } else {
                 LOGW("wifi", "network watchdog: %s for %lu s - restarting the WiFi driver (repair %u; %s)", what, down, netwdStep, h);
                 esp_wifi_disconnect();
@@ -243,13 +270,12 @@ static void netWatchdogLoop()
                 esp_err_t e = esp_wifi_start();
                 if (e == ESP_OK) e = esp_wifi_connect();
                 if (e != ESP_OK) LOGE("wifi", "network watchdog: WiFi driver restart failed: %s", esp_err_to_name(e));
-                // pause before the next driver restart: 10, 20, 30, 30 ... min
-                uint32_t pause = 600000UL * (netwdStep - 1);
-                netwdNextAt += pause < NETWD_MAX_PAUSE_MS ? pause : NETWD_MAX_PAUSE_MS;
+                size_t i = netwdStep - 2, n = sizeof(NETWD_PAUSE_MS) / sizeof(NETWD_PAUSE_MS[0]);
+                netwdNextAt += NETWD_PAUSE_MS[i < n ? i : n - 1];
             }
         }
     }
-    if (wifiUp) netwdPingGateway();
+    if (wifiUp && netwdRoundDone) netwdPingGateway();
 }
 
 void netLoop()
