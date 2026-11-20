@@ -6,8 +6,8 @@
 //   - checks the latest release (api.github.com, releases/latest: no pre-releases
 //     or drafts) 2 minutes after boot and then every 24 h, when auto check is on;
 //   - downloads and installs it on request (never by itself), then restarts.
-// HTTPS is verified against the Mozilla root CAs in certs/x509_crt_bundle.bin
-// (scripts/gen_ca_bundle.py). The ESP-IDF checks the image (magic byte, checksum,
+// HTTPS is verified against the root CAs in certs/x509_crt_bundle.bin: GitHub's and a few
+// more as margin, listed in certs/ca_roots.pem (scripts/gen_ca_bundle.py). The ESP-IDF checks the image (magic byte, checksum,
 // SHA-256) before it is made bootable; a broken download is never activated.
 //
 // The work runs in its own task: a TLS connection blocks for seconds, and the
