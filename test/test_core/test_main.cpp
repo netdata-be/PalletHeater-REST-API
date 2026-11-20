@@ -466,6 +466,50 @@ static void test_pellet_tracker()
     TEST_ASSERT_EQUAL_FLOAT(-1, (float)p.remainingKg());
 }
 
+// One full cycle: refill (sensor clear), burn `secs` at `auger`, then the alarm
+static uint32_t pelletCycle(pc::PelletTracker& p, uint32_t t, uint32_t secs, float auger)
+{
+    t = pelletRun(p, t, 60, 0, auger);    // refill confirmed
+    t = pelletRun(p, t, secs, 0, auger);
+    return pelletRun(p, t, 70, 5, auger); // alarm confirmed
+}
+// Each alarm corrects the estimate: the prediction error is kept per cycle and recent
+// cycles weigh more, so a changed burn rate shows up quickly
+static void test_pellet_self_correcting()
+{
+    pc::PelletTracker p;
+    uint32_t t = 1800000000;
+    t = pelletRun(p, t, 70, 5, 6.2f);                 // first alarm: start
+    t = pelletCycle(p, t, 36000, 6.2f);               // 15 kg in 10 h
+    TEST_ASSERT_EQUAL(1, p.nCycles);
+    TEST_ASSERT_TRUE(std::isnan(p.predKg[0]));        // no estimate before the first cycle
+    t = pelletCycle(p, t, 36000, 6.2f);               // the same again: predicted about right
+    TEST_ASSERT_FLOAT_WITHIN(0.1f, 0, p.predKg[1]);
+    double k2 = p.kgPerUnit();
+    // other pellets: 15 kg last only 8 h -> the alarm comes early, ~3 kg still predicted
+    t = pelletCycle(p, t, 28800, 6.2f);
+    TEST_ASSERT_FLOAT_WITHIN(0.2f, 3.0f, p.predKg[2]);
+    TEST_ASSERT_TRUE(p.kgPerUnit() > k2);
+    // weighted: closer to the new cycle than the plain average of the three
+    double plain = 45.0 / (p.cycles[0].units + p.cycles[1].units + p.cycles[2].units);
+    TEST_ASSERT_TRUE(p.kgPerUnit() > plain);
+    TEST_ASSERT_EQUAL_FLOAT(1.0f, (float)p.cycleWeight(2));
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.75f, (float)p.cycleWeight(1));
+    // the other way round: the alarm comes late -> overdue while burning past the estimate
+    t = pelletRun(p, t, 60, 0, 6.2f);                 // refill
+    TEST_ASSERT_FALSE(p.overdue());
+    t = pelletRun(p, t, 40000, 0, 6.2f);              // longer than any cycle so far
+    TEST_ASSERT_TRUE(p.overdue());
+    TEST_ASSERT_EQUAL_FLOAT(0, (float)p.remainingKg());
+    t = pelletRun(p, t, 70, 5, 6.2f);
+    TEST_ASSERT_FALSE(p.overdue());                   // low now
+    TEST_ASSERT_TRUE(p.predKg[3] < -1.0f);            // came late
+    // the oldest cycle drops out with its prediction
+    for (int i = 0; i < 7; i++) t = pelletCycle(p, t, 36000, 6.2f);
+    TEST_ASSERT_EQUAL(10, p.nCycles);
+    TEST_ASSERT_FALSE(std::isnan(p.predKg[0]));       // the first cycle (NAN) is gone
+}
+
 static void test_hour_acc()
 {
     pc::HourAcc a;
@@ -533,5 +577,6 @@ int main(int, char**)
     RUN_TEST(test_hour_acc);
     RUN_TEST(test_pellet_tracker);
     RUN_TEST(test_pellet_units_capped);
+    RUN_TEST(test_pellet_self_correcting);
     return UNITY_END();
 }

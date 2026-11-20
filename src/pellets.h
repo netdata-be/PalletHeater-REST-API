@@ -34,8 +34,17 @@ void pelletsLoad()
     p.begin("pellet", true);
     pc::PelletTracker t;
     size_t n = p.getBytesLength("s");
-    if (n == sizeof(t) && p.getBytes("s", &t, sizeof(t)) == sizeof(t) && t.version == pellets.version) {
+    // version 1 had no predKg at the end (same fields before it): read it and convert
+    const size_t v1 = offsetof(pc::PelletTracker, predKg);
+    bool v1ok = n >= v1 && n < v1 + 8 && n < sizeof(t) && p.getBytes("s", &t, n) == n && t.version == 1;
+    if (v1ok) {
+        for (int i = 0; i < pc::PelletTracker::MAX_CYCLES; i++) t.predKg[i] = NAN;
+        t.version = pellets.version;
+        LOGI("stove", "pellets: stored data converted from version 1");
+    }
+    if (v1ok || (n == sizeof(t) && p.getBytes("s", &t, sizeof(t)) == sizeof(t) && t.version == pellets.version)) {
         pellets = t;
+        if (v1ok) pelletsDirty = true;
         pellets.lastT = 0;   // no units for the time the controller was off
         LOGI("stove", "pellets: %d calibration cycle(s), %s", pellets.nCycles,
              pellets.cycleStart < 0 ? "waiting for the first low pellet alarm" : pellets.low ? "pellets low, waiting for the refill" : "counting since the last refill");
@@ -43,6 +52,7 @@ void pelletsLoad()
         LOGW("stove", "pellets: stored data has another layout (%u bytes) - starting again", (unsigned)n);
     }
     p.end();
+    if (pelletsDirty) pelletsSave();
 }
 
 // Average auger value over the hourly records of the last 7 days (burning and not
@@ -94,6 +104,7 @@ void pelletsJson(JsonObject o, bool detail)
     o["calibrated"] = k > 0;
     o["cycles"] = pellets.nCycles;
     o["low"] = pellets.low != 0;
+    o["overdue"] = pellets.overdue();   // past the estimate, the alarm did not come yet
     if (rem >= 0) o["remainingKg"] = serialized(String(rem, 1)); else o["remainingKg"] = nullptr;
     // until the low pellet alarm, at the current auger value (only while it feeds)
     double h = pellets.hoursAt(cachedAugerSpeed);
@@ -127,6 +138,9 @@ void pelletsJson(JsonObject o, bool detail)
         c["kg"] = pellets.cycles[i].kg;
         c["units"] = (uint32_t)pellets.cycles[i].units;
         c["gramsPerUnit"] = serialized(String(pellets.cycles[i].kg / pellets.cycles[i].units * 1000.0, 4));
+        c["weight"] = serialized(String(pellets.cycleWeight(i), 3));
+        // kg the estimate still had left at this alarm: > 0 the alarm came early, < 0 late
+        if (isnan(pellets.predKg[i])) c["predKg"] = nullptr; else c["predKg"] = serialized(String(pellets.predKg[i], 2));
     }
 }
 

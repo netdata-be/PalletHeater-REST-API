@@ -5281,7 +5281,7 @@
       },
       "Pellets": {
         "type": "object",
-        "description": "Pellet consumption, measured between low pellet alarms. The controller counts auger units (auger value RAM 0x0D x seconds). The level sensor (RAM 0xA4) trips at the same level each time, so between two trips exactly the pellets added in between were burned: kg per unit = kg added / units. A refill is detected when the sensor clears again after a trip (refillKg); topping up without an alarm is entered with add.",
+        "description": "Pellet consumption, measured between low pellet alarms. The controller counts auger units (auger value RAM 0x0D x seconds). The level sensor (RAM 0xA4) trips at the same level each time, so between two trips exactly the pellets added in between were burned: kg per unit = kg added / units. A refill is detected when the sensor clears again after a trip (refillKg); topping up without an alarm is entered with add. Cycles are weighted: the newest counts 1, each older one 0.75 times the next.",
         "properties": {
           "calibrated": {
             "type": "boolean",
@@ -5294,6 +5294,10 @@
           "low": {
             "type": "boolean",
             "description": "Between a low pellet alarm and the refill"
+          },
+          "overdue": {
+            "type": "boolean",
+            "description": "Burning past the estimate: the counter says the pellets above the sensor are used up, but the alarm did not come yet (remainingKg stays 0). The alarm corrects the calibration."
           },
           "remainingKg": {
             "type": "number",
@@ -5373,6 +5377,15 @@
                 },
                 "gramsPerUnit": {
                   "type": "number"
+                },
+                "weight": {
+                  "type": "number",
+                  "description": "Weight of this cycle in kg per unit (newest = 1)"
+                },
+                "predKg": {
+                  "type": "number",
+                  "nullable": true,
+                  "description": "kg the estimate still predicted when this alarm came: > 0 the alarm came early, < 0 late; null = no estimate yet (first cycle)"
                 }
               }
             }

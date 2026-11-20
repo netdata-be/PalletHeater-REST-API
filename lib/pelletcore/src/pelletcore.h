@@ -518,6 +518,11 @@ struct HourAcc {
 // pre-loading at the start) mean the motor runs all the time: counted as the cycle.
 //   - a trip counts once the sensor stayed low for LOW_CONFIRM_S (it flickers when
 //     the level is right at the sensor); the cycle boundary is where it first went low
+//   - kg per unit weighs recent cycles more (RECENT_WEIGHT per older cycle): a new
+//     pellet brand or a changed refill amount shows up after one or two cycles
+//   - at every trip the kg the estimate still predicted is kept (predKg): > 0 = the
+//     alarm came earlier than calculated, < 0 = later; the next estimate already uses
+//     this cycle, so it corrects itself
 //   - a refill is detected when the sensor is back to normal for REFILL_CONFIRM_S
 //     after a confirmed trip, with the default amount (refillKg); a refill without a
 //     trip (topped up early) can only be entered by hand (addKg)
@@ -533,8 +538,9 @@ struct PelletTracker {
     static const int      MAX_CYCLES = 10;
     static const uint32_t MAX_STEP_S = 30;   // longer gaps (no readings) are counted as 30 s
     static constexpr float AUGER_CYCLE_S = 12.0f;   // auger cycle; a larger on-time = running all the time
+    static constexpr double RECENT_WEIGHT = 0.75;   // weight of each older cycle relative to the next one
 
-    uint32_t version = 1;
+    uint32_t version = 2;         // 2: predKg added at the end (version 1 is read and converted)
     double   units = 0;           // auger units counted since the start
     double   cycleStart = -1;     // units at the last trip, < 0 = no trip seen yet
     float    cycleKg = 0;         // kg added since that trip
@@ -549,6 +555,9 @@ struct PelletTracker {
     float    lastRefillKg = 0;    // its amount
     uint8_t  nCycles = 0;
     PelletCycle cycles[MAX_CYCLES] = {};
+    // per cycle (same index): kg the estimate still had left when the alarm came; NAN = there
+    // was no estimate yet (first cycle). Keep at the end: older layouts are converted by size.
+    float    predKg[MAX_CYCLES] = {NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN};
 
     enum Event { NONE = 0, TRIP = 1, REFILL = 2 };
 
@@ -596,12 +605,22 @@ struct PelletTracker {
     }
     void resetCalibration() { nCycles = 0; }
 
-    // kg per auger unit from the stored cycles (total kg / total units), 0 = not known
+    // kg per auger unit from the stored cycles: weighted total kg / total units, the newest
+    // cycle with weight 1, each older one RECENT_WEIGHT times the next; 0 = not known
     double kgPerUnit() const
     {
-        double kg = 0, u = 0;
-        for (int i = 0; i < nCycles; i++) { kg += cycles[i].kg; u += cycles[i].units; }
+        double kg = 0, u = 0, w = 1;
+        for (int i = nCycles - 1; i >= 0; i--, w *= RECENT_WEIGHT) { kg += w * cycles[i].kg; u += w * cycles[i].units; }
         return u > 0 ? kg / u : 0;
+    }
+    // weight of cycle i in kgPerUnit (newest = 1)
+    double cycleWeight(int i) const { double w = 1; for (int j = nCycles - 1; j > i; j--) w *= RECENT_WEIGHT; return w; }
+    // past the estimate: the counter says the pellets above the sensor are used up, but the
+    // alarm did not come yet (more pellets per unit than calibrated)
+    bool overdue() const
+    {
+        double k = kgPerUnit();
+        return !low && cycleStart >= 0 && k > 0 && cycleKg - k * (units - cycleStart) < 0;
     }
     // Spread of the cycles (relative standard deviation of kg / unit), 0 with < 2 cycles
     double spread() const
@@ -637,7 +656,14 @@ private:
     {
         low = 1;
         if (cycleStart >= 0 && cycleKg > 0 && lowUnits > cycleStart) {
-            if (nCycles == MAX_CYCLES) { memmove(cycles, cycles + 1, sizeof(cycles[0]) * (MAX_CYCLES - 1)); nCycles--; }
+            double k = kgPerUnit();   // before this cycle: what the estimate said
+            float pred = k > 0 ? (float)(cycleKg - k * (lowUnits - cycleStart)) : NAN;
+            if (nCycles == MAX_CYCLES) {
+                memmove(cycles, cycles + 1, sizeof(cycles[0]) * (MAX_CYCLES - 1));
+                memmove(predKg, predKg + 1, sizeof(predKg[0]) * (MAX_CYCLES - 1));
+                nCycles--;
+            }
+            predKg[nCycles] = pred;
             cycles[nCycles++] = { t, cycleKg, (float)(lowUnits - cycleStart) };
         }
         cycleStart = lowUnits;

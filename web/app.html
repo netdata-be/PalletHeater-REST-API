@@ -1204,6 +1204,7 @@ function pelletsLeft(p) {
   let txt = "–";
   if (p && !p.calibrated) txt = t("pelLearning");
   else if (p && p.low) txt = t("pelAtAlarm");
+  else if (p && p.overdue) txt = L("voorbij de schatting: het alarm kan elk moment komen", "past the estimate: the alarm can come any moment");
   else if (p && p.remainingKg != null) {
     txt = t("pelKg", Number(p.remainingKg).toLocaleString(lang === "nl" ? "nl-BE" : "en-GB", { maximumFractionDigits: 1 }));
     if (p.hoursLeft != null) txt += " · " + t("pelAtNow", fmtDur(Math.round(p.hoursLeft * 3600)));
