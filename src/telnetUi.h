@@ -86,11 +86,22 @@ static String fmtTime(time_t t, const char* f = "%d/%m/%Y %H:%M")   // local tim
 static String fmtTemp(float c) { return String(c, 1) + " C"; }
 
 // ── Pages ─────────────────────────────────────────────────────────────
+// What an item does when it is opened: shown with its own sign and colour, so a submenu
+// does not look like a line of information (legend under every menu)
+enum TmItemKind : uint8_t {
+    TI_ACT = 0,   // »  does something right away
+    TI_MENU,      // ▸  opens a submenu
+    TI_VIEW,      // ≡  opens a screen
+    TI_EDIT,      // ↕  change a value (picker or text)
+    TI_TOGGLE,    // •  switches on / off
+    TI_ASK,       // !  asks for confirmation first
+};
 struct TmItem {
     const char* label;
     void (*value)(int i, String& out);   // current value, nullptr = none
     void (*open)(int i);                 // Enter (i = index of the item)
     const char* help;                    // one line, shown while the item is selected
+    TmItemKind  kind;
 };
 struct TmMenu {
     const char*   title;
@@ -119,6 +130,7 @@ struct TmInput {
     char   prompt[64];
     String buf;
     uint8_t max;
+    bool   secret;                       // shown as * (passwords)
     void (*done)(const String& s);       // Enter (with the text, trimmed)
     const char* help;
 };
@@ -190,8 +202,14 @@ static void tmInputStart(const char* prompt, void (*done)(const String&), uint8_
 {
     strncpy(tmInput.prompt, prompt, sizeof(tmInput.prompt) - 1);
     tmInput.prompt[sizeof(tmInput.prompt) - 1] = 0;
-    tmInput.buf = ""; tmInput.max = max; tmInput.done = done; tmInput.help = help;
+    tmInput.buf = ""; tmInput.max = max; tmInput.done = done; tmInput.help = help; tmInput.secret = false;
     tmPush(PK_INPUT, &tmInput);
+}
+// The same for a password: typed characters are shown as *
+static void tmInputSecretStart(const char* prompt, void (*done)(const String&), uint8_t max = 64, const char* help = nullptr)
+{
+    tmInputStart(prompt, done, max, help);
+    tmInput.secret = true;
 }
 static void tmConfirmStart(const String& question, void (*yes)())
 {
@@ -227,21 +245,52 @@ static void tmFooter(const char* keys, const char* help)
     tpf(A_DIM "   %s" A_RST A_EOL, keys);
 }
 
+static const char* tmKindSign(TmItemKind k)
+{
+    static const char* S[] = { "\xC2\xBB", "\xE2\x96\xB8", "\xE2\x89\xA1", "\xE2\x86\x95", "\xE2\x80\xA2", "!" };   // » ▸ ≡ ↕ • !
+    return S[k];
+}
+static const char* tmKindColor(TmItemKind k)
+{
+    static const char* C[] = { A_GRN, A_BOLD A_CYN, A_CYN, A_YEL, A_YEL, A_BOLD A_RED };
+    return C[k];
+}
+static const char* const TM_KIND_NAME[] = { "action", "submenu", "screen", "value", "on / off", "asks first" };
+// A value: on / yes / [x] in green, off / no / [ ] dimmed, a value you can change in yellow
+static void tmValue(TmItemKind k, const String& v)
+{
+    if (!v.length()) return;
+    String l = v; l.toLowerCase();
+    int e = 0; while (e < (int)l.length() && isalpha((unsigned char)l[e])) e++;   // first word
+    String w = l.substring(0, e);
+    bool on  = w == "on" || w == "yes" || w == "required" || w == "connected" || l.startsWith("[x]");
+    bool off = w == "off" || w == "no" || w == "not" || l.startsWith("[ ]");
+    if (on) tp(A_GRN); else if (off) tp(A_DIM); else if (k == TI_EDIT || k == TI_TOGGLE) tp(A_YEL);
+    tp(v);
+}
+
 static void tmDrawMenu(const TmMenu* m, uint8_t cursor)
 {
     tmTitle(m->title);
     if (m->info) { m->info(); tpl(); }
     String v;
+    bool kinds[6] = { false, false, false, false, false, false };
     for (int i = 0; i < m->n; i++) {
         const TmItem& it = m->items[i];
         bool sel = i == cursor;
         v = "";
         if (it.value) it.value(i, v);
+        kinds[it.kind] = true;
         char row[48];
         snprintf(row, sizeof(row), " %c  %-26s", tmHotkey(i), it.label);
-        if (sel) tpf(" " A_INV "%s" A_RST " %s" A_EOL, row, v.c_str());
-        else     tpf(" %s %s" A_EOL, row, v.c_str());
+        tpf(" %s%s" A_RST " %s%s" A_RST " ", sel ? A_INV : "", row, tmKindColor(it.kind), tmKindSign(it.kind));
+        tmValue(it.kind, v);
+        tp(A_RST A_EOL);
     }
+    // legend of the signs used in this menu
+    tp(A_DIM "  ");
+    for (int k = 0; k < 6; k++) if (kinds[k]) tpf("   " A_RST "%s%s" A_RST A_DIM " %s", tmKindColor((TmItemKind)k), tmKindSign((TmItemKind)k), TM_KIND_NAME[k]);
+    tp(A_RST A_EOL);
     tmFooter("[up/down] move  [enter] select  [1-9] direct  [esc/left] back  [?] help", m->n ? m->items[cursor].help : nullptr);
 }
 
@@ -258,7 +307,8 @@ static void tmDrawInput()
     tmTitle(tmInput.prompt);
     tmFooter("[enter] OK  [backspace] delete  [esc] cancel", tmInput.help);
     tpl();
-    tpf("   > %s", tmInput.buf.c_str());   // last: the cursor stays behind the text
+    if (tmInput.secret) { tp("   > "); for (size_t i = 0; i < tmInput.buf.length(); i++) tp("*"); }
+    else tpf("   > %s", tmInput.buf.c_str());   // last: the cursor stays behind the text
 }
 
 static void tmDrawConfirm()
@@ -373,7 +423,7 @@ static void tmKeyInput(int k)
     }
     if (k >= 32 && k < 127 && tmInput.buf.length() < tmInput.max) {
         tmInput.buf += (char)k;
-        char c[2] = { (char)k, 0 };
+        char c[2] = { tmInput.secret ? '*' : (char)k, 0 };
         tp(c);   // echo: the client does not (WILL ECHO)
     }
 }

@@ -234,18 +234,18 @@ static void tmLiveStart(int)
     tmView(&TM_LIVE);
 }
 static const TmItem TM_LIVE_ITEMS[] = {
-    { "Stove state",    tmLiveValue, tmLiveToggle, "State number and name (RAM 0x21)" },
-    { "Temperatures",   tmLiveValue, tmLiveToggle, "Room, stove sensor, remote control, set point, fumes" },
-    { "Flame power",    tmLiveValue, tmLiveToggle, "Setting and the power the stove runs at now" },
-    { "Fans",           tmLiveValue, tmLiveToggle, "Room fan (set / actual / power) and fume fan" },
-    { "Auger",          tmLiveValue, tmLiveToggle, "On-time per 12 s cycle and the share of the time it runs" },
-    { "Pellets",        tmLiveValue, tmLiveToggle, "Low pellet alarm, level sensor, reserve counters, estimate" },
-    { "Energy saving",  tmLiveValue, tmLiveToggle, "Stop / restart offsets" },
-    { "Errors",         tmLiveValue, tmLiveToggle, "Error reported now, confirmed error, countdown" },
-    { "Remote control / display", tmLiveValue, tmLiveToggle, "Menu shown on the remote (reads 2 registers every 2 s)" },
-    { "Network",        tmLiveValue, tmLiveToggle, "WiFi signal and free memory" },
-    { "All / none",     nullptr, tmLiveAll, nullptr },
-    { "Start",          nullptr, tmLiveStart, "Prints the selected values every 2 s; any key stops" },
+    { "Stove state",    tmLiveValue, tmLiveToggle, "State number and name (RAM 0x21)", TI_TOGGLE },
+    { "Temperatures",   tmLiveValue, tmLiveToggle, "Room, stove sensor, remote control, set point, fumes", TI_TOGGLE },
+    { "Flame power",    tmLiveValue, tmLiveToggle, "Setting and the power the stove runs at now", TI_TOGGLE },
+    { "Fans",           tmLiveValue, tmLiveToggle, "Room fan (set / actual / power) and fume fan", TI_TOGGLE },
+    { "Auger",          tmLiveValue, tmLiveToggle, "On-time per 12 s cycle and the share of the time it runs", TI_TOGGLE },
+    { "Pellets",        tmLiveValue, tmLiveToggle, "Low pellet alarm, level sensor, reserve counters, estimate", TI_TOGGLE },
+    { "Energy saving",  tmLiveValue, tmLiveToggle, "Stop / restart offsets", TI_TOGGLE },
+    { "Errors",         tmLiveValue, tmLiveToggle, "Error reported now, confirmed error, countdown", TI_TOGGLE },
+    { "Remote control / display", tmLiveValue, tmLiveToggle, "Menu shown on the remote (reads 2 registers every 2 s)", TI_TOGGLE },
+    { "Network",        tmLiveValue, tmLiveToggle, "WiFi signal and free memory", TI_TOGGLE },
+    { "All / none",     nullptr, tmLiveAll, nullptr, TI_ACT },
+    { "Start",          nullptr, tmLiveStart, "Prints the selected values every 2 s; any key stops", TI_VIEW },
 };
 static const TmMenu TM_LIVE_MENU = { "Live values - choose what to show", TM_LIVE_ITEMS, sizeof(TM_LIVE_ITEMS) / sizeof(TM_LIVE_ITEMS[0]), nullptr, 0 };
 
@@ -377,16 +377,16 @@ static void tmCtlOpen(int i)
     }
 }
 static const TmItem TM_CTL_ITEMS[] = {
-    { "Power",                 tmCtlValue, tmCtlOpen, "Switch on / off (asks for confirmation)" },
-    { "Set point",             tmCtlValue, tmCtlOpen, "Room temperature to reach, 7 - 30 C" },
-    { "Flame power",           tmCtlValue, tmCtlOpen, "1 - 4" },
-    { "Room fan",              tmCtlValue, tmCtlOpen, "0 (off) - 3" },
-    { "Energy saving stop",    tmCtlValue, tmCtlOpen, "Stop the stove when the room is warmer than the set point" },
-    { "Energy saving restart", tmCtlValue, tmCtlOpen, "Restart after an energy saving stop" },
-    { "Combustion quality",    tmCtlValue, tmCtlOpen, "Combustion air: -3 .. +3, +G" },
-    { "Pellet quality",        tmCtlValue, tmCtlOpen, "Pellets per auger cycle: -5 .. +5" },
-    { "Beep",                  tmCtlValue, tmCtlOpen, "Beep of the stove on key presses" },
-    { "Sync stove clock",      tmCtlValue, tmCtlOpen, "Set the stove clock to the NTP time (the timers run on it)" },
+    { "Power",                 tmCtlValue, tmCtlOpen, "Switch on / off (asks for confirmation)", TI_ASK },
+    { "Set point",             tmCtlValue, tmCtlOpen, "Room temperature to reach, 7 - 30 C", TI_EDIT },
+    { "Flame power",           tmCtlValue, tmCtlOpen, "1 - 4", TI_EDIT },
+    { "Room fan",              tmCtlValue, tmCtlOpen, "0 (off) - 3", TI_EDIT },
+    { "Energy saving stop",    tmCtlValue, tmCtlOpen, "Stop the stove when the room is warmer than the set point", TI_EDIT },
+    { "Energy saving restart", tmCtlValue, tmCtlOpen, "Restart after an energy saving stop", TI_EDIT },
+    { "Combustion quality",    tmCtlValue, tmCtlOpen, "Combustion air: -3 .. +3, +G", TI_EDIT },
+    { "Pellet quality",        tmCtlValue, tmCtlOpen, "Pellets per auger cycle: -5 .. +5", TI_EDIT },
+    { "Beep",                  tmCtlValue, tmCtlOpen, "Beep of the stove on key presses", TI_EDIT },
+    { "Sync stove clock",      tmCtlValue, tmCtlOpen, "Set the stove clock to the NTP time (the timers run on it)", TI_ACT },
 };
 static const TmMenu TM_CONTROL = { "Control", TM_CTL_ITEMS, sizeof(TM_CTL_ITEMS) / sizeof(TM_CTL_ITEMS[0]), nullptr, 2000 };
 
@@ -440,12 +440,12 @@ static void tmTimerOpen(int i)
     tmMenu(&TM_TIMER_EDIT);
 }
 static const TmItem TM_TIMERS_ITEMS[] = {
-    { "PR1", tmTimerValue, tmTimerOpen, "Enter: change this program" },
-    { "PR2", tmTimerValue, tmTimerOpen, "Enter: change this program" },
-    { "PR3", tmTimerValue, tmTimerOpen, "Enter: change this program" },
-    { "PR4", tmTimerValue, tmTimerOpen, "Enter: change this program" },
-    { "PR5", tmTimerValue, tmTimerOpen, "Enter: change this program" },
-    { "PR6", tmTimerValue, tmTimerOpen, "Enter: change this program" },
+    { "PR1", tmTimerValue, tmTimerOpen, "Enter: change this program", TI_MENU },
+    { "PR2", tmTimerValue, tmTimerOpen, "Enter: change this program", TI_MENU },
+    { "PR3", tmTimerValue, tmTimerOpen, "Enter: change this program", TI_MENU },
+    { "PR4", tmTimerValue, tmTimerOpen, "Enter: change this program", TI_MENU },
+    { "PR5", tmTimerValue, tmTimerOpen, "Enter: change this program", TI_MENU },
+    { "PR6", tmTimerValue, tmTimerOpen, "Enter: change this program", TI_MENU },
 };
 static const TmMenu TM_TIMERS = { "Timers (week programs)", TM_TIMERS_ITEMS, 6, tmTimersInfo, 0 };
 
@@ -505,13 +505,13 @@ static void tmTimerEditOpen(int i)
     }
 }
 static const TmItem TM_TIMER_EDIT_ITEMS[] = {
-    { "Enabled",       tmTimerEditValue, tmTimerEditOpen, "Enter: switch the program on / off (written right away)" },
-    { "Switch on at",  tmTimerEditValue, tmTimerEditOpen, "Time the stove starts" },
-    { "Switch off at", tmTimerEditValue, tmTimerEditOpen, "Time the stove stops" },
-    { "Set point",     tmTimerEditValue, tmTimerEditOpen, "Room temperature during the program" },
-    { "Flame power",   tmTimerEditValue, tmTimerEditOpen, "Flame power during the program" },
-    { "Room fan",      tmTimerEditValue, tmTimerEditOpen, "Room fan during the program" },
-    { "Days",          tmTimerEditValue, tmTimerEditOpen, "Days of the week the program runs" },
+    { "Enabled",       tmTimerEditValue, tmTimerEditOpen, "Enter: switch the program on / off (written right away)", TI_TOGGLE },
+    { "Switch on at",  tmTimerEditValue, tmTimerEditOpen, "Time the stove starts", TI_EDIT },
+    { "Switch off at", tmTimerEditValue, tmTimerEditOpen, "Time the stove stops", TI_EDIT },
+    { "Set point",     tmTimerEditValue, tmTimerEditOpen, "Room temperature during the program", TI_EDIT },
+    { "Flame power",   tmTimerEditValue, tmTimerEditOpen, "Flame power during the program", TI_EDIT },
+    { "Room fan",      tmTimerEditValue, tmTimerEditOpen, "Room fan during the program", TI_EDIT },
+    { "Days",          tmTimerEditValue, tmTimerEditOpen, "Days of the week the program runs", TI_MENU },
 };
 extern const TmMenu TM_TIMER_EDIT = { tmTimerTitle, TM_TIMER_EDIT_ITEMS, 7, nullptr, 0 };
 
@@ -527,16 +527,16 @@ static void tmDaysSave(int)
 }
 static void tmDaysCancel(int) { tmMsgSet(true, "Cancelled - nothing written."); tmPop(); }
 static const TmItem TM_DAYS_ITEMS[] = {
-    { "Monday",        tmDayValue, tmDayToggle, nullptr },
-    { "Tuesday",       tmDayValue, tmDayToggle, nullptr },
-    { "Wednesday",     tmDayValue, tmDayToggle, nullptr },
-    { "Thursday",      tmDayValue, tmDayToggle, nullptr },
-    { "Friday",        tmDayValue, tmDayToggle, nullptr },
-    { "Saturday",      tmDayValue, tmDayToggle, nullptr },
-    { "Sunday",        tmDayValue, tmDayToggle, nullptr },
-    { "All / none",    nullptr,    tmDaysAll,   nullptr },
-    { "Save",          nullptr,    tmDaysSave,  "Write the days to the stove" },
-    { "Cancel",        nullptr,    tmDaysCancel, nullptr },
+    { "Monday",        tmDayValue, tmDayToggle, nullptr, TI_TOGGLE },
+    { "Tuesday",       tmDayValue, tmDayToggle, nullptr, TI_TOGGLE },
+    { "Wednesday",     tmDayValue, tmDayToggle, nullptr, TI_TOGGLE },
+    { "Thursday",      tmDayValue, tmDayToggle, nullptr, TI_TOGGLE },
+    { "Friday",        tmDayValue, tmDayToggle, nullptr, TI_TOGGLE },
+    { "Saturday",      tmDayValue, tmDayToggle, nullptr, TI_TOGGLE },
+    { "Sunday",        tmDayValue, tmDayToggle, nullptr, TI_TOGGLE },
+    { "All / none",    nullptr,    tmDaysAll,   nullptr, TI_ACT },
+    { "Save",          nullptr,    tmDaysSave,  "Write the days to the stove", TI_ACT },
+    { "Cancel",        nullptr,    tmDaysCancel, nullptr, TI_ACT },
 };
 extern const TmMenu TM_DAYS = { "Days of the week", TM_DAYS_ITEMS, 10, nullptr, 0 };
 
@@ -592,9 +592,9 @@ static void tmPelletsOpen(int i)
 }
 static void tmPelletsValue(int i, String& v) { if (i == 1) v = String(pellets.refillKg, 1) + " kg"; }
 static const TmItem TM_PELLETS_ITEMS[] = {
-    { "Pellets added (kg)", nullptr,        tmPelletsOpen, "Enter the kg you added by hand" },
-    { "Refill amount",      tmPelletsValue, tmPelletsOpen, "Kg counted for an automatically detected refill" },
-    { "Reset calibration",  nullptr,        tmPelletsOpen, "Forget the measured cycles (asks for confirmation)" },
+    { "Pellets added (kg)", nullptr,        tmPelletsOpen, "Enter the kg you added by hand", TI_EDIT },
+    { "Refill amount",      tmPelletsValue, tmPelletsOpen, "Kg counted for an automatically detected refill", TI_EDIT },
+    { "Reset calibration",  nullptr,        tmPelletsOpen, "Forget the measured cycles (asks for confirmation)", TI_ASK },
 };
 static const TmMenu TM_PELLETS = { "Pellets", TM_PELLETS_ITEMS, 3, tmPelletsInfo, 5000 };
 
@@ -680,9 +680,9 @@ static void tmErrorsOpen(int i)
     }
 }
 static const TmItem TM_ERRORS_ITEMS[] = {
-    { "Event log",          nullptr, tmErrorsOpen, "State changes, errors, pellet sensor and serial link (kept over restarts)" },
-    { "History",            nullptr, tmErrorsOpen, "The last 3 hours: temperatures, flame, fan, auger" },
-    { "Clear error memory", nullptr, tmErrorsOpen, "Write 0 to the 5 error memory slots (asks for confirmation)" },
+    { "Event log",          nullptr, tmErrorsOpen, "State changes, errors, pellet sensor and serial link (kept over restarts)", TI_VIEW },
+    { "History",            nullptr, tmErrorsOpen, "The last 3 hours: temperatures, flame, fan, auger", TI_VIEW },
+    { "Clear error memory", nullptr, tmErrorsOpen, "Write 0 to the 5 error memory slots (asks for confirmation)", TI_ASK },
 };
 static const TmMenu TM_ERRORS = { "Errors and history", TM_ERRORS_ITEMS, 3, tmErrorsInfo, 3000 };
 
@@ -798,9 +798,9 @@ static void tmNetOpen(int i)
     }
 }
 static const TmItem TM_IP_ITEMS[] = {
-    { "Use DHCP",         nullptr, tmNetOpen, "Address from the router" },
-    { "Static IP",        nullptr, tmNetOpen, "IP, netmask, gateway, DNS; checked before it is saved" },
-    { "Restart to apply", nullptr, tmNetOpen, "Restart the controller (asks for confirmation)" },
+    { "Use DHCP",         nullptr, tmNetOpen, "Address from the router", TI_ACT },
+    { "Static IP",        nullptr, tmNetOpen, "IP, netmask, gateway, DNS; checked before it is saved", TI_EDIT },
+    { "Restart to apply", nullptr, tmNetOpen, "Restart the controller (asks for confirmation)", TI_ASK },
 };
 static const TmMenu TM_IP = { "IP settings", TM_IP_ITEMS, 3, tmNetInfo, 0 };
 
@@ -820,9 +820,9 @@ static void tmNetworkValue(int i, String& v)
     if (i == 2) v = netGet("netcfg", "dhcp").startsWith("static,") ? "static" : "DHCP";
 }
 static const TmItem TM_NETWORK_ITEMS[] = {
-    { "WiFi and IP status", tmNetworkValue, tmNetworkOpen, "Signal, IPv4 and IPv6 addresses, drops, network watchdog" },
-    { "Hostname",           tmNetworkValue, tmNetworkOpen, "Saved in the controller, used after a restart" },
-    { "IP settings",        tmNetworkValue, tmNetworkOpen, "DHCP or static IP, used after a restart" },
+    { "WiFi and IP status", tmNetworkValue, tmNetworkOpen, "Signal, IPv4 and IPv6 addresses, drops, network watchdog", TI_VIEW },
+    { "Hostname",           tmNetworkValue, tmNetworkOpen, "Saved in the controller, used after a restart", TI_EDIT },
+    { "IP settings",        tmNetworkValue, tmNetworkOpen, "DHCP or static IP, used after a restart", TI_MENU },
 };
 static const TmMenu TM_NETWORK = { "Network", TM_NETWORK_ITEMS, 3, nullptr, 0 };
 
@@ -889,9 +889,9 @@ static void tmFwOpen(int i)
 }
 static void tmFwValue(int i, String& v) { if (i == 2) v = fwAutoCheck ? (httpsTlsOn ? "on (at start-up only, HTTPS is on)" : "on (daily)") : "off"; }
 static const TmItem TM_FW_ITEMS[] = {
-    { "Check for an update",  nullptr,   tmFwOpen, "Ask GitHub for the latest release (takes a few seconds)" },
-    { "Install latest",       nullptr,   tmFwOpen, "Download, verify and install, then restart (asks for confirmation)" },
-    { "Automatic check",      tmFwValue, tmFwOpen, "Enter: switch on / off" },
+    { "Check for an update",  nullptr,   tmFwOpen, "Ask GitHub for the latest release (takes a few seconds)", TI_ACT },
+    { "Install latest",       nullptr,   tmFwOpen, "Download, verify and install, then restart (asks for confirmation)", TI_ASK },
+    { "Automatic check",      tmFwValue, tmFwOpen, "Enter: switch on / off", TI_TOGGLE },
 };
 static const TmMenu TM_FIRMWARE = { "Firmware update (GitHub releases)", TM_FW_ITEMS, 3, tmFirmwareInfo, 1000 };
 
@@ -911,9 +911,191 @@ static void tmServicesRender()
     tkv("Telnet", "%s, this session from %s, %lu session(s) since the start, %lu taken over", tnListenText(), tnS.peer,
         (unsigned long)tnSessions, (unsigned long)tnTakeovers);
     if (tnW.fd >= 0) tkv("", "%s waits to take over", tnW.peer);
-    tpl(A_DIM "   MQTT, HTTPS and Bluetooth are set up in the web app (Device card)." A_RST);
 }
 static const TmView TM_SERVICES = { "Services", tmServicesRender, 2000, false };
+
+// ── Services: MQTT, HTTPS, Bluetooth, API key, telnet ─────────────────
+// The same setters as the web app (mqttApply, httpsSet*, bleSaveEnabled, apiKey*,
+// telnetSetEnabled); nothing here writes to the stove.
+
+// MQTT: every change is applied at once, like Save in the web app
+static void tmMqttApply(const MqttConfig& c, const char* what)
+{
+    String err = mqttApply(c, tmSource());
+    if (err.length()) tmMsgSet(false, "Not changed: " + err + ".");
+    else tmMsgSet(true, String(what) + " saved; MQTT " + (c.enabled ? "reconnects." : "is off."));
+}
+static void tmMqttInfo()
+{
+    if (!mqttCfg.enabled) tkv("Status", "off");
+    else tkv("Status", "%s%s%s", mqtt.connected() ? A_GRN "connected" A_RST : A_YEL "not connected" A_RST,
+             mqttLastError.length() ? " - last error: " : "", mqttLastError.c_str());
+    tkv("Messages", "%lu sent, %lu commands received", (unsigned long)mqttPublishes, (unsigned long)mqttCommands);
+    tkv("Topics", "%s/state/..., %s/set/...", mqttCfg.prefix.c_str(), mqttCfg.prefix.c_str());
+}
+static void tmMqttValue(int i, String& v)
+{
+    switch (i) {
+    case 0: v = mqttCfg.enabled ? "on" : "off"; break;
+    case 1: v = mqttCfg.host.length() ? mqttCfg.host : String("-"); break;
+    case 2: v = String(mqttCfg.port); break;
+    case 3: v = mqttCfg.user.length() ? mqttCfg.user : String("-"); break;
+    case 4: v = mqttCfg.pass.length() ? "set" : "-"; break;
+    case 5: v = mqttCfg.prefix; break;
+    case 6: v = mqttCfg.discovery ? "on" : "off"; break;
+    case 7: v = mqttCfg.discoveryPrefix; break;
+    }
+}
+static void tmMqttHost(const String& t)   { MqttConfig c = mqttCfg; c.host = t; tmMqttApply(c, "Broker"); }
+static void tmMqttPort(const String& t)
+{
+    int p = 0;
+    if (!pc::parseIntRange(t.c_str(), 1, 65535, p)) { tmMsgSet(false, "Port must be 1 - 65535."); return; }
+    MqttConfig c = mqttCfg; c.port = p; tmMqttApply(c, "Port");
+}
+static void tmMqttUser(const String& t)   { MqttConfig c = mqttCfg; c.user = t; tmMqttApply(c, "User"); }
+static void tmMqttPass(const String& t)
+{
+    if (!t.length()) { tmMsgSet(true, "Password unchanged."); return; }
+    MqttConfig c = mqttCfg; c.pass = t == "-" ? String("") : t; tmMqttApply(c, t == "-" ? "Empty password" : "Password");
+}
+static void tmMqttPrefix(const String& t) { MqttConfig c = mqttCfg; c.prefix = t; while (c.prefix.endsWith("/")) c.prefix.remove(c.prefix.length() - 1); tmMqttApply(c, "Topic prefix"); }
+static void tmMqttDiscPre(const String& t) { MqttConfig c = mqttCfg; c.discoveryPrefix = t; tmMqttApply(c, "Discovery prefix"); }
+static void tmMqttOpen(int i)
+{
+    MqttConfig c = mqttCfg;
+    switch (i) {
+    case 0: c.enabled = !c.enabled; tmMqttApply(c, "MQTT"); break;
+    case 1: tmInputStart("MQTT broker (host name or IP)", tmMqttHost, 63); break;
+    case 2: tmInputStart("MQTT port", tmMqttPort, 5, "Usually 1883"); break;
+    case 3: tmInputStart("MQTT user (empty = none)", tmMqttUser, 63); break;
+    case 4: tmInputSecretStart("MQTT password", tmMqttPass, 63, "Empty = unchanged, '-' = no password. Telnet is not encrypted."); break;
+    case 5: tmInputStart("Topic prefix", tmMqttPrefix, 63, "e.g. openpelletbridge; no # or +"); break;
+    case 6: c.discovery = !c.discovery; tmMqttApply(c, "Home Assistant discovery"); break;
+    case 7: tmInputStart("Discovery prefix", tmMqttDiscPre, 63, "Home Assistant uses homeassistant"); break;
+    }
+}
+static const TmItem TM_MQTT_ITEMS[] = {
+    { "MQTT",                     tmMqttValue, tmMqttOpen, "Enter: switch on / off", TI_TOGGLE },
+    { "Broker",                   tmMqttValue, tmMqttOpen, "Host name or IP address of the MQTT broker", TI_EDIT },
+    { "Port",                     tmMqttValue, tmMqttOpen, "TCP port of the broker", TI_EDIT },
+    { "User",                     tmMqttValue, tmMqttOpen, "Empty = no login", TI_EDIT },
+    { "Password",                 tmMqttValue, tmMqttOpen, "Typed as *; telnet itself is not encrypted", TI_EDIT },
+    { "Topic prefix",             tmMqttValue, tmMqttOpen, "<prefix>/state/..., <prefix>/set/...", TI_EDIT },
+    { "Home Assistant discovery", tmMqttValue, tmMqttOpen, "Enter: switch on / off", TI_TOGGLE },
+    { "Discovery prefix",         tmMqttValue, tmMqttOpen, "Topic root Home Assistant listens on", TI_EDIT },
+};
+static const TmMenu TM_MQTT = { "MQTT", TM_MQTT_ITEMS, 8, tmMqttInfo, 3000 };
+
+// HTTPS
+static void tmHttpsInfo()
+{
+    if (!httpsEnabled) tkv("Status", "off");
+    else tkv("Status", "%s, %lu sessions, %lu requests, %lu refused (memory)", httpsListening ? A_GRN "listening on port 443" A_RST : A_YEL "starting" A_RST,
+             (unsigned long)httpsStats.sessions, (unsigned long)httpsStats.requests, (unsigned long)httpsStats.refused);
+    if (httpsCrtLen) {
+        tkv("Certificate for", "%s", httpsSan.c_str());
+        tkv("SHA-256", "%s", httpsFingerprint().c_str());
+    }
+    if (httpsMsg.length()) tkv("Last problem", "%s", httpsMsg.c_str());
+    tpl(A_DIM "   HTTPS needs about 34 KB of memory per session; off is the safer choice on this board." A_RST);
+}
+static void tmHttpsValue(int i, String& v)
+{
+    switch (i) {
+    case 0: v = httpsEnabled ? "on" : "off"; break;
+    case 1: v = httpsRedirect ? "on" : "off"; break;
+    case 2: v = httpsAlt.length() ? httpsAlt : String("-"); break;
+    }
+}
+static void tmHttpsAlt(const String& t)
+{
+    String err = httpsSetAltNames(t, tmSource());
+    if (err.length()) tmMsgSet(false, "Not changed: " + err + ".");
+    else tmMsgSet(true, "Extra names saved; the certificate is made again (the browser warns once more).");
+}
+static void tmHttpsNewYes() { httpsRequestNewCert(tmSource()); tmMsgSet(true, "A new key and certificate are being made (a few seconds)."); }
+static void tmHttpsOpen(int i)
+{
+    switch (i) {
+    case 0: httpsSetEnabled(!httpsEnabled, tmSource()); tmMsgSet(true, httpsEnabled ? "HTTPS on." : "HTTPS off: its memory is released."); break;
+    case 1: httpsSetRedirect(!httpsRedirect, tmSource()); tmMsgSet(true, httpsRedirect ? "Web app pages on HTTP now go to HTTPS." : "No redirect to HTTPS."); break;
+    case 2: tmInputStart("Extra names in the certificate", tmHttpsAlt, 120, "Comma-separated host names / IPv4 addresses, empty = none (hostname and IP are always in)"); break;
+    case 3: tmConfirmStart("   Make a new key and certificate? Browsers warn again and a saved\n   certificate (trusted on a device) no longer matches.", tmHttpsNewYes); break;
+    }
+}
+static const TmItem TM_HTTPS_ITEMS[] = {
+    { "HTTPS",                    tmHttpsValue, tmHttpsOpen, "Enter: switch on / off (port 443, self-signed certificate)", TI_TOGGLE },
+    { "Redirect HTTP to HTTPS",   tmHttpsValue, tmHttpsOpen, "Enter: switch on / off (web app pages only, the API stays on HTTP)", TI_TOGGLE },
+    { "Extra names",              tmHttpsValue, tmHttpsOpen, "Extra host names / IPs in the certificate", TI_EDIT },
+    { "New key and certificate",  nullptr,      tmHttpsOpen, "Asks for confirmation", TI_ASK },
+};
+static const TmMenu TM_HTTPS = { "HTTPS", TM_HTTPS_ITEMS, 4, tmHttpsInfo, 3000 };
+
+// API key
+static void tmKeyInfo()
+{
+    tkv("Status", "%s", apiKeyRequired ? "required for the web app and the API" : "not required");
+    tkv("Also", "the OTA upload password");
+    tpl(A_DIM "   Telnet and Bluetooth do not use the API key." A_RST);
+}
+static void tmKeyValue(int i, String& v) { if (i == 0) v = apiKeyRequired ? "required" : "off"; }
+static void tmKeyShowYes() { tmShowText("API key", "   " + apiKey + "\n\n   Header: X-API-Key: <key>\n"); }
+static void tmKeyRotateYes() { apiKeyRotate(tmSource()); tmMsgSet(true, "New API key made; open 'Show key' to read it."); }
+static void tmKeyOpen(int i)
+{
+    switch (i) {
+    case 0: apiKeySetRequired(!apiKeyRequired, tmSource());
+            tmMsgSet(true, apiKeyRequired ? "API key required: the web app asks for it once per browser." : "API key no longer required.");
+            break;
+    case 1: tmConfirmStart("   Show the API key? Telnet is not encrypted: anyone on the network\n   who listens can read it.", tmKeyShowYes); break;
+    case 2: tmConfirmStart("   Make a new API key? The web app, Home Assistant / scripts and\n   OTA uploads need the new key afterwards.", tmKeyRotateYes); break;
+    }
+}
+static const TmItem TM_KEY_ITEMS[] = {
+    { "Key required",  tmKeyValue, tmKeyOpen, "Enter: switch on / off", TI_TOGGLE },
+    { "Show key",      nullptr,    tmKeyOpen, "Asks first: telnet is not encrypted", TI_ASK },
+    { "New key",       nullptr,    tmKeyOpen, "Asks for confirmation", TI_ASK },
+};
+static const TmMenu TM_APIKEY = { "API key", TM_KEY_ITEMS, 3, tmKeyInfo, 0 };
+
+// Services menu
+static bool tmTelnetOffPending = false;   // switched off from telnetLoop, not inside this session's key handler
+static void tmTelnetOffYes() { tmTelnetOffPending = true; }
+static void tmSvcValue(int i, String& v)
+{
+    switch (i) {
+    case 0: v = mqttCfg.enabled ? (mqtt.connected() ? "on, connected" : "on, not connected") : "off"; break;
+    case 1: v = httpsEnabled ? (httpsListening ? "on" : "on, starting") : "off"; break;
+    case 2: { bool saved = bleSavedEnabled();
+              v = String(saved ? "on" : "off") + (saved != bleEnabled ? String(" (after a restart; now ") + (bleEnabled ? "on)" : "off)") : String(""));
+              break; }
+    case 3: v = apiKeyRequired ? "required" : "off"; break;
+    case 4: v = "on"; break;
+    }
+}
+static void tmSvcOpen(int i)
+{
+    switch (i) {
+    case 0: tmMenu(&TM_MQTT); break;
+    case 1: tmMenu(&TM_HTTPS); break;
+    case 2: { bool on = !bleSavedEnabled(); bleSaveEnabled(on, tmSource());
+              tmMsgSet(true, String("Bluetooth ") + (on ? "on" : "off") + " saved; it applies after a restart (Device > Restart controller).");
+              break; }
+    case 3: tmMenu(&TM_APIKEY); break;
+    case 4: tmConfirmStart("   Switch telnet off? This session ends. Switch it on again in the web app\n   (Device card) or with POST /api/telnet?enabled=true.", tmTelnetOffYes); break;
+    case 5: tmView(&TM_SERVICES); break;
+    }
+}
+static const TmItem TM_SVC_ITEMS[] = {
+    { "MQTT",        tmSvcValue, tmSvcOpen, "Broker, login, topics, Home Assistant discovery", TI_MENU },
+    { "HTTPS",       tmSvcValue, tmSvcOpen, "On / off, redirect, certificate", TI_MENU },
+    { "Bluetooth",   tmSvcValue, tmSvcOpen, "Enter: switch on / off (applies after a restart)", TI_TOGGLE },
+    { "API key",     tmSvcValue, tmSvcOpen, "Required or not, show, make a new one", TI_MENU },
+    { "Telnet",      tmSvcValue, tmSvcOpen, "Switch this menu off (asks first)", TI_ASK },
+    { "Overview",    nullptr,    tmSvcOpen, "All services with their counters, refreshes by itself", TI_VIEW },
+};
+static const TmMenu TM_SVC = { "Services", TM_SVC_ITEMS, 6, nullptr, 3000 };
 
 static void tmSystemRender()
 {
@@ -954,7 +1136,7 @@ static void tmLogOpen(int i)
 }
 static void tmLogMenuOpen()
 {
-    for (int i = 0; i < LOG_MODULES; i++) tmLogItems[i] = { logModules[i].tag, tmLogValue, tmLogOpen, logModules[i].what };
+    for (int i = 0; i < LOG_MODULES; i++) tmLogItems[i] = { logModules[i].tag, tmLogValue, tmLogOpen, logModules[i].what, TI_EDIT };
     tmLogMenu.n = LOG_MODULES;
     tmMenu(&tmLogMenu);
 }
@@ -963,7 +1145,7 @@ static void tmDeviceOpen(int i)
 {
     switch (i) {
     case 0: tmMenu(&TM_FIRMWARE); break;
-    case 1: tmView(&TM_SERVICES); break;
+    case 1: tmMenu(&TM_SVC); break;
     case 2: tmView(&TM_SYSTEM); break;
     case 3: tmLogMenuOpen(); break;
     case 4: tmConfirmStart("   Restart the controller now? (The stove keeps running.)", tmRestartYes); break;
@@ -979,11 +1161,11 @@ static void tmDeviceValue(int i, String& v)
     if (i == 2) v = "up " + uptimeStr();
 }
 static const TmItem TM_DEVICE_ITEMS[] = {
-    { "Firmware update",     tmDeviceValue, tmDeviceOpen, "Check GitHub for a newer release and install it" },
-    { "Services",            tmDeviceValue, tmDeviceOpen, "MQTT, HTTPS, HTTP over IPv6, Bluetooth, telnet" },
-    { "System",              tmDeviceValue, tmDeviceOpen, "Uptime, restarts, memory, stove bus counters" },
-    { "Log levels",          tmDeviceValue, tmDeviceOpen, "How much each module writes to the firmware log" },
-    { "Restart controller",  tmDeviceValue, tmDeviceOpen, "Restart the ESP32 (asks for confirmation)" },
+    { "Firmware update",     tmDeviceValue, tmDeviceOpen, "Check GitHub for a newer release and install it", TI_MENU },
+    { "Services",            tmDeviceValue, tmDeviceOpen, "MQTT, HTTPS, Bluetooth, API key, telnet", TI_MENU },
+    { "System",              tmDeviceValue, tmDeviceOpen, "Uptime, restarts, memory, stove bus counters", TI_VIEW },
+    { "Log levels",          tmDeviceValue, tmDeviceOpen, "How much each module writes to the firmware log", TI_MENU },
+    { "Restart controller",  tmDeviceValue, tmDeviceOpen, "Restart the ESP32 (asks for confirmation)", TI_ASK },
 };
 static const TmMenu TM_DEVICE = { "Device", TM_DEVICE_ITEMS, 5, nullptr, 0 };
 
@@ -1125,12 +1307,12 @@ static void tmDebugOpen(int i)
     }
 }
 static const TmItem TM_DEBUG_ITEMS[] = {
-    { "Firmware log",      nullptr,      tmDebugOpen, "The log of the controller, live (levels: Device > Log levels)" },
-    { "Bus frame debug",   tmDebugValue, tmDebugOpen, "Keep every stove bus frame in the bus debug buffer" },
-    { "Bus debug buffer",  nullptr,      tmDebugOpen, "The last frames (about 3 KB)" },
-    { "Clear the buffer",  nullptr,      tmDebugOpen, nullptr },
-    { "Raw read",          nullptr,      tmDebugOpen, "Read one register and show the frames" },
-    { "Raw write",         nullptr,      tmDebugOpen, "Write registers directly (asks for confirmation)" },
+    { "Firmware log",      nullptr,      tmDebugOpen, "The log of the controller, live (levels: Device > Log levels)", TI_VIEW },
+    { "Bus frame debug",   tmDebugValue, tmDebugOpen, "Keep every stove bus frame in the bus debug buffer", TI_TOGGLE },
+    { "Bus debug buffer",  nullptr,      tmDebugOpen, "The last frames (about 3 KB)", TI_VIEW },
+    { "Clear the buffer",  nullptr,      tmDebugOpen, nullptr, TI_ACT },
+    { "Raw read",          nullptr,      tmDebugOpen, "Read one register and show the frames", TI_EDIT },
+    { "Raw write",         nullptr,      tmDebugOpen, "Write registers directly (asks for confirmation)", TI_ASK },
 };
 static const TmMenu TM_DEBUG = { "Debug", TM_DEBUG_ITEMS, 6, nullptr, 0 };
 
@@ -1165,17 +1347,17 @@ static void tmMainValue(int i, String& v)
     }
 }
 static const TmItem TM_MAIN_ITEMS[] = {
-    { "Status",             tmMainValue, tmMainOpen, "Everything at a glance, refreshes by itself" },
-    { "Chart",              tmMainValue, tmMainOpen, "History as a line chart: temperatures, fumes, auger, flame, fume fan (3 h - 7 days)" },
-    { "Live values",        tmMainValue, tmMainOpen, "Chosen values printed every 2 s (scrolls)" },
-    { "Control",            tmMainValue, tmMainOpen, "Power, set point, flame, fan, energy saving, burn settings, clock" },
-    { "Timers",             tmMainValue, tmMainOpen, "Week programs PR1 - PR6" },
-    { "Pellets",            tmMainValue, tmMainOpen, "Estimate until the low pellet alarm, pellet reserve, refill, calibration" },
-    { "Errors and history", tmMainValue, tmMainOpen, "Current error, error memory, event log, last 3 hours" },
-    { "Network",            tmMainValue, tmMainOpen, "WiFi, IPv4 / IPv6, hostname, IP settings" },
-    { "Device",             tmMainValue, tmMainOpen, "Firmware update, services, system, log levels, restart" },
-    { "Debug",              tmMainValue, tmMainOpen, "Firmware log, stove bus frames, raw register read / write" },
-    { "Exit",               tmMainValue, tmMainOpen, "Close the session (q)" },
+    { "Status",             tmMainValue, tmMainOpen, "Everything at a glance, refreshes by itself", TI_VIEW },
+    { "Chart",              tmMainValue, tmMainOpen, "History as a line chart: temperatures, fumes, auger, flame, fume fan (3 h - 7 days)", TI_VIEW },
+    { "Live values",        tmMainValue, tmMainOpen, "Chosen values printed every 2 s (scrolls)", TI_MENU },
+    { "Control",            tmMainValue, tmMainOpen, "Power, set point, flame, fan, energy saving, burn settings, clock", TI_MENU },
+    { "Timers",             tmMainValue, tmMainOpen, "Week programs PR1 - PR6", TI_MENU },
+    { "Pellets",            tmMainValue, tmMainOpen, "Estimate until the low pellet alarm, pellet reserve, refill, calibration", TI_MENU },
+    { "Errors and history", tmMainValue, tmMainOpen, "Current error, error memory, event log, last 3 hours", TI_MENU },
+    { "Network",            tmMainValue, tmMainOpen, "WiFi, IPv4 / IPv6, hostname, IP settings", TI_MENU },
+    { "Device",             tmMainValue, tmMainOpen, "Firmware update, services, system, log levels, restart", TI_MENU },
+    { "Debug",              tmMainValue, tmMainOpen, "Firmware log, stove bus frames, raw register read / write", TI_MENU },
+    { "Exit",               tmMainValue, tmMainOpen, "Close the session (q)", TI_ACT },
 };
 static const TmMenu TM_MAIN = { "Main menu", TM_MAIN_ITEMS, sizeof(TM_MAIN_ITEMS) / sizeof(TM_MAIN_ITEMS[0]), nullptr, 5000 };
 
@@ -1260,4 +1442,8 @@ void setupTelnet()
 // Close the session and stop listening (POST /api/telnet?enabled=false)
 void telnetStop() { tnStop(); }
 // From loop()
-void telnetLoop() { tnLoop(); }
+void telnetLoop()
+{
+    if (tmTelnetOffPending) { tmTelnetOffPending = false; LOGI("sys", "telnet switched off from the telnet menu"); telnetSetEnabled(false); return; }
+    tnLoop();
+}

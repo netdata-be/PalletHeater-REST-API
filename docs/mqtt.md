@@ -81,8 +81,10 @@ Every screen starts with a status header: stove state, room temperature and set 
 | Pellets | Estimate until the low pellet alarm, calibration cycles, pellets added by hand, refill amount, reset calibration (the same data as [`/api/pellets`](api.md#apipellets)) |
 | Errors and history | Error memory (and clearing it), the event log, the last 3 hours of history |
 | Network | WiFi, IPv4 and IPv6 addresses, drops, network watchdog; hostname and IP settings (saved like in the web app, used after a restart, with the same 5 minute confirmation: opening the web app *or* a telnet session on the new address confirms it) |
-| Device | GitHub firmware update (check, install, automatic check), services (MQTT, HTTPS, HTTP over IPv6, Bluetooth, telnet), system (restarts, memory, bus counters), log levels per module, restart |
+| Device | GitHub firmware update (check, install, automatic check); services: MQTT (on / off, broker, port, user, password, topic prefix, Home Assistant discovery and its prefix), HTTPS (on / off, redirect, extra certificate names, new key and certificate), Bluetooth (on / off, applies after a restart), API key (required or not, show it, make a new one), switching telnet off, and an overview with the counters; system (restarts, memory, bus counters), log levels per module, restart |
 | Debug | Firmware log (live), bus frame debug and its buffer, raw register read / write |
+
+Every menu item shows what it does, with a legend under the menu: `▸` opens a submenu, `≡` a screen, `↕` changes a value, `•` switches something on or off, `»` runs an action, `!` asks for confirmation first. On / yes / required are green, off / no grey, values you can change yellow. Service settings use the same code as the web app (the MQTT password is typed as `*`; showing the API key asks first, because telnet is not encrypted).
 
 Keys: arrows (or tab) to move, Enter / right to open, `1`-`9` and `a`-`h` to open an item directly, Esc / left / backspace / `q` to go back (`q` in the main menu exits), `r` to redraw, `?` for help. A value is chosen with the arrow keys and only written to the stove on Enter; power, clearing the error memory, raw writes, IP settings and restarts ask for confirmation (`y`). Every write is logged with the source `telnet menu (<client address>)`.
 
