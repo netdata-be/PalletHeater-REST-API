@@ -459,6 +459,7 @@ Raw register dump for reverse engineering. Each register is read over the serial
 |---|---|
 | `register` | `ram` (default), `eeprom`, `all`. Add `unknown` (e.g. `ram,unknown`) to only return addresses that are not decoded yet. |
 | `address` | Comma separated list, decimal or hex (`0x21,0x34,125`). Default: all 256. |
+| `async` | `1`: read in the background. Without it the dump runs in the web server's task: for those seconds no other request, telnet or MQTT is served. With `async=1` the request answers at once with `202 {"state":"running","done":0,"total":41}`; repeat the same request to follow the progress (`202`) until the dump is ready, then it returns the dump itself (once; the same request after that starts a new dump). A dump with other parameters while one runs: `409`. The background task pauses 20 ms after every register, so the sensor task and other requests get the stove bus in between. The web app's parameter table uses it. |
 
 ```bash
 curl "http://openpelletbridge.local/api/dump?register=ram&address=0x21,0x34"

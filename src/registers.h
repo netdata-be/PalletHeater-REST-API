@@ -293,31 +293,11 @@ static void parseAddressList(const String& param, bool out[256])
     pc::parseAddressList(param.c_str(), out);
 }
 
-void handleRouteDump()
+// Dump as JSON, streamed in chunks: {"RAM(0x00)":{"0x21":{Address_int, Value_int, Value_txt,
+// Value_hex}, ...}, "EEPROM(0x20)":{...}}. get(type, addr) gives the value (-1 = read error):
+// read from the bus right now (synchronous dump) or from a finished background dump.
+static void dumpWriteJson(bool doRam, bool doEeprom, bool filterUnknown, const bool* addrs, std::function<int(byte, byte)> get)
 {
-    if (wm.server->method() != HTTP_GET) { wm.server->send(405); return; }
-    if (stove.linkDown) {
-        wm.server->send(503, "application/json", "{\"error\":\"The stove does not answer (serial connection) - try again later\"}");
-        return;
-    }
-    // The bus lock is taken per register (not for the whole dump), so the sensor
-    // task can read in between: a dump of 60 registers takes several seconds.
-    int failedInRow = 0;
-    char src[96];
-    snprintf(src, sizeof(src), "web/API %s (GET %s)", clientIp().c_str(), wm.server->uri().c_str());
-
-    // --- register param ---
-    String regParam = wm.server->arg("register");
-    if (regParam.length() == 0) regParam = "ram";
-    regParam.toLowerCase();
-    bool doRam         = regParam.indexOf("all") >= 0 || regParam.indexOf("ram")    >= 0;
-    bool doEeprom      = regParam.indexOf("all") >= 0 || regParam.indexOf("eeprom") >= 0;
-    bool filterUnknown = regParam.indexOf("unknown") >= 0;
-
-    // --- address param ---
-    bool addrs[256];
-    parseAddressList(wm.server->arg("address"), addrs);
-
     struct RegDef {
         bool        enabled;
         byte        type;
@@ -328,7 +308,6 @@ void handleRouteDump()
         { doRam,    ram,    "RAM(0x00)",    getRamValueTxt,    isKnownRamAddr    },
         { doEeprom, eeprom, "EEPROM(0x20)", getEepromValueTxt, isKnownEepromAddr },
     };
-
     // Stream the response in chunks: a full dump of both banks is ~45 KB, and
     // building it as one String can fail on heap fragmentation, which silently
     // drops parts of the output and produces truncated / invalid JSON.
@@ -346,33 +325,21 @@ void handleRouteDump()
     };
     out += "{";
     bool firstReg = true;
-
     for (auto& r : regs) {
         if (!r.enabled || aborted) continue;
-
         if (!firstReg) out += ",";
         firstReg = false;
         out += "\"";
         out += r.label;
         out += "\":{";
-
         bool firstAddr = true;
         for (int addr = 0; addr <= 0xFF && !aborted; addr++) {
             if (!addrs[addr]) continue;
             if (filterUnknown && r.isKnownFn((byte)addr)) continue;
             esp_task_wdt_reset();
-            int val = -1;
-            // stove gone during the dump: the remaining registers are reported as
-            // read errors (-1) without trying them, instead of 3 attempts each
-            if (failedInRow < 3 && !stove.linkDown && stoveLockTake(3000)) {
-                CmdSource cs(src);
-                val = stove.read(r.type, (byte)addr);
-                if (stoveMutex) xSemaphoreGiveRecursive(stoveMutex);
-                failedInRow = val < 0 ? failedInRow + 1 : 0;
-            }
+            int val = get(r.type, (byte)addr);
             uint8_t uval = (val >= 0) ? (uint8_t)val : 0;
             String  txt  = jsonEscape(r.txtFn((byte)addr, val));
-
             char header[72];
             snprintf(header, sizeof(header),
                 "%s\"0x%02X\":{\"Address_int\":%d,\"Value_int\":%d,\"Value_txt\":\"",
@@ -380,7 +347,6 @@ void handleRouteDump()
                 addr, addr, (val >= 0 ? val : -1));
             out += header;
             out += txt;
-
             char footer[24];
             snprintf(footer, sizeof(footer), "\",\"Value_hex\":\"0x%02X\"}", uval);
             out += footer;
@@ -389,11 +355,138 @@ void handleRouteDump()
         }
         out += "}";
     }
-
     if (aborted) return;
     out += "}";
     flushOut(true);
     httpEndChunks();  // terminate the chunked response
+}
+
+// ── Background dump (GET /api/dump?...&async=1) ─────────────────────────────────────
+// A synchronous dump runs in the loop task: while it reads (~45 EEPROM registers take ~8 s)
+// the web server, telnet and MQTT wait, and the loop takes the bus lock back right after every
+// register. The background dump reads in its own task with a pause after every register, so
+// the sensor task and other requests get the bus in between; the request answers at once:
+//   202 {"state":"running","done":12,"total":45}  until it is done, then the dump itself (once;
+//   the next request with the same parameters starts a new dump). Another dump while one runs: 409.
+struct DumpJob {
+    volatile uint8_t state = 0;   // 0 none, 1 running, 2 done
+    bool    delivered = false;
+    bool    doRam = false, doEeprom = false, filterUnknown = false;
+    bool    addrs[256];
+    int16_t val[2][256];          // [0] RAM, [1] EEPROM; -1 = read error
+    volatile int done = 0;
+    int     total = 0;
+    String  key;                  // the parameters it was started with
+    char    src[96];
+    uint32_t tookMs = 0;
+};
+static DumpJob* dumpJob = nullptr;   // allocated at the first background dump (~1.5 KB), kept
+static const uint32_t DUMP_PAUSE_MS = 20;
+
+static void dumpTask(void*)
+{
+    DumpJob& j = *dumpJob;
+    uint32_t t0 = millis();
+    int failedInRow = 0;
+    for (int bank = 0; bank < 2; bank++) {
+        if (!(bank ? j.doEeprom : j.doRam)) continue;
+        byte type = bank ? eeprom : ram;
+        for (int addr = 0; addr <= 0xFF; addr++) {
+            if (!j.addrs[addr]) continue;
+            if (j.filterUnknown && (bank ? isKnownEepromAddr((byte)addr) : isKnownRamAddr((byte)addr))) continue;
+            int v = -1;
+            // stove gone: the rest are read errors without trying (as the synchronous dump)
+            if (failedInRow < 3 && !stove.linkDown && stoveLockTake(3000)) {
+                { CmdSource cs(j.src); v = stove.read(type, (byte)addr); }   // source only set while the bus is ours
+                if (stoveMutex) xSemaphoreGiveRecursive(stoveMutex);
+                failedInRow = v < 0 ? failedInRow + 1 : 0;
+            }
+            j.val[bank][addr] = (int16_t)v;
+            j.done++;
+            vTaskDelay(pdMS_TO_TICKS(DUMP_PAUSE_MS));   // the sensor task and web routes get the bus
+        }
+    }
+    j.tookMs = millis() - t0;
+    LOGD("http", "background dump: %d register(s) in %lu ms", j.total, (unsigned long)j.tookMs);
+    j.state = 2;
+    vTaskDelete(nullptr);
+}
+
+void handleRouteDump()
+{
+    if (wm.server->method() != HTTP_GET) { wm.server->send(405); return; }
+    // --- register param ---
+    String regParam = wm.server->arg("register");
+    if (regParam.length() == 0) regParam = "ram";
+    regParam.toLowerCase();
+    bool doRam         = regParam.indexOf("all") >= 0 || regParam.indexOf("ram")    >= 0;
+    bool doEeprom      = regParam.indexOf("all") >= 0 || regParam.indexOf("eeprom") >= 0;
+    bool filterUnknown = regParam.indexOf("unknown") >= 0;
+    bool async = pc::parseOnOff(wm.server->arg("async").c_str()) == 1;
+    String key = regParam + "|" + wm.server->arg("address");
+
+    if (async && dumpJob && dumpJob->key == key && dumpJob->state == 2 && !dumpJob->delivered) {
+        // the background dump of these parameters is done: send it (once)
+        dumpJob->delivered = true;
+        DumpJob* j = dumpJob;
+        dumpWriteJson(j->doRam, j->doEeprom, j->filterUnknown, j->addrs, [j](byte type, byte addr) { return (int)j->val[type == eeprom ? 1 : 0][addr]; });
+        return;
+    }
+    if (async && dumpJob && dumpJob->state == 1) {
+        if (dumpJob->key != key) { wm.server->send(409, "application/json", "{\"error\":\"Another dump is running - try again in a few seconds\"}"); return; }
+        char b[80]; snprintf(b, sizeof(b), "{\"state\":\"running\",\"done\":%d,\"total\":%d}", dumpJob->done, dumpJob->total);
+        wm.server->send(202, "application/json", b);
+        return;
+    }
+    if (stove.linkDown) {
+        wm.server->send(503, "application/json", "{\"error\":\"The stove does not answer (serial connection) - try again later\"}");
+        return;
+    }
+    // --- address param ---
+    bool addrs[256];
+    parseAddressList(wm.server->arg("address"), addrs);
+    char src[96];
+    snprintf(src, sizeof(src), "web/API %s (GET %s)", clientIp().c_str(), wm.server->uri().c_str());
+
+    if (async) {   // start a background dump
+        if (!dumpJob) dumpJob = new (std::nothrow) DumpJob();
+        if (!dumpJob) { wm.server->send(503, "application/json", "{\"error\":\"Not enough memory\"}"); return; }
+        DumpJob& j = *dumpJob;
+        j.doRam = doRam; j.doEeprom = doEeprom; j.filterUnknown = filterUnknown;
+        memcpy(j.addrs, addrs, sizeof(addrs));
+        j.total = 0;
+        for (int bank = 0; bank < 2; bank++) {
+            if (!(bank ? doEeprom : doRam)) continue;
+            for (int a = 0; a <= 0xFF; a++)
+                if (addrs[a] && !(filterUnknown && (bank ? isKnownEepromAddr((byte)a) : isKnownRamAddr((byte)a)))) j.total++;
+        }
+        j.done = 0; j.delivered = false; j.key = key; j.tookMs = 0;
+        strncpy(j.src, src, sizeof(j.src) - 1); j.src[sizeof(j.src) - 1] = 0;
+        j.state = 1;
+        if (xTaskCreatePinnedToCore(dumpTask, "dump", 4096, nullptr, 1, nullptr, 1) != pdPASS) {
+            j.state = 0;
+            wm.server->send(503, "application/json", "{\"error\":\"Could not start the dump task (memory)\"}");
+            return;
+        }
+        char b[80]; snprintf(b, sizeof(b), "{\"state\":\"running\",\"done\":0,\"total\":%d}", j.total);
+        wm.server->send(202, "application/json", b);
+        return;
+    }
+    // Synchronous: read while answering. The bus lock is taken per register (not for the whole
+    // dump), so the sensor task can read in between; the loop task is busy all that time.
+    int failedInRow = 0;
+    dumpWriteJson(doRam, doEeprom, filterUnknown, addrs, [&failedInRow, &src](byte type, byte addr) {
+        int val = -1;
+        // stove gone during the dump: the remaining registers are reported as
+        // read errors (-1) without trying them, instead of 3 attempts each
+        if (failedInRow < 3 && !stove.linkDown && stoveLockTake(3000)) {
+            CmdSource cs(src);
+            val = stove.read(type, addr);
+            if (stoveMutex) xSemaphoreGiveRecursive(stoveMutex);
+            failedInRow = val < 0 ? failedInRow + 1 : 0;
+        }
+        return val;
+    });
 }
 
 void handleRouteRemote()

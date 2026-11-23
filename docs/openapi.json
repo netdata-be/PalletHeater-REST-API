@@ -1740,6 +1740,14 @@
               "type": "string"
             },
             "example": "0x21,0x34,125"
+          },
+          {
+            "name": "async",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Read in the background: 202 with {state, done, total} until ready, then the dump (once). 409 while another dump runs."
           }
         ],
         "responses": {
@@ -1780,6 +1788,30 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "202": {
+            "description": "Background dump running (async=1): {state: running, done, total}",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string"
+                    },
+                    "done": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Another background dump is running"
           }
         }
       }

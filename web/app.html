@@ -3543,7 +3543,16 @@ async function loadParams(force) {
   const want = [...new Set(PRESET_ROWS.flatMap(r => [r[1], r[2], r[3]]).concat(PHASE_PARAMS.map(r => r[0]), USER_PARAMS.map(r => r[0])).filter(a => a !== null))];
   parBusy = true; $("parReload").disabled = true;
   try {
-    const r = await api("GET", "/api/dump", { register: "eeprom", address: want.map(hx).join(",") });
+    // in the background on the controller (async): the loop and the stove bus stay free meanwhile;
+    // the same request shows the progress (202) until the dump is ready
+    const q = { register: "eeprom", address: want.map(hx).join(","), async: 1 };
+    let r = await api("GET", "/api/dump", q);
+    for (let i = 0; r.status === 202 && i < 120; i++) {
+      if (r.data && r.data.total) $("parAge").textContent = L("lezen… ", "reading… ") + r.data.done + " / " + r.data.total;
+      await new Promise(res => setTimeout(res, 500));
+      r = await api("GET", "/api/dump", q);
+    }
+    if (r.status === 202) throw new Error(L("dump duurt te lang", "dump takes too long"));
     const blk = r.data ? Object.values(r.data)[0] || {} : {};
     for (const v of Object.values(blk)) parVals[v.Address_int] = v.Value_int;
     parAt = Date.now();
