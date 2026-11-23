@@ -302,7 +302,7 @@ static void logStoveChanges(bool slow)
     if (fabsf(ambTemp - lRoom) >= 0.5f) { LOGD("stove", "room temperature %.1f -> %.1f °C (set point %d)", lRoom, ambTemp, (int)setPointTemp); lRoom = ambTemp; }
     if (fabsf(ambTempStove - lStoveT) >= 0.5f) { LOGD("stove", "stove sensor %.1f -> %.1f °C", lStoveT, ambTempStove); lStoveT = ambTempStove; }
     if (fabsf(ambTempRemoteControl - lRemote) >= 0.5f) { LOGD("stove", "remote control sensor %.1f -> %.1f °C", lRemote, ambTempRemoteControl); lRemote = ambTempRemoteControl; }
-    if (fabsf(cachedAugerSpeed - lAuger) >= 0.5f) { LOGD("stove", "auger %.1f -> %.1f rpm", lAuger, cachedAugerSpeed); lAuger = cachedAugerSpeed; }
+    if (fabsf(cachedAugerSpeed - lAuger) >= 0.5f) { LOGD("stove", "auger %.1f -> %.1f s on per 12 s cycle (%d %%)", lAuger, cachedAugerSpeed, pc::augerPercent(cachedAugerSpeed)); lAuger = cachedAugerSpeed; }
 }
 
 // ── Read planner ─────────────────────────────────────────────────────────────────────────

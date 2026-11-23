@@ -287,7 +287,7 @@ long previousMillisNTP;
 #define wirelessSensorAddr   0xb6
 #define menuEditValueAddr    0x19  // RAM: value being edited in the display menu
 #define palletSensorAddr     0xa4  // Pellet sensor state (5 = active)
-#define augerSpeedAddr       0x0D  // Auger speed (raw / 10 = rpm)
+#define augerSpeedAddr       0x0D  // Auger on-time per ~12 s cycle (raw / 10 = seconds; not rpm, measured 20/11/2026)
 #define palletLevelAddr      0x89  // Pellet fill level
 #define displayMenuAddr      0x1a  // Currently displayed menu / display write target
 #define selectedParamAddr    0x18  // Parameter selected in display menu

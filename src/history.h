@@ -21,7 +21,7 @@ struct __attribute__((packed)) HistSample {
     int8_t   state;
     int8_t   fan;
     int8_t   flameActual;   // -1 = unknown (samples from older firmware)
-    int16_t  auger10;       // auger speed rpm x10, -1 = unknown (older firmware)
+    int16_t  auger10;       // auger on-time per cycle, s x10, -1 = unknown (older firmware)
     uint16_t fumeRpm;       // fume fan rpm, 0xFFFF = unknown (older firmware)
     int8_t   fanActual;     // speed the room fan really runs at (0..3), -1 = unknown
     uint8_t  fanPower;      // room fan power, RAM 0x0A (0 off, 21/23/25), 0xFF = unknown
