@@ -41,6 +41,7 @@ static unsigned long fwCheckedAt = 0;       // millis() of the last successful c
 static bool          fwAutoCheck = true;
 static String        fwLastInstall;         // "v1.0.0 -> v1.1.0", from NVS
 
+void otaLastInstallChanged(const String& last) { fwLastInstall = last; }   // otaVerify.h, on confirming a new firmware
 static bool fwTimeValid() { return time(nullptr) > 1700000000; }   // TLS checks certificate dates
 
 // Progress of an install in NVS ("fwupd" / "prog"): survives a power cut, so a hang

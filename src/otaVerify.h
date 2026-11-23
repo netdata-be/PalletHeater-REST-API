@@ -21,11 +21,13 @@
 #include <Preferences.h>
 #include <WiFi.h>
 
+void otaLastInstallChanged(const String& last);   // fwUpdate.h: its copy of "last install"
 extern "C" bool verifyRollbackLater() { return true; }   // overrides the weak C default in the Arduino core
 
 static const uint32_t OTA_TRIAL_OK_MS     = 120000;   // 2 min with WiFi
 static const uint32_t OTA_TRIAL_NOWIFI_MS = 600000;   // 10 min without WiFi: roll back
 static bool   otaTrial = false;      // the running image is on trial (pending verify)
+static String otaPrevVersion;        // the firmware before this one (NVS "ota"/"good"), for "last install"
 static String otaRolledBack;         // version of an update that was rolled back ("" = none)
 
 // First thing in setup(): is this image on trial, was the last update rolled back?
@@ -35,7 +37,12 @@ void otaVerifySetup()
     esp_ota_img_states_t st;
     if (run && esp_ota_get_state_partition(run, &st) == ESP_OK && st == ESP_OTA_IMG_PENDING_VERIFY) {
         otaTrial = true;
-        Preferences p; p.begin("ota", false); p.putString("trial", BUILD_VERSION); p.end();
+        Preferences p; p.begin("ota", false);
+        otaPrevVersion = p.getString("good", p.getString("trial", "?"));   // "trial" for firmware from before "good" existed
+        p.putString("trial", BUILD_VERSION); p.end();
+        // a new firmware runs: an unfinished GitHub install noted by the previous one is over
+        // (installed by upload, espota or Bluetooth this time; fwUpdate.h reads it later in setup)
+        Preferences f; f.begin("fwupd", false); f.remove("prog"); f.end();
     }
     // a partition marked invalid: an update that did not start properly. It stays marked until
     // the next update overwrites that slot, so this is shown until then.
@@ -57,6 +64,15 @@ static void otaConfirm(const char* why)
     if (!otaTrial) return;
     esp_err_t e = esp_ota_mark_app_valid_cancel_rollback();
     otaTrial = false;
+    if (e == ESP_OK) {
+        // the last install, whatever way it came (GitHub, upload, espota, Bluetooth)
+        Preferences p; p.begin("ota", false); p.putString("good", BUILD_VERSION); p.end();
+        if (otaPrevVersion.length() && otaPrevVersion != BUILD_VERSION) {
+            String last = otaPrevVersion + " -> " + BUILD_VERSION;
+            Preferences f; f.begin("fwupd", false); f.putString("last", last); f.end();
+            otaLastInstallChanged(last);
+        }
+    }
     if (e == ESP_OK) LOGI("update", "firmware %s confirmed (%s)", BUILD_VERSION, why);
     else LOGW("update", "confirming firmware %s failed: %s", BUILD_VERSION, esp_err_to_name(e));
 }
