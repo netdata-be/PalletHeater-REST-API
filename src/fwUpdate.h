@@ -212,9 +212,15 @@ static String fwDoInstall()
     return "";
 }
 
+// An install from GitHub is running (check, download, restart): other web requests get a 503 (auth.h)
+static volatile bool fwInstalling = false;
+bool fwInstallBusy() { return fwInstalling && (fwState == FW_CHECKING || fwState == FW_DOWNLOADING || fwState == FW_RESTARTING); }
+int  fwInstallPercent() { return fwState == FW_DOWNLOADING && fwTotal ? (int)(fwDone * 100 / fwTotal) : fwState == FW_RESTARTING ? 100 : 0; }
+
 static void fwTask(void* arg)
 {
     bool install = arg != nullptr;
+    fwInstalling = install;
     fwState = FW_CHECKING;
     fwError = "";
     // one TLS connection at a time: let a running HTTPS session (often the request that
@@ -258,6 +264,7 @@ static void fwTask(void* arg)
         else LOGW("update", "update check failed: %s", err.c_str());
     }
     else fwState = FW_IDLE;
+    fwInstalling = false;
     fwBusy = false;
     vTaskDelete(nullptr);
 }

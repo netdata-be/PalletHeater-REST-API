@@ -135,6 +135,24 @@ static const char* httpMethodName(HTTPMethod m)
     default: return "?";
     }
 }
+// During a firmware install from GitHub (fwUpdate.h) the TLS download takes most of the memory:
+// every request that is not needed to follow it gets a short 503 instead of building its answer
+// (/api/state, /metrics, /api/history ... are large). Allowed: the update status, the web app
+// page and its icons, the health check.
+bool fwInstallBusy();      // fwUpdate.h (included later)
+int  fwInstallPercent();
+static bool httpRefusedForUpdate()
+{
+    if (!fwInstallBusy()) return false;
+    const String& u = wm.server->uri();
+    if (u == "/api/firmware" || u == "/api/health" || u == "/" || u == "/app" || u == "/manifest.webmanifest" || u == "/icon.svg" || u == "/icon-180.png") return false;
+    wm.server->sendHeader("Retry-After", "30");
+    char b[160];
+    snprintf(b, sizeof(b), "{\"error\":\"Firmware update in progress - try again later\",\"firmwareUpdate\":true,\"progress\":%d,\"retryAfter\":30}", fwInstallPercent());
+    wm.server->send(503, "application/json", b);
+    LOGD("http", "503 %s: firmware update in progress", u.c_str());
+    return true;
+}
 // Breadcrumb for a web request: method and URI while the handler runs (liveLog.h)
 static void crumbRequest()
 {
@@ -145,7 +163,7 @@ static void crumbRequest()
 // Wrap a route handler so the breadcrumb shows its request (public routes; authed() does it too)
 std::function<void()> crumbed(std::function<void()> fn)
 {
-    return [fn]() { crumbRequest(); fn(); crumb("http: request done"); };
+    return [fn]() { crumbRequest(); if (httpRefusedForUpdate()) return; fn(); crumb("http: request done"); };
 }
 
 // Wrap a route handler so it is only executed with a valid key (when required)
@@ -153,6 +171,7 @@ std::function<void()> authed(std::function<void()> fn)
 {
     return [fn]() {
         crumbRequest();
+        if (httpRefusedForUpdate()) return;
         if (!authOk()) {
             wm.server->sendHeader("WWW-Authenticate", "Bearer");
             LOGW("http", "401 %s from %s: missing or invalid API key", wm.server->uri().c_str(), clientIp().c_str());

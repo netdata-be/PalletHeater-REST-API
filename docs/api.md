@@ -21,6 +21,7 @@ The HTTP REST API of the controller. The OpenAPI 3 specification is [openapi.jso
   | `405` | HTTP method not supported on this route |
   | `500` | Serial communication with the stove failed |
   | `503` | The stove bus is busy (another request held it for more than 5 s). Retry. |
+  | `503` | While the controller installs a firmware from GitHub (`/api/firmware`): `{"error":"Firmware update in progress - try again later","firmwareUpdate":true,"progress":42,"retryAfter":30}` with a `Retry-After: 30` header. The TLS download needs most of the memory, so every route except `/api/firmware`, `/api/health`, the web app page and its icons is refused until the controller restarts on the new firmware (or the install fails). |
 
 - **Caching:** `/api/state` and `/metrics` are served from a cache that a background task keeps up to date. All other endpoints talk to the stove directly, so each call takes a few serial round trips.
 - **Bus locking:** the serial bus is shared with the background sensor task and BLE. Every endpoint that talks to the stove takes the bus lock first, so requests are handled one at a time on the bus.

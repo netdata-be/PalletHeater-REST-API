@@ -160,4 +160,6 @@ Every way of updating (GitHub, `POST /api/update`, espota, Bluetooth) ends the s
 | `trial` | The running firmware is on trial (`trialSecondsLeft` until it is confirmed with WiFi) |
 | `rolledBack` | Version of the last update that did not start properly and was rolled back, `null` if none (cleared by the next successful update) |
 
+During the install (check, download, restart) every other web request gets a short `503 Firmware update in progress` with `Retry-After: 30`, except `/api/firmware`, `/api/health` and the web app page: the TLS download leaves only 10 – 20 KB of free memory, and building large answers then (core dump 23/11/2026) starved it further. The web app only follows the progress meanwhile. The web server also reads a request line with a 2 s timeout (the library left 5 s from the previous answer: a request that came in only partly during the download kept the loop task 10 s, the task watchdog limit).
+
 `action=install` without `force` is refused (`400`) when there is no newer release; `409` while a check or update is already running. Poll `GET` to follow the progress; the controller is unreachable for about a minute while it restarts. The web app shows this under *Device* → *OpenPelletBridge firmware*.

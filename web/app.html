@@ -1197,7 +1197,11 @@ async function apiCall(method, path, params, body) {
     if (rec) { rec.status = res.status; rec.ms = Math.round(performance.now() - t0); }
     if (res.status === 401) { showKeyDialog(); throw new Error(t("keyNeeded")); }
     let data = null; try { data = text ? JSON.parse(text) : null; } catch (_) { data = { result: text }; }
-    if (!res.ok) throw new Error((data && (data.error || data.result)) || ("HTTP " + res.status));
+    if (!res.ok) {
+      const err = new Error((data && (data.error || data.result)) || ("HTTP " + res.status));
+      if (res.status === 503 && data && data.firmwareUpdate) { err.fwUpdate = true; err.progress = data.progress; }   // GitHub install running (auth.h)
+      throw err;
+    }
     return { status: res.status, data };
   } finally { clearTimeout(to); }
 }
@@ -4032,7 +4036,11 @@ async function poll() {
     // the controller answered: its dot is green; the stove dot tells about the serial link
     setConn(true, t("updated", new Date().toLocaleTimeString(lang === "nl" ? "nl-BE" : "en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })));
     renderStoveConn(data);
-  } catch (e) { offline = true; setConn(false, t("offline")); renderStoveConn(null); renderAlerts(); applyReach(); }
+  } catch (e) {
+    // the controller is installing a firmware: it answers, but only the update status
+    if (e.fwUpdate) { setConn(true, L("Firmware-update bezig… ", "Firmware update in progress… ") + (e.progress || 0) + " %", true); if (!fwDownloading()) loadFw(); }
+    else { offline = true; setConn(false, t("offline")); renderStoveConn(null); renderAlerts(); applyReach(); }
+  }
   finally { polling = false; pollTimer = setTimeout(poll, POLL_MS); }
 }
 document.addEventListener("visibilitychange", () => { if (!document.hidden) { poll(); pollRemote(); } });
