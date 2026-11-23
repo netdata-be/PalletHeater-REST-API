@@ -167,7 +167,14 @@ static bool httpWriteRaw(const uint8_t* p, size_t n, uint32_t maxStallMs = 3000)
 struct WebServerPeek : public WebServer {
     bool chunked() const { return _chunked; }
     void chunkedDone() { _chunked = false; }
+    // Read timeout of the client object the server reuses for the next connection. The
+    // library sets it to 5 s while answering (HTTP_MAX_SEND_WAIT) and never back, so the next
+    // request is read with readStringUntil('\r') and ('\n') at 5 s each: a request that came in
+    // only partly kept the loop task 10 s in _parseRequest, the task watchdog limit (core dump
+    // 23/11/2026, GitHub install at 80 %, free heap 10 - 20 KB during the TLS download).
+    void readTimeout(uint32_t s) { _currentClient.setTimeout(s); }
 };
+static const uint32_t HTTP_READ_TIMEOUT_S = 2;   // a request line that takes longer is dropped
 static bool httpChunked() { return static_cast<WebServerPeek*>(wm.server.get())->chunked(); }
 
 static void httpStall()

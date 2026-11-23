@@ -1692,6 +1692,10 @@ function renderFw() {
   if (working) fwFastT = setTimeout(loadFw, 1500);   // follow the check / download closely
 }
 $("updBadge").onclick = () => { $("devCard").scrollIntoView({ behavior: "smooth", block: "start" }); setTimeout(() => (!$("ghInstall").hidden ? $("ghInstall") : $("ghCheck")).focus({ preventScroll: true }), 400); };
+// While the controller downloads a firmware from GitHub its memory is low (the TLS connection):
+// the page then only follows the progress and leaves the heavier routes alone (core dump
+// 23/11/2026: a request that came in only partly during the download hung the loop task)
+const fwDownloading = () => !!(fwInfo && fwInfo.state === "downloading");
 async function loadFw() { try { fwInfo = (await api("GET", "/api/firmware")).data; } catch (_) { fwInfo = null; } renderFw(); }
 async function fwAction(params, label) {
   try { fwInfo = (await api("POST", "/api/firmware", params)).data; toast(label); }
@@ -2924,7 +2928,7 @@ function renderRemote() { renderLcd(); renderRemoteInfo(); }
 let remoteTimer = null;
 async function pollRemote() {
   clearTimeout(remoteTimer);
-  if (!document.hidden && busy === 0) {
+  if (!document.hidden && busy === 0 && !fwDownloading()) {
     try { remote = (await api("GET", "/api/remote")).data; if (remote && remote.language && remote.language !== "Unknown") setLang(langFromRemote(remote.language)); renderRemote(); } catch (_) {}
   }
   // poll faster while a menu is open on the remote, so edits show up quickly
@@ -3363,6 +3367,7 @@ function renderEvents() {
 let histTimer = null;
 async function loadHistory() {
   clearTimeout(histTimer);
+  if (fwDownloading()) { histTimer = setTimeout(loadHistory, 30000); return; }
   const [h, ev] = await Promise.allSettled([api("GET", "/api/history", { hours: histWantFine() ? 24 : 168 }), api("GET", "/api/events")]);
   hist = h.status === "fulfilled" ? h.value.data : { error: h.reason && h.reason.message };
   events = ev.status === "fulfilled" && ev.value.data && Array.isArray(ev.value.data.events) ? ev.value.data.events.slice().sort((a, b) => a.t - b.t) : null;   // null: firmware without the log
@@ -3550,7 +3555,7 @@ $("parReload").onclick = () => loadParams(true);
 let pelDbg = null, pelDbgAt = 0, pelDbgBusy = false;
 const AUGER_KNOWN = { 1: 3.0, 2: 4.6, 3: 6.2, 4: 7.8 };   // RAM 0x0D per flame power, seen on this stove
 async function loadPelDbg() {
-  if (!debug || offline || pelDbgBusy || document.hidden) return;
+  if (!debug || offline || pelDbgBusy || document.hidden || fwDownloading()) return;
   pelDbgBusy = true;
   try { const { data } = await api("GET", "/api/pellets"); pelDbg = data; pelDbgAt = Date.now(); }
   catch (e) { toast(t("failed", t("pelDbgTitle"), e.message), true); }
@@ -3745,7 +3750,7 @@ function renderPelDbg() {
 let useDays = (() => { try { return +localStorage.getItem("useDays") || 31; } catch (_) { return 31; } })();
 let useData = null, usePel = null, useBusy = false;
 async function loadUse() {
-  if (offline || useBusy || document.hidden) return;
+  if (offline || useBusy || document.hidden || fwDownloading()) return;
   useBusy = true;
   try {
     const [d, p] = await Promise.all([api("GET", "/api/pellets/days", { days: useDays }), api("GET", "/api/pellets")]);
@@ -4014,7 +4019,7 @@ function renderWeather() {
 let pollTimer = null, polling = false;
 async function poll() {
   clearTimeout(pollTimer);
-  if (busy > 0 || polling || document.hidden) { pollTimer = setTimeout(poll, POLL_MS); return; }
+  if (busy > 0 || polling || document.hidden || fwDownloading()) { pollTimer = setTimeout(poll, POLL_MS); return; }
   polling = true;
   try {
     const { data } = await api("GET", "/api/state");

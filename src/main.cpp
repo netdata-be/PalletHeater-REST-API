@@ -296,6 +296,8 @@ void loop()
     if (wifiConnected && wm.server) {
         crumb("http: accepting / reading a request");   // a route handler overwrites it with its request
         wm.server->handleClient();
+        // back to a short read timeout for the next request (see WebServerPeek::readTimeout)
+        static_cast<WebServerPeek*>(wm.server.get())->readTimeout(HTTP_READ_TIMEOUT_S);
     }
     crumb("WiFiManager");
     wm.process();
