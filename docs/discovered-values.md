@@ -649,7 +649,7 @@ Confirmed:
 
 Observations, not verified:
 - 0xA4 takes the values 0, 3, 4 and 5 (5 → 3 → 0 at the refill): rather a level / debounce
-  value than a plain flag. The controller treats every value 1 – 5 as low.
+  value than a plain flag. Confirmed on 23/11/2026 while burning, see the next section.
 - **RAM 0x96** was 193 during the whole reserve (17/11) and while empty (20/11), 74 right after
   the refill, 42 off with a full hopper (17/11) and 84 – 89 while working (16/11): a candidate
   for the raw value of the pellet level sensor (high = no pellets).
@@ -665,6 +665,38 @@ Observations, not verified:
 - The controller's pellet tracker detected the refill (10:05:02) and booked the default 15 kg;
   enter the real amount in the web app when it differs.
 
+
+### Refill during the reserve, stove burning (23/11/2026)
+
+From the event log (every change of RAM 0xA4 is recorded); the stove burned at flame 3 the whole
+time and never switched off.
+
+| Time | 0xA4 | Step after | |
+|------|------|-----------|---|
+| 08:47:02 | 0 → 5 | | no pellets at the level sensor: straight to 5, the 20 min countdown (0x89) starts |
+| 09:01:54 | 5 → 4 | | |
+| 09:02:31 | 4 → 5 | 37 s | pellets sliding past the sensor, not a refill |
+| ~09:07 | | | calculated (08:47 + 20 min, not read): 0x89 at 0, the last 30 minutes (0x91) start |
+| 09:12:29 | 5 → 4 | | hopper refilled |
+| 09:13:06 | 4 → 3 | 37 s | |
+| 09:14:20 | 3 → 2 | 74 s | |
+| 09:15:34 | 2 → 1 | 74 s | |
+| 09:16:12 | 1 → 0 | 38 s | the stove has confirmed the pellets |
+
+Derived (one refill while burning):
+- 0xA4 is a counter the stove keeps itself: up to 5 at once when the sensor sees no pellets, one
+  step down per reading when it sees pellets, a reading about every 37 s while burning (the steps
+  of 74 s are a reading without pellets in between). On 20/11, with the stove off, it went
+  5 → 3 → 0 within seconds; there 0x8D counted ~30 s steps instead.
+- Confirming a refill takes 5 × ~37 s ≈ 3 – 4 minutes while burning. Until 0 the controller showed
+  "pellets used up, the stove switches off in … min"; since this date 1 – 3 count as a refill being
+  confirmed (`pelletReserve.refilling`, green message in the web app and telnet; `lowPalletAlarm`
+  false). A single 4 is still treated as low: it also occurs as a flicker.
+- Refilling during the last 30 minutes (0x91 running) kept the stove burning: no shut-down, no
+  restart. Seen once.
+- The pellet estimate counted this as the end of its first calibration cycle: 15 kg in 244,942
+  auger units = 0.0612 g per unit (1.37 kg/h at flame 3). It only uses 5 (alarm, after 60 s) and
+  0 (refilled, after 30 s), so the steps in between did not disturb it.
 ### Start-up (20/11/2026 11:25 – 11:38) and the auger while working
 
 Full RAM dumps every ~32 s from START PHASE I (state 2, already running at 11:25:00; the CHECK
