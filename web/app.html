@@ -2581,11 +2581,12 @@ function renderTimers() {
   wrap.innerHTML = "";
   for (const [name, tm] of Object.entries(timersData)) wrap.appendChild(timerCard(name, tm));
 }
-async function loadTimers() {
-  try { const { data } = await api("GET", "/api/timers"); timersData = data.timers; renderTimers(); renderNext(); if (hist) renderHistory(); renderParams(); }   // timer bands
+// From the controller's cache (kept fresh by its read planner); Reload reads the stove now (live=1)
+async function loadTimers(live) {
+  try { const { data } = await api("GET", "/api/timers", live ? { live: 1 } : null); timersData = data.timers; renderTimers(); renderNext(); if (hist) renderHistory(); renderParams(); }   // timer bands
   catch (e) { $("timers").innerHTML = ""; $("timers").appendChild(el("p", "muted", t("timersErr", e.message))); }
 }
-$("reloadTimers").onclick = () => { timersData = null; renderTimers(); loadTimers(); };
+$("reloadTimers").onclick = () => { timersData = null; renderTimers(); loadTimers(true); };
 
 // Next timer event, computed from the programs and the stove clock
 function renderNext() {

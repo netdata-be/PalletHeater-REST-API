@@ -1403,7 +1403,17 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "live",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Read the stove now instead of the cache (~2 s)"
+          }
+        ]
       },
       "post": {
         "tags": [

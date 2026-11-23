@@ -23,11 +23,36 @@ static int timerIndexFromUri(const String& uri)
     return -1;
 }
 
+long planTimerAgeS(int idx);   // stoveCache.h
 // Returns false (and sets timer["error"]) when a register could not be read,
 // so clients never see — or write back — half-read garbage.
-static bool serializeTimerToJson(int idx, JsonObject timer)
+// live = false: from the cache the read planner keeps fresh (stoveCache.h: every program about
+// every 20 - 60 s, at once after a write and when the remote control leaves a menu), when it has it.
+static bool serializeTimerToJson(int idx, JsonObject timer, bool live = true)
 {
     byte base = timerBases[idx];
+    long age = live ? -1 : planTimerAgeS(idx);
+    if (age >= 0) {
+        int enabled = cachedTimerEnabled[idx], onVal = cachedTimerOnVal[idx], offVal = cachedTimerOffVal[idx];
+        int dow = cachedTimerDowMask[idx], sp = cachedTimerSetpoint[idx], fp = cachedTimerFlame[idx], fan = cachedTimerFan[idx];
+        timer["enabled"] = enabled > 0;
+        timer["on"]  = timerValueToTimeStr(onVal);
+        timer["off"] = timerValueToTimeStr(offVal);
+        JsonObject enabledOn = timer.createNestedObject("enabled_on");
+        enabledOn["monday"]    = (dow & 1)  != 0;
+        enabledOn["tuesday"]   = (dow & 2)  != 0;
+        enabledOn["wednesday"] = (dow & 4)  != 0;
+        enabledOn["thursday"]  = (dow & 8)  != 0;
+        enabledOn["friday"]    = (dow & 16) != 0;
+        enabledOn["saturday"]  = (dow & 32) != 0;
+        enabledOn["sunday"]    = (dow & 64) != 0;
+        JsonObject settings = timer.createNestedObject("settings");
+        settings["setpoint"]     = sp;
+        settings["flame_power"]  = fp;
+        settings["RoomFanSpeed"] = fan;
+        timer["readSecondsAgo"] = age;
+        return true;
+    }
     int enabled = stove.read(eeprom, base + TIMER_ONOFF_OFFSET);
     int onVal   = stove.read(eeprom, base + TIMER_ONTIME_OFFSET);
     int offVal  = stove.read(eeprom, base + TIMER_OFFTIME_OFFSET);
@@ -203,10 +228,11 @@ void handleRouteTimers()
 
     if (wm.server->method() == HTTP_GET)
     {
-        DynamicJsonDocument json(2048);
+        DynamicJsonDocument json(2560);
         JsonObject timers = json.createNestedObject("timers");
+        bool live = pc::parseOnOff(wm.server->arg("live").c_str()) == 1;   // ?live=1: read the stove now
         for (int i = 0; i < 6; i++)
-            serializeTimerToJson(i, timers.createNestedObject(prNames[i]));
+            serializeTimerToJson(i, timers.createNestedObject(prNames[i]), live);
         sendJson(200, json);
         return;
     }
@@ -274,7 +300,7 @@ void handleRouteTimer()
     if (wm.server->method() == HTTP_GET)
     {
         DynamicJsonDocument json(512);
-        bool ok = serializeTimerToJson(idx, json.createNestedObject(prNames[idx]));
+        bool ok = serializeTimerToJson(idx, json.createNestedObject(prNames[idx]), pc::parseOnOff(wm.server->arg("live").c_str()) == 1);
         String out;
         serializeJson(json, out);
         wm.server->send(ok ? 200 : 500, "application/json", out);
