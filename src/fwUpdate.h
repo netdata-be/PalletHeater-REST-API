@@ -96,9 +96,21 @@ static String fwDoCheck()
     http.addHeader("Accept", "application/vnd.github+json");
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);   // a renamed repository answers 301 to its new location
     unsigned long t0 = millis();
+    // DNS first, separately: HTTPClient reports every failed connection as "connection refused"
+    IPAddress ip;
+    if (!WiFi.hostByName("api.github.com", ip)) { http.end(); return String("DNS lookup of api.github.com failed (") + (millis() - t0) + " ms)"; }
+    LOGD("update", "api.github.com = %s (DNS %lu ms)", ip.toString().c_str(), millis() - t0);
     int code = http.GET();
     LOGD("update", "GitHub answered %d (%s) in %lu ms (TLS connection included)", code,
          code < 0 ? http.errorToString(code).c_str() : "HTTP", millis() - t0);
+    if (code < 0) {
+        char tls[100] = ""; int te = client.lastError(tls, sizeof(tls));
+        String e = String("connection to api.github.com (") + ip.toString() + ") failed after " + (millis() - t0) + " ms" +
+                   (te ? String(": TLS error -0x") + String(-te, HEX) + " " + tls : String(": no TLS error (TCP connect or timeout)")) +
+                   ", free heap " + (ESP.getFreeHeap() / 1024) + " KB, largest block " + (ESP.getMaxAllocHeap() / 1024) + " KB";
+        http.end();
+        return e;
+    }
     if (code == 404) { http.end(); return "no release published yet on github.com/" FW_REPO " (pre-releases and drafts do not count)"; }
     if (code != 200) {
         String e = code < 0 ? String("connection failed: ") + http.errorToString(code) : String("GitHub answered HTTP ") + code;
