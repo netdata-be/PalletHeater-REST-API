@@ -3785,6 +3785,30 @@
             "schema": {
               "type": "boolean"
             }
+          },
+          {
+            "name": "pricePerBag",
+            "in": "query",
+            "schema": {
+              "type": "number"
+            },
+            "description": "Price of a bag in € (0 - 200, 0 = not kept)"
+          },
+          {
+            "name": "bagKg",
+            "in": "query",
+            "schema": {
+              "type": "number"
+            },
+            "description": "Kg in one bag (1 - 100)"
+          },
+          {
+            "name": "stockBags",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Bags in stock (0 - 10000), or off = not kept"
           }
         ],
         "responses": {
@@ -3802,6 +3826,75 @@
             "description": "Invalid parameter"
           }
         }
+      }
+    },
+    "/api/pellets/days": {
+      "get": {
+        "summary": "Pellet use per day",
+        "description": "Auger units per local day (up to 400 days, oldest first, today so far last), with kg and cost at the calibration and price of now.",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 400,
+              "default": 31
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Use per day",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "kgPerUnit": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "pricePerKg": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "days": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "d": {
+                            "type": "string",
+                            "format": "date"
+                          },
+                          "units": {
+                            "type": "number"
+                          },
+                          "kg": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "cost": {
+                            "type": "number",
+                            "nullable": true
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "days out of range"
+          }
+        },
+        "tags": [
+          "Status"
+        ]
       }
     },
     "/api/coredump": {
@@ -5432,6 +5525,31 @@
           "debug": {
             "type": "object",
             "description": "GET /api/pellets only: every input and intermediate step of the estimate (input, tracker, constants, calc, loop, save), for troubleshooting. See docs/api.md.",
+            "additionalProperties": true
+          },
+          "kgToday": {
+            "type": "number",
+            "nullable": true,
+            "description": "Pellets burned today (local day), kg; null while not calibrated"
+          },
+          "kgPerDay": {
+            "type": "number",
+            "nullable": true,
+            "description": "Average kg per day over the last 7 days; null while not calibrated"
+          },
+          "costPerMonth": {
+            "type": "number",
+            "nullable": true,
+            "description": "Estimated € per month: kg per day (7 d) x 30.44 x price per kg; null without price or calibration"
+          },
+          "stockBags": {
+            "type": "number",
+            "nullable": true,
+            "description": "Bags in stock; null when not kept"
+          },
+          "usage": {
+            "type": "object",
+            "description": "GET /api/pellets only: price, stock and use over the last 7 / 30 / 365 days (pricePerBag, bagKg, pricePerKg, stockBags, days, unitsToday, last7, last30, last365 {days, kg, kgPerDay, cost}, stockDays). See docs/api.md.",
             "additionalProperties": true
           }
         }

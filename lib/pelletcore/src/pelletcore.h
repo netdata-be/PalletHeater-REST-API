@@ -679,4 +679,60 @@ private:
     }
 };
 
+// ── Pellet use per day and cost ─────────────────────────────────────────────
+// Auger units per local day (YYYYMMDD), not kg: kg = units x kg per unit of the calibration at
+// the moment it is shown, so old days get more accurate with every calibration cycle too.
+// The day in progress runs from dayStart (the unit counter at its start). Plain data, stored as a
+// file on SPIFFS (pellets.h).
+struct PelletDay {
+    uint32_t day;      // YYYYMMDD (local time)
+    float    units;    // auger units burned that day
+};
+struct PelletUsage {
+    static const int MAX_DAYS = 400;
+    uint32_t version = 1;
+    uint32_t curDay = 0;          // day in progress, 0 = none yet
+    double   dayStart = 0;        // unit counter at its start
+    int32_t  n = 0, head = 0;     // closed days in the ring, next write position
+    PelletDay days[MAX_DAYS] = {};
+
+    // Called with the local day and the unit counter; closes the day in progress when the date
+    // changed (all units since its start count for it, also over days the controller was off).
+    // Returns true when a day was closed.
+    bool roll(uint32_t today, double units)
+    {
+        if (!today) return false;
+        if (!curDay) { curDay = today; dayStart = units; return false; }
+        if (today == curDay) return false;
+        float u = units > dayStart ? (float)(units - dayStart) : 0;
+        days[head] = { curDay, u };
+        head = (head + 1) % MAX_DAYS;
+        if (n < MAX_DAYS) n++;
+        curDay = today; dayStart = units;
+        return true;
+    }
+    double unitsToday(double units) const { return curDay && units > dayStart ? units - dayStart : 0; }
+    // i = 0 is the most recent closed day
+    const PelletDay& closed(int i) const { return days[(head - 1 - i + 2 * MAX_DAYS) % MAX_DAYS]; }
+    // Units of the last k closed days (yesterday and before), and how many of them are known
+    double unitsClosed(int k, int* got = nullptr) const
+    {
+        double u = 0; int c = 0;
+        for (int i = 0; i < n && i < k; i++) { u += closed(i).units; c++; }
+        if (got) *got = c;
+        return u;
+    }
+};
+// Price and stock: price per bag, kg per bag, bags in stock (fractions allowed)
+struct PelletCost {
+    float pricePerBag = 0;   // €, 0 = not set
+    float bagKg = 15;
+    float stockBags = -1;    // < 0 = not kept
+    double pricePerKg() const { return pricePerBag > 0 && bagKg > 0 ? pricePerBag / bagKg : 0; }
+    // pellets taken from the stock (a refill): kg out of the bags, never below 0
+    void take(float kg) { if (stockBags >= 0 && bagKg > 0) { stockBags -= kg / bagKg; if (stockBags < 0) stockBags = 0; } }
+};
+// "2026-11-23" from YYYYMMDD
+inline void dayText(uint32_t d, char out[11]) { snprintf(out, 11, "%04u-%02u-%02u", (unsigned)(d / 10000), (unsigned)(d / 100 % 100), (unsigned)(d % 100)); }
+
 } // namespace pc

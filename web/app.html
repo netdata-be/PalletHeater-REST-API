@@ -326,6 +326,13 @@ body:not(.debug) .d{display:none!important}
   .bar .brk{display:block;order:2;flex-basis:100%;height:0}
   .bar .xbtn{order:3}
 }
+/* pellet use per day */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:2px 0 10px}
+.kpi{background:var(--seg);border-radius:10px;padding:8px 12px}
+.kpi .k{font-size:12px;color:var(--muted)}
+.kpi .v{font-size:20px;font-weight:650;font-variant-numeric:tabular-nums;line-height:1.3}
+.kpi .s{font-size:12px;color:var(--muted)}
+#useChart line.g{stroke:var(--grid);stroke-width:1}
 /* pellet estimate (debug) */
 .pdstage{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
 .pdchecks{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:6px;font-size:13px}
@@ -474,6 +481,17 @@ button.mini{padding:1px 8px;font-size:11px;font-weight:550;border-radius:7px;mar
       <details class="tbl x"><summary data-i="showTable"></summary><div class="scroll"><table id="histTable"></table></div></details>
     </div>
     <details class="tbl" id="evtBox" style="display:none"><summary data-i="evtTitle"></summary><div class="scroll"><table id="evtTable"></table></div></details>
+  </section>
+
+  <!-- Pellet use per day and cost (GET /api/pellets/days, /api/pellets usage) -->
+  <section class="card wide" id="useCard">
+    <h2><span><span data-i="useTitle"></span><span data-help="use"></span></span>
+      <span class="seg" id="useSeg"><button data-d="14">14 d</button><button data-d="31">30 d</button><button data-d="92">3 m</button><button data-d="366">1 j</button></span></h2>
+    <div class="kpis" id="useKpis"></div>
+    <div class="chart" id="useChart"><svg role="img"></svg><div class="tip"></div></div>
+    <p class="muted" style="font-size:12px;margin:6px 0 0" id="useNote"></p>
+    <div class="actions"><button id="usePrice"></button><button id="useStock"></button></div>
+    <details class="tbl"><summary data-i="showTable"></summary><div class="scroll"><table id="useTable"></table></div></details>
   </section>
 
   <!-- Remote control -->
@@ -750,6 +768,7 @@ const I18N = {
     mqttEdit:"Settings", mqttEnabled:"MQTT on", mqttUser:"User", mqttPass:"Password", mqttPrefix:"Topic prefix", mqttDisc:"Home Assistant discovery", mqttDiscPrefix:"Discovery prefix",
     mqttNone:"Not available (older firmware)", mqttOff:"Off", mqttConnected:"Connected to {0} – topics {1}/…", mqttDisconnected:"Not connected to {0}: {1}", mqttPassKeep:"unchanged", mqttSaved:"MQTT settings saved", cancel:"Cancel",
     h_mqtt:"Publishes the stove values to an MQTT broker and accepts commands. Values are plain text under <prefix>/state/… (e.g. room_temp = 21.5, power = ON), retained, on change and every 5 min. Commands go to <prefix>/set/…: power and energy_saving (ON / OFF or 1 / 0), mode (heat / off), setpoint (7 – 30), flame_power (1 – 4), fan_speed (off / 0 – 3), es_stop and es_start (0 – 3). <prefix>/status is online / offline. With Home Assistant discovery on, the stove appears in Home Assistant by itself (climate, switches, numbers, sensors). Other systems such as Loxone (through an MQTT gateway) or Node-RED use the same topics; discovery can stay off for them.",
+    useTitle:"Pellet use", h_use:"Pellets burned per day, from the auger counter (auger value × time, the same as the estimate). Kept per day on the controller for up to 400 days; the days before the feature existed are filled in from the 7-day hourly history. Kilograms use the calibration of now, so older days become more accurate with every refill cycle too. Price…: the price of a bag and its weight (€ per kg follows). Stock…: the bags you have at home; every refill (detected or entered) takes its kg from it, and the stock is shown in days at the use of the last 7 days. Today is drawn lighter: the day is still running.",
     pelDbgTitle:"Pellet estimate (debug)", h_pelDbg:"Everything the pellet estimate is made of, from GET /api/pellets (refreshed every 10 s while debug mode is on). The controller adds up 'auger units': the auger on-time per cycle (RAM 0x0D, at most 12 s) times the seconds it fed. The level sensor (RAM 0xA4) trips at the same height each time, so between two alarms exactly the kg refilled in between were burned: kg per unit = kg / units. Left = kg refilled since the last alarm − kg per unit × units since that alarm; hours = left / (kg per unit × auger value × 3600). The checks at the top flag what usually goes wrong: no alarm or refill seen yet, sensor values the counter ignores, more burned than refilled (wrong refill amount), gaps in the readings, cycles that disagree. 'Copy' puts the raw JSON on the clipboard for a bug report.",
     parTitle:"Parameters (EEPROM)", h_par:"Presets stored in the stove EEPROM, read live (GET /api/dump). 'Verified' = checked on this stove. The presets per power level are the values the stove uses at each flame power; the row of the current actual flame power is highlighted.",
     parPresets:"Presets per phase and power level", parPhases:"Start-up, cleaning and alarm (installer parameters Pr01 – Pr22 at EEPROM address Pr − 1, as in the Micronova L023 manual)", parCReg:"Register", parCManual:"In the manual", parCName:"Meaning", parCVal:"Value", parUser:"Settings (menu parameter id = EEPROM address + 1)", parCMenu:"Menu parameter", parTimers:"Timer programs (from /api/timers)", parCProg:"Program", parCOn:"On", parCOff:"Off", parCDays:"Days", parCSet:"Temp.", parCFlame:"Flame", parCFan:"Fan", parLevel:"Level", parAuger:"Auger value", parFume:"Fume fan target", parNow:"now",
@@ -921,6 +940,7 @@ pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low 
     mqttEdit:"Instellen", mqttEnabled:"MQTT aan", mqttUser:"Gebruiker", mqttPass:"Wachtwoord", mqttPrefix:"Topic-prefix", mqttDisc:"Home Assistant discovery", mqttDiscPrefix:"Discovery-prefix",
     mqttNone:"Niet beschikbaar (oudere firmware)", mqttOff:"Uit", mqttConnected:"Verbonden met {0} – topics {1}/…", mqttDisconnected:"Niet verbonden met {0}: {1}", mqttPassKeep:"ongewijzigd", mqttSaved:"MQTT-instellingen bewaard", cancel:"Annuleren",
     h_mqtt:"Publiceert de waarden van de kachel naar een MQTT-broker en aanvaardt commando's. Waarden staan als gewone tekst onder <prefix>/state/… (bv. room_temp = 21.5, power = ON), retained, bij elke wijziging en elke 5 min. Commando's gaan naar <prefix>/set/…: power en energy_saving (ON / OFF of 1 / 0), mode (heat / off), setpoint (7 – 30), flame_power (1 – 4), fan_speed (off / 0 – 3), es_stop en es_start (0 – 3). <prefix>/status is online / offline. Met Home Assistant discovery aan verschijnt de kachel vanzelf in Home Assistant (thermostaat, schakelaars, getallen, sensoren). Andere systemen zoals Loxone (via een MQTT-gateway) of Node-RED gebruiken dezelfde topics; discovery mag voor hen uit.",
+    useTitle:"Pelletverbruik", h_use:"Verbrande pellets per dag, uit de schroefteller (schroefwaarde × tijd, dezelfde als voor de schatting). Per dag bewaard op de controller, tot 400 dagen; de dagen van vóór deze functie zijn aangevuld uit de uurgeschiedenis van 7 dagen. De kilo's gebruiken de ijking van nu, zodat ook oudere dagen nauwkeuriger worden bij elke bijvulcyclus. Prijs…: de prijs van een zak en zijn gewicht (€ per kg volgt daaruit). Voorraad…: de zakken die je thuis hebt; elke bijvulling (herkend of ingegeven) haalt zijn kilo's daaruit, en de voorraad wordt getoond in dagen bij het verbruik van de laatste 7 dagen. Vandaag is lichter getekend: die dag loopt nog.",
     pelDbgTitle:"Pelletschatting (debug)", h_pelDbg:"Alles waaruit de pelletschatting bestaat, uit GET /api/pellets (elke 10 s ververst zolang debug aan staat). De controller telt 'schroefeenheden' op: de aan-tijd van de schroef per cyclus (RAM 0x0D, hoogstens 12 s) maal het aantal seconden dat ze voedde. De niveausensor (RAM 0xA4) slaat telkens op dezelfde hoogte aan, dus tussen twee alarmen is precies de bijgevulde hoeveelheid verbrand: kg per eenheid = kg / eenheden. Over = kg bijgevuld sinds het laatste alarm − kg per eenheid × eenheden sinds dat alarm; uren = over / (kg per eenheid × schroefwaarde × 3600). De controles bovenaan tonen wat meestal misloopt: nog geen alarm of bijvulling gezien, sensorwaarden die de teller negeert, meer verbrand dan bijgevuld (verkeerde hoeveelheid), gaten in de metingen, cycli die niet overeenkomen. 'Kopieer' zet de ruwe JSON op het klembord voor een foutmelding.",
     parTitle:"Parameters (EEPROM)", h_par:"Presets in het EEPROM van de kachel, live gelezen (GET /api/dump). 'Bevestigd' = nagekeken op deze kachel. De presets per vermogen zijn de waarden die de kachel per vlamvermogen gebruikt; de rij van het huidige werkelijke vlamvermogen is gemarkeerd.",
     parPresets:"Presets per fase en vermogen", parPhases:"Opstart, reiniging en alarm (installateursparameters Pr01 – Pr22 op EEPROM-adres Pr − 1, zoals in de Micronova L023-handleiding)", parCReg:"Register", parCManual:"In de handleiding", parCName:"Betekenis", parCVal:"Waarde", parUser:"Instellingen (menuparameter-id = EEPROM-adres + 1)", parCMenu:"Menuparameter", parTimers:"Timerprogramma's (uit /api/timers)", parCProg:"Programma", parCOn:"Aan", parCOff:"Uit", parCDays:"Dagen", parCSet:"Temp.", parCFlame:"Vlam", parCFan:"Ventilator", parLevel:"Niveau", parAuger:"Schroefwaarde", parFume:"Doeltoerental rookgasventilator", parNow:"nu",
@@ -3713,6 +3733,143 @@ function renderPelDbg() {
   $("pelDbgCyc").appendChild(ytb);
 }
 
+// ---------- pellet use per day and cost (GET /api/pellets/days + usage of /api/pellets) ----------
+// One series (kg per day) as bars on one axis; today lighter (still running); a dashed line for the
+// average of the shown days; hover shows the day. Colours are the app's series tokens (themed).
+let useDays = (() => { try { return +localStorage.getItem("useDays") || 31; } catch (_) { return 31; } })();
+let useData = null, usePel = null, useBusy = false;
+async function loadUse() {
+  if (offline || useBusy || document.hidden) return;
+  useBusy = true;
+  try {
+    const [d, p] = await Promise.all([api("GET", "/api/pellets/days", { days: useDays }), api("GET", "/api/pellets")]);
+    useData = d.data; usePel = p.data;
+  } catch (_) {}
+  finally { useBusy = false; }
+  renderUse();
+}
+setInterval(loadUse, 600000);
+$("useSeg").onclick = e => {
+  const b = e.target.closest("button"); if (!b) return;
+  useDays = +b.dataset.d; try { localStorage.setItem("useDays", useDays); } catch (_) {}
+  loadUse();
+};
+$("usePrice").onclick = async () => {
+  const u = usePel && usePel.usage || {};
+  const v = prompt(L("Prijs van een zak pellets (€, 0 = niet bijhouden):", "Price of a bag of pellets (€, 0 = do not keep):"), u.pricePerBag ?? "");
+  if (v === null) return;
+  const price = parseFloat(String(v).replace(",", "."));
+  if (!(price >= 0 && price <= 200)) { toast(L("Geef een prijs tussen 0 en 200 €", "Enter a price of 0 - 200 €"), true); return; }
+  const w = prompt(L("Gewicht van een zak (kg):", "Weight of a bag (kg):"), u.bagKg ?? 15);
+  if (w === null) return;
+  const kg = parseFloat(String(w).replace(",", "."));
+  if (!(kg >= 1 && kg <= 100)) { toast(L("Geef een gewicht tussen 1 en 100 kg", "Enter a weight of 1 - 100 kg"), true); return; }
+  try { await write(L("Prijs bewaard", "Price saved"), "POST", "/api/pellets", { pricePerBag: price, bagKg: kg }); } catch (_) {}
+  loadUse();
+};
+$("useStock").onclick = async () => {
+  const u = usePel && usePel.usage || {};
+  const v = prompt(L("Hoeveel zakken heb je in voorraad? (leeg = niet bijhouden; elke bijvulling haalt er automatisch af)",
+                     "How many bags do you have in stock? (empty = do not keep; every refill takes from it)"), u.stockBags ?? "");
+  if (v === null) return;
+  const t = String(v).trim().replace(",", ".");
+  const bags = t === "" ? "off" : parseFloat(t);
+  if (bags !== "off" && !(bags >= 0 && bags <= 10000)) { toast(L("Geef een aantal zakken", "Enter a number of bags"), true); return; }
+  try { await write(L("Voorraad bewaard", "Stock saved"), "POST", "/api/pellets", { stockBags: bags }); } catch (_) {}
+  loadUse();
+};
+function renderUse() {
+  const loc = lang === "nl" ? "nl-BE" : "en-GB";
+  const nf = (v, d = 1) => v == null ? "–" : Number(v).toLocaleString(loc, { minimumFractionDigits: d, maximumFractionDigits: d });
+  const eur = v => v == null ? "–" : "€ " + nf(v, v >= 100 ? 0 : 2);
+  document.querySelectorAll("#useSeg button").forEach(b => { const on = +b.dataset.d === useDays; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on); });
+  $("usePrice").textContent = L("Prijs…", "Price…"); $("useStock").textContent = L("Voorraad…", "Stock…");
+  const kp = $("useKpis"); kp.innerHTML = "";
+  const kpi = (k, v, sub) => { const d = el("div", "kpi"); d.append(el("div", "k", k), el("div", "v", v)); if (sub) d.appendChild(el("div", "s", sub)); kp.appendChild(d); };
+  const u = usePel && usePel.usage, days = useData && useData.days || [];
+  const calibrated = !!(useData && useData.kgPerUnit);
+  const ppk = u && u.pricePerKg;
+  if (u) {
+    const today = days.length ? days[days.length - 1] : null;
+    kpi(L("Vandaag", "Today"), today && today.kg != null ? nf(today.kg) + " kg" : "–", today && today.cost != null ? eur(today.cost) + L(" · loopt nog", " · still running") : L("loopt nog", "still running"));
+    kpi(L("Per dag", "Per day"), u.last7.kgPerDay != null ? nf(u.last7.kgPerDay) + " kg" : "–",
+        L("gem. " + u.last7.days + " d", "avg " + u.last7.days + " d") + (u.last30.days > u.last7.days && u.last30.kgPerDay != null ? " · " + nf(u.last30.kgPerDay) + L(" kg over " + u.last30.days + " d", " kg over " + u.last30.days + " d") : ""));
+    const month = u.last7.kgPerDay != null ? u.last7.kgPerDay * 30.44 : null;
+    kpi(L("Per maand", "Per month"), month == null ? "–" : ppk ? "≈ € " + nf(month * ppk, 0) : "≈ " + nf(month, 0) + " kg",
+        month == null ? "" : (ppk ? "≈ " + nf(month, 0) + " kg · " : "") + L("bij het verbruik van 7 d", "at the use of 7 d"));
+    kpi(L("Voorraad", "Stock"), u.stockBags == null ? L("niet ingesteld", "not set") : nf(u.stockBags, 1) + L(" zakken", " bags"),
+        u.stockDays != null ? "± " + nf(u.stockDays, 0) + L(" dagen (met de bak)", " days (with the hopper)") : ppk ? eur(u.pricePerBag) + L(" per zak", " per bag") : "");
+  }
+  // period total
+  const vals = days.map(d => calibrated ? d.kg : d.units);
+  const sumKg = days.reduce((a, d) => a + (d.kg || 0), 0), sumCost = days.reduce((a, d) => a + (d.cost || 0), 0);
+  if (u && days.length) kpi(L("Periode", "Period") + " (" + days.length + " d)", calibrated ? nf(sumKg, 0) + " kg" : "–", ppk ? eur(sumCost) : "");
+  // chart
+  const box = $("useChart"), svg = box.querySelector("svg"), tip = box.querySelector(".tip");
+  svg.innerHTML = ""; tip.style.display = "none";
+  if (!days.length) { $("useNote").textContent = L("Nog geen gegevens.", "No data yet."); return; }
+  const W = Math.max(320, box.clientWidth || 800), H = 190, ml = 44, mr = 10, mt = 10, mb = 24, pw = W - ml - mr, ph = H - mt - mb;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("aria-label", L("Pelletverbruik per dag", "Pellet use per day"));
+  const unit = calibrated ? "kg" : L("eenheden", "units");
+  const max = Math.max(...vals.map(v => v || 0), 0.1);
+  const step = [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000].find(s => max / s <= 4) || max / 4;
+  const top = Math.ceil(max / step) * step;
+  const y = v => mt + ph - (v / top) * ph;
+  const NS = "http://www.w3.org/2000/svg", mk = (t, a) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
+  for (let g = 0; g <= top + 1e-9; g += step) {
+    svg.appendChild(mk("line", { class: "g", x1: ml, x2: W - mr, y1: y(g), y2: y(g) }));
+    const tx = mk("text", { x: ml - 6, y: y(g) + 4, "text-anchor": "end" });
+    tx.textContent = nf(g, step < 1 ? 1 : 0) + (g + step > top + 1e-9 && calibrated ? " kg" : ""); svg.appendChild(tx);   // unit on the top label
+  }
+  const n = days.length, bw = pw / n, gap = bw > 6 ? 2 : bw > 3 ? 1 : 0, w = Math.max(1, bw - gap), r = Math.min(4, w / 2);
+  days.forEach((d, i) => {
+    const v = vals[i] || 0, x = ml + i * bw + gap / 2, yt = y(v), h = mt + ph - yt;
+    if (h > 0.5) {
+      const rr = Math.min(r, h);   // rounded data end, square at the baseline
+      const path = `M${x},${mt + ph}V${yt + rr}Q${x},${yt} ${x + rr},${yt}H${x + w - rr}Q${x + w},${yt} ${x + w},${yt + rr}V${mt + ph}Z`;
+      svg.appendChild(mk("path", { d: path, fill: i === n - 1 ? "color-mix(in srgb,var(--s3) 45%,var(--card))" : "var(--s3)", "data-i": i }));
+    }
+  });
+  // average of the closed days shown (dashed), labelled at the right
+  const closed = vals.slice(0, -1).filter(v => v != null);
+  if (closed.length >= 2) {
+    const avg = closed.reduce((a, v) => a + v, 0) / closed.length;
+    svg.appendChild(mk("line", { x1: ml, x2: W - mr, y1: y(avg), y2: y(avg), stroke: "var(--muted)", "stroke-dasharray": "4 4", "stroke-width": 1 }));
+    const al = mk("text", { x: W - mr, y: y(avg) - 4, "text-anchor": "end" }); al.textContent = L("gem. ", "avg ") + nf(avg, calibrated ? 1 : 0) + " " + unit; svg.appendChild(al);
+  }
+  // date labels: about 6, on whole days
+  const every = Math.max(1, Math.ceil(n / 6));
+  days.forEach((d, i) => {
+    if ((n - 1 - i) % every) return;
+    const [yy, mm, dd] = d.d.split("-");
+    const tx = mk("text", { x: ml + i * bw + bw / 2, y: H - 6, "text-anchor": "middle" }); tx.textContent = dd + "/" + mm; svg.appendChild(tx);
+  });
+  // hover: hit areas the full height of the plot
+  const hit = mk("rect", { x: ml, y: mt, width: pw, height: ph, fill: "transparent" }); svg.appendChild(hit);
+  const show = ev => {
+    const rc = svg.getBoundingClientRect(), sx = (ev.clientX - rc.left) * W / rc.width, i = Math.floor((sx - ml) / bw);
+    if (i < 0 || i >= n) { tip.style.display = "none"; return; }
+    const d = days[i], dt = new Date(d.d + "T12:00:00");
+    tip.innerHTML = "";
+    tip.append(el("b", "", dt.toLocaleDateString(loc, { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" }) + (i === n - 1 ? L(" (loopt nog)", " (still running)") : "")));
+    tip.append(el("div", "", d.kg != null ? nf(d.kg, 2) + " kg" : nf(d.units, 0) + " " + L("eenheden", "units")));
+    if (d.cost != null) tip.append(el("div", "", eur(d.cost)));
+    tip.style.display = "block";
+    const bx = rc.left + (ml + i * bw + bw / 2) * rc.width / W - box.getBoundingClientRect().left;
+    tip.style.left = Math.min(Math.max(0, bx - 70), box.clientWidth - 150) + "px"; tip.style.top = "0px";
+  };
+  hit.addEventListener("mousemove", show); hit.addEventListener("touchstart", e => show(e.touches[0]), { passive: true });
+  hit.addEventListener("mouseleave", () => tip.style.display = "none");
+  $("useNote").textContent = (calibrated ? L("Kilo's met de ijking van nu (", "Kilograms with the calibration of now (") + nf(useData.kgPerUnit * 1e3, 4) + L(" g per schroefeenheid).", " g per auger unit).")
+    : L("Nog geen ijking: in schroefeenheden tot de eerste volledige bijvulcyclus.", "Not calibrated yet: in auger units until the first full refill cycle.")) + " " + L("Vandaag is lichter: die dag loopt nog.", "Today is lighter: the day is still running.");
+  // table (newest first)
+  const tb = $("useTable"); tb.innerHTML = "";
+  const hr = el("tr"); [L("Dag", "Day"), unit, "€"].forEach(h => hr.appendChild(el("th", "", h))); tb.appendChild(hr);
+  for (let i = n - 1; i >= 0; i--) { const d = days[i], tr = el("tr"); tr.append(el("td", "", d.d.split("-").reverse().join("/")), el("td", "", calibrated ? nf(d.kg, 2) : nf(d.units, 0)), el("td", "", d.cost != null ? nf(d.cost, 2) : "–")); tb.appendChild(tr); }
+}
+window.addEventListener("resize", () => { if (useData) renderUse(); });
+
 // ---------- polling ----------
 let pollTimer = null, polling = false;
 async function poll() {
@@ -3737,7 +3894,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) { po
 
 applyStatic(); applyExpert(); renderTimers();
 // Read the remote first so the page starts in the right language
-pollRemote().finally(() => poll().then(() => { loadTimers(); loadHistory(); loadBt(); loadSecurity(); loadMqtt(); loadWifi(); loadFw(); loadParams(); loadPelDbg(); }));
+pollRemote().finally(() => poll().then(() => { loadTimers(); loadHistory(); loadBt(); loadSecurity(); loadMqtt(); loadWifi(); loadFw(); loadParams(); loadPelDbg(); loadUse(); }));
 setInterval(() => { if (!document.hidden && !offline) { loadMqtt(); loadWifi(); if (!fwInfo || !["checking", "downloading", "restarting"].includes(fwInfo.state)) loadFw(); } }, 30000);
 </script>
 </body>

@@ -170,6 +170,12 @@ static void mqttPublishStates(bool force)
         double rem = pellets.remainingKg(), h = pellets.hoursAt(pelletsAvgAuger());
         mqttState("pellets_kg",    rem >= 0 ? String(rem, 1) : String(""), force);
         mqttState("pellets_hours", h >= 0 ? String(h, 1) : String(""), force);
+        // use per day and cost (pellets.h); empty = not known (no calibration / no price / no stock)
+        double today = pelKgToday(), perDay = pelKgPerDay7(), month = pelCostPerMonth(), stock = pelStockBags();
+        mqttState("pellets_kg_today",   today >= 0 ? String(today, 1) : String(""), force);
+        mqttState("pellets_kg_per_day", perDay >= 0 ? String(perDay, 1) : String(""), force);
+        mqttState("pellets_cost_month", month >= 0 ? String(month, 0) : String(""), force);
+        mqttState("pellets_stock_bags", stock >= 0 ? String(stock, 1) : String(""), force);
     }
     mqttState("hours_service",  String(cachedHoursSinceLastService), force);
     mqttState("total_hours",    String(cachedTotalRuntime), force);
@@ -256,6 +262,10 @@ static void mqttPublishDiscovery()
     mqttDiscoveryEntity("binary_sensor", "low_pellets", "Pellets bijna op", [](JsonObject& o) { o["device_class"] = "problem"; }, false);
     mqttDiscoveryEntity(sensor, "pellets_kg", "Pellets tot alarm", [](JsonObject& o) { o["unit_of_measurement"] = "kg"; o["device_class"] = "weight"; o["state_class"] = "measurement"; }, false);
     mqttDiscoveryEntity(sensor, "pellets_hours", "Branduren tot pelletalarm", [](JsonObject& o) { o["unit_of_measurement"] = "h"; o["device_class"] = "duration"; o["state_class"] = "measurement"; }, false);
+    mqttDiscoveryEntity(sensor, "pellets_kg_today", "Pelletverbruik vandaag", [](JsonObject& o) { o["unit_of_measurement"] = "kg"; o["device_class"] = "weight"; o["state_class"] = "total_increasing"; }, false);
+    mqttDiscoveryEntity(sensor, "pellets_kg_per_day", "Pelletverbruik per dag (7 d)", [](JsonObject& o) { o["unit_of_measurement"] = "kg"; o["device_class"] = "weight"; o["state_class"] = "measurement"; }, false);
+    mqttDiscoveryEntity(sensor, "pellets_cost_month", "Pelletkost per maand", [](JsonObject& o) { o["unit_of_measurement"] = "EUR"; o["device_class"] = "monetary"; }, false);
+    mqttDiscoveryEntity(sensor, "pellets_stock_bags", "Pelletvoorraad (zakken)", [](JsonObject& o) { o["unit_of_measurement"] = "zakken"; o["state_class"] = "measurement"; o["icon"] = "mdi:sack"; }, false);
 }
 
 // ── Commands ────────────────────────────────────────────────────────────────

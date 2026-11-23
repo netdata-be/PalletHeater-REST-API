@@ -38,6 +38,98 @@ struct PelletsDiag {
 };
 static PelletsDiag pelDiag;
 
+// ── Use per day and cost (pc::PelletUsage / pc::PelletCost) ──────────────────────────────
+// Auger units per local day on SPIFFS (/pellet_days.bin, rewritten once a day and at the first
+// start), price per bag, kg per bag and the bags in stock in NVS "pelcost". A refill takes its
+// kg from the stock.
+static pc::PelletUsage pelUse;
+static pc::PelletCost  pelCost;
+static const char*     PELDAYS_FILE = "/pellet_days.bin";
+static const uint8_t   PELDAYS_MAGIC[4] = { 'P', 'P', 'D', '1' };
+static bool            pelUseLoaded = false;
+
+static uint32_t pelLocalDay(time_t now)
+{
+    if (now <= 1700000000) return 0;
+    struct tm tm; localtime_r(&now, &tm);
+    return (uint32_t)(tm.tm_year + 1900) * 10000 + (tm.tm_mon + 1) * 100 + tm.tm_mday;
+}
+static void pelUseSave()
+{
+    if (!spiffsMounted) return;
+    File f = SPIFFS.open(PELDAYS_FILE, FILE_WRITE);
+    if (!f) { LOGW("stove", "pellets: %s could not be written", PELDAYS_FILE); return; }
+    f.write(PELDAYS_MAGIC, 4);
+    f.write((const uint8_t*)&pelUse, sizeof(pelUse));
+    f.close();
+}
+static void pelUseLoad()
+{
+    pelUseLoaded = true;
+    if (!spiffsMounted || !SPIFFS.exists(PELDAYS_FILE)) return;
+    File f = SPIFFS.open(PELDAYS_FILE, FILE_READ);
+    uint8_t m[4];
+    pc::PelletUsage u;
+    if (f && f.read(m, 4) == 4 && !memcmp(m, PELDAYS_MAGIC, 4) && f.read((uint8_t*)&u, sizeof(u)) == sizeof(u)
+        && u.version == pelUse.version && u.n >= 0 && u.n <= pc::PelletUsage::MAX_DAYS) {
+        pelUse = u;
+        LOGI("stove", "pellets: use of %d day(s) loaded", (int)pelUse.n);
+    } else LOGW("stove", "pellets: %s has another layout - day totals start again", PELDAYS_FILE);
+    if (f) f.close();
+}
+static void pelCostLoad()
+{
+    Preferences p; p.begin("pelcost", true);
+    pelCost.pricePerBag = p.getFloat("price", 0);
+    pelCost.bagKg       = p.getFloat("bagkg", 15);
+    pelCost.stockBags   = p.getFloat("stock", -1);
+    p.end();
+}
+static void pelCostSave()
+{
+    Preferences p; p.begin("pelcost", false);
+    p.putFloat("price", pelCost.pricePerBag); p.putFloat("bagkg", pelCost.bagKg); p.putFloat("stock", pelCost.stockBags);
+    p.end();
+}
+// First start with day totals: fill in the days before today from the hourly records of the last
+// 7 days (history.h): average auger value x 3600 s per hour = the units of that hour.
+static void pelUseBackfill(uint32_t today)
+{
+    if (pelUse.n || pelUse.curDay || !weekCount) return;
+    uint32_t day = 0; double units = 0, todayUnits = 0; int filled = 0;
+    for (int i = 0; i < weekCount; i++) {
+        const pc::HourRecord& r = week[(weekHead - weekCount + i + WEEK_SIZE) % WEEK_SIZE];
+        uint32_t d = pelLocalDay((time_t)r.t + 1800);
+        if (!d || d > today) break;
+        if (d == today) { if (r.auger10 > 0) todayUnits += min((int)r.auger10, 120) / 10.0 * 3600.0; continue; }
+        if (d != day) {
+            if (day) { pelUse.days[pelUse.head] = { day, (float)units }; pelUse.head = (pelUse.head + 1) % pc::PelletUsage::MAX_DAYS; pelUse.n++; filled++; }
+            day = d; units = 0;
+        }
+        if (r.auger10 > 0) units += min((int)r.auger10, 120) / 10.0 * 3600.0;
+    }
+    if (day) { pelUse.days[pelUse.head] = { day, (float)units }; pelUse.head = (pelUse.head + 1) % pc::PelletUsage::MAX_DAYS; pelUse.n++; filled++; }
+    if (filled) LOGI("stove", "pellets: %d day(s) filled in from the hourly history", filled);
+    // today so far: the finished hours of today count as already burned today
+    pelUse.curDay = today;
+    pelUse.dayStart = pellets.units - todayUnits;
+}
+
+// kg used today and per day over the last (up to) 7 closed days; < 0 = not known (no calibration)
+// (not static: also used by metrics.h, which is included earlier)
+double pelKgToday() { double k = pellets.kgPerUnit(); return k > 0 ? k * pelUse.unitsToday(pellets.units) : -1; }
+double pelStockBags() { return pelCost.stockBags; }
+double pelKgPerDay(int days, int* got)
+{
+    double k = pellets.kgPerUnit(); int g = 0;
+    double u = pelUse.unitsClosed(days, &g);
+    if (got) *got = g;
+    return k > 0 && g ? k * u / g : -1;
+}
+double pelKgPerDay7() { return pelKgPerDay(7, nullptr); }
+double pelCostPerMonth() { double d = pelKgPerDay7(), ppk = pelCost.pricePerKg(); return d >= 0 && ppk > 0 ? d * 30.44 * ppk : -1; }
+
+
 static void pelletsSave()
 {
     Preferences p;
@@ -51,6 +143,8 @@ static void pelletsSave()
 
 void pelletsLoad()
 {
+    pelCostLoad();
+    pelUseLoad();
     Preferences p;
     p.begin("pellet", true);
     pc::PelletTracker t;
@@ -120,6 +214,14 @@ void pelletsTick()
     pelDiag.ticks++; pelDiag.lastTickT = (uint32_t)now;
     int ev = pellets.update((uint32_t)now, cachedPelletSensor, cachedAugerSpeed);
     if (ev) { pelDiag.lastEvent = ev; pelDiag.lastEventT = (uint32_t)now; }
+    // day totals: a new local day closes the previous one (saved once a day)
+    uint32_t before = pelUse.curDay, today = pelLocalDay(now);
+    if (!before && today) pelUseBackfill(today);
+    if (pelUse.roll(today, pellets.units) || before != pelUse.curDay) pelUseSave();
+    if (ev == pc::PelletTracker::REFILL && pelCost.stockBags >= 0) {
+        pelCost.take(pellets.lastRefillKg); pelCostSave();
+        LOGI("stove", "pellets: %.1f kg taken from the stock, %.1f bag(s) left", pellets.lastRefillKg, pelCost.stockBags);
+    }
     if (ev == pc::PelletTracker::TRIP) {
         double k = pellets.kgPerUnit();
         if (pellets.nCycles && k > 0) {
@@ -162,10 +264,45 @@ void pelletsJson(JsonObject o, bool detail)
     } else { o["hoursLeftAverage"] = nullptr; o["alarmExpectedAt"] = nullptr; }
     if (k > 0) o["kgPerHour"] = cachedAugerSpeed > 0 ? serialized(String(k * cachedAugerSpeed * 3600.0, 2)) : serialized(String("0")); else o["kgPerHour"] = nullptr;
     o["refillKg"] = pellets.refillKg;
+    // use per day and cost (also in /api/state: the web app status card)
+    {
+        double today = pelKgToday(), perDay = pelKgPerDay7(), ppk = pelCost.pricePerKg();
+        if (today >= 0) o["kgToday"] = serialized(String(today, 1)); else o["kgToday"] = nullptr;
+        if (perDay >= 0) o["kgPerDay"] = serialized(String(perDay, 1)); else o["kgPerDay"] = nullptr;
+        if (perDay >= 0 && ppk > 0) o["costPerMonth"] = serialized(String(perDay * 30.44 * ppk, 0)); else o["costPerMonth"] = nullptr;
+        if (pelCost.stockBags >= 0) o["stockBags"] = serialized(String(pelCost.stockBags, 1)); else o["stockBags"] = nullptr;
+    }
     // last refill: detected when the low pellet alarm cleared, or entered by hand
     if (pellets.lastRefillT) { o["lastRefillAt"] = pellets.lastRefillT; o["lastRefillKg"] = pellets.lastRefillKg; }
     else { o["lastRefillAt"] = nullptr; o["lastRefillKg"] = nullptr; }
     if (!detail) return;
+    {
+        JsonObject u = o.createNestedObject("usage");
+        double k = pellets.kgPerUnit(), ppk = pelCost.pricePerKg();
+        u["pricePerBag"] = pelCost.pricePerBag > 0 ? serialized(String(pelCost.pricePerBag, 2)) : serialized(String("null"));
+        u["bagKg"] = pelCost.bagKg;
+        u["pricePerKg"] = ppk > 0 ? serialized(String(ppk, 3)) : serialized(String("null"));
+        u["stockBags"] = pelCost.stockBags >= 0 ? serialized(String(pelCost.stockBags, 2)) : serialized(String("null"));
+        u["days"] = pelUse.n;
+        u["unitsToday"] = serialized(String(pelUse.unitsToday(pellets.units), 0));
+        static const int SPANS[] = { 7, 30, 365 };
+        for (int span : SPANS) {
+            int got = 0; double units = pelUse.unitsClosed(span, &got);
+            JsonObject p = u.createNestedObject(span == 7 ? "last7" : span == 30 ? "last30" : "last365");
+            p["days"] = got;
+            if (k > 0 && got) {
+                p["kg"] = serialized(String(k * units, 1));
+                p["kgPerDay"] = serialized(String(k * units / got, 2));
+                if (ppk > 0) p["cost"] = serialized(String(k * units * ppk, 2)); else p["cost"] = nullptr;
+            } else { p["kg"] = nullptr; p["kgPerDay"] = nullptr; p["cost"] = nullptr; }
+        }
+        // how long the stock lasts at the use of the last 7 days (plus what is in the hopper)
+        double perDay = pelKgPerDay7();
+        if (pelCost.stockBags >= 0 && perDay > 0) {
+            double rem = pellets.remainingKg();
+            u["stockDays"] = serialized(String((pelCost.stockBags * pelCost.bagKg + (rem > 0 ? rem : 0)) / perDay, 0));
+        } else u["stockDays"] = nullptr;
+    }
     o["kgSinceAlarm"] = pellets.cycleStart >= 0 ? serialized(String(pellets.cycleKg, 1)) : serialized(String("null"));
     o["gramsPerUnit"] = k > 0 ? serialized(String(k * 1000.0, 4)) : serialized(String("null"));
     o["spread"] = pellets.nCycles >= 2 ? serialized(String(pellets.spread(), 3)) : serialized(String("null"));
@@ -253,6 +390,37 @@ void pelletsJson(JsonObject o, bool detail)
     }
 }
 
+// GET /api/pellets/days[?days=1..400]  -> use per day, oldest first, today last:
+//   {"kgPerUnit":…, "pricePerKg":…|null, "days":[{"d":"2026-11-22","units":…,"kg":…|null,"cost":…|null}, …]}
+// kg (and cost) with the calibration of now; null before the first calibration cycle. Built as a
+// string (up to ~20 KB for 400 days) instead of a JSON document.
+void handleRoutePelletDays()
+{
+    int want = 31;
+    if (wm.server->hasArg("days") && !pc::parseIntRange(wm.server->arg("days").c_str(), 1, pc::PelletUsage::MAX_DAYS, want)) {
+        wm.server->send(400, "application/json", "{\"result\":\"failed - days must be 1 - 400\"}"); return;
+    }
+    double k = pellets.kgPerUnit(), ppk = pelCost.pricePerKg();
+    String out; out.reserve(80 + want * 64);
+    out += "{\"kgPerUnit\":"; out += k > 0 ? String(k, 9) : String("null");
+    out += ",\"pricePerKg\":"; out += ppk > 0 ? String(ppk, 3) : String("null");
+    out += ",\"days\":[";
+    auto add = [&](uint32_t d, double units, bool first) {
+        char ds[11]; pc::dayText(d, ds);
+        if (!first) out += ',';
+        out += "{\"d\":\""; out += ds; out += "\",\"units\":"; out += String(units, 0);
+        out += ",\"kg\":"; out += k > 0 ? String(k * units, 2) : String("null");
+        out += ",\"cost\":"; out += k > 0 && ppk > 0 ? String(k * units * ppk, 2) : String("null");
+        out += '}';
+    };
+    int n = min((int)pelUse.n, want - 1);
+    bool first = true;
+    for (int i = n - 1; i >= 0; i--) { const pc::PelletDay& d = pelUse.closed(i); add(d.day, d.units, first); first = false; }
+    if (pelUse.curDay) add(pelUse.curDay, pelUse.unitsToday(pellets.units), first);   // today, so far
+    out += "]}";
+    wm.server->send(200, "application/json", out);
+}
+
 // GET  /api/pellets                     -> estimate, calibration and its cycles
 // POST /api/pellets?add=<kg>            -> pellets added by hand (topped up without an alarm,
 //                                          or another amount than refillKg for the coming refill)
@@ -272,10 +440,27 @@ void handleRoutePellets()
             float v = wm.server->arg("add").toFloat();
             if (v <= 0 || v > 100) err = "add must be 0 - 100 kg";
             else {
+                if (!pellets.low) { pelCost.take(v); pelCostSave(); }   // while low: taken at the refill itself
                 pellets.addKg(v, (uint32_t)time(nullptr)); pelletsDirty = true;
                 LOGI("stove", "pellets: %.1f kg added by hand (%s) by %s", v,
                      pellets.low ? "used for the refill when the sensor clears" : "topped up", clientIp().c_str());
             }
+        }
+        if (!err.length() && wm.server->hasArg("pricePerBag")) {
+            float v = wm.server->arg("pricePerBag").toFloat();
+            if (v < 0 || v > 200) err = "pricePerBag must be 0 - 200 (EUR, 0 = not set)";
+            else { pelCost.pricePerBag = v; pelCostSave(); LOGI("stove", "pellets: price %.2f per bag set by %s", v, clientIp().c_str()); }
+        }
+        if (!err.length() && wm.server->hasArg("bagKg")) {
+            float v = wm.server->arg("bagKg").toFloat();
+            if (v < 1 || v > 100) err = "bagKg must be 1 - 100";
+            else { pelCost.bagKg = v; pelCostSave(); }
+        }
+        if (!err.length() && wm.server->hasArg("stockBags")) {
+            String a = wm.server->arg("stockBags");
+            float v = a == "-" || a == "off" ? -1 : a.toFloat();
+            if (v > 10000 || (v < 0 && v != -1)) err = "stockBags must be 0 - 10000, or 'off'";
+            else { pelCost.stockBags = v; pelCostSave(); LOGI("stove", "pellets: stock set to %.1f bag(s) by %s", v, clientIp().c_str()); }
         }
         if (!err.length() && pc::parseOnOff(wm.server->arg("resetCalibration").c_str()) == 1) {
             pellets.resetCalibration(); pelletsDirty = true;

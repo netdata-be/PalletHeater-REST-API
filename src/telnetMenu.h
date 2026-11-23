@@ -552,6 +552,13 @@ static void tmPelletsInfo()
 {
     tmPelletLines(true);
     tmReserveLines();
+    {
+        double today = pelKgToday(), perDay = pelKgPerDay7(), month = pelCostPerMonth();
+        String use = today >= 0 ? String(today, 1) + " kg today" : String("today: not calibrated yet");
+        if (perDay >= 0) use += ", " + String(perDay, 1) + " kg per day (7 d)";
+        if (month >= 0) use += ", about EUR " + String(month, 0) + " per month";
+        tkv("Use", "%s", use.c_str());
+    }
     if (pellets.nCycles) {
         tkv("Measured cycles", "%s", "");
         for (int i = pellets.nCycles - 1; i >= 0 && i >= pellets.nCycles - 5; i--) {
@@ -564,6 +571,7 @@ static void tmPelletsAdded(const String& s)
 {
     float v = s.toFloat();
     if (v <= 0 || v > 100) { tmMsgSet(false, "Must be 0 - 100 kg."); return; }
+    if (!pellets.low) { pelCost.take(v); pelCostSave(); }   // while low: taken at the refill itself
     pellets.addKg(v, (uint32_t)time(nullptr));
     pelletsSave();
     LOGI("stove", "pellets: %.1f kg added by hand (%s) by %s", v, pellets.low ? "used for the refill when the sensor clears" : "topped up", tmSource());
@@ -585,22 +593,62 @@ static void tmPelletsResetYes()
     LOGI("stove", "pellets: calibration reset by %s", tmSource());
     tmMsgSet(true, "Calibration reset.");
 }
+static void tmPelletPrice(const String& s)
+{
+    String t = s; t.replace(",", ".");
+    float v = t.toFloat();
+    if (v < 0 || v > 200) { tmMsgSet(false, "Must be 0 - 200 EUR (0 = not kept)."); return; }
+    pelCost.pricePerBag = v; pelCostSave();
+    LOGI("stove", "pellets: price %.2f per bag set by %s", v, tmSource());
+    tmMsgSet(true, v > 0 ? "Price saved." : "Price cleared.");
+}
+static void tmPelletBagKg(const String& s)
+{
+    String t = s; t.replace(",", ".");
+    float v = t.toFloat();
+    if (v < 1 || v > 100) { tmMsgSet(false, "Must be 1 - 100 kg."); return; }
+    pelCost.bagKg = v; pelCostSave(); tmMsgSet(true, "Bag weight saved.");
+}
+static void tmPelletStock(const String& s)
+{
+    String t = s; t.replace(",", ".");
+    if (!t.length() || t == "-" || t == "off") { pelCost.stockBags = -1; pelCostSave(); tmMsgSet(true, "Stock no longer kept."); return; }
+    float v = t.toFloat();
+    if (v < 0 || v > 10000) { tmMsgSet(false, "Must be 0 - 10000 bags, or empty / '-' to stop keeping it."); return; }
+    pelCost.stockBags = v; pelCostSave();
+    LOGI("stove", "pellets: stock set to %.1f bag(s) by %s", v, tmSource());
+    tmMsgSet(true, "Stock saved; every refill takes from it.");
+}
 static void tmPelletsOpen(int i)
 {
     switch (i) {
+    case 3: tmInputStart("Price of a bag (EUR, 0 = not kept)", tmPelletPrice, 8); break;
+    case 4: tmInputStart("Weight of a bag (kg)", tmPelletBagKg, 8); break;
+    case 5: tmInputStart("Bags in stock (empty or '-' = not kept)", tmPelletStock, 8, "Every refill (detected or entered) takes its kg from the stock"); break;
     case 0: tmInputStart("Pellets added by hand (kg)", tmPelletsAdded, 8,
                          "Topped up without a low pellet alarm, or another amount than the refill amount for the coming refill"); break;
     case 1: tmInputStart("Refill amount (kg)", tmPelletsRefillKg, 8, "Counted when a refill is detected (the level sensor clears after an alarm)"); break;
     case 2: tmConfirmStart("   Forget the measured cycles? The estimate starts again after the next two alarms.", tmPelletsResetYes); break;
     }
 }
-static void tmPelletsValue(int i, String& v) { if (i == 1) v = String(pellets.refillKg, 1) + " kg"; }
+static void tmPelletsValue(int i, String& v)
+{
+    switch (i) {
+    case 1: v = String(pellets.refillKg, 1) + " kg"; break;
+    case 3: v = pelCost.pricePerBag > 0 ? "EUR " + String(pelCost.pricePerBag, 2) : String("-"); break;
+    case 4: v = String(pelCost.bagKg, 1) + " kg"; break;
+    case 5: v = pelCost.stockBags >= 0 ? String(pelCost.stockBags, 1) + " bags" : String("-"); break;
+    }
+}
 static const TmItem TM_PELLETS_ITEMS[] = {
     { "Pellets added (kg)", nullptr,        tmPelletsOpen, "Enter the kg you added by hand", TI_EDIT },
     { "Refill amount",      tmPelletsValue, tmPelletsOpen, "Kg counted for an automatically detected refill", TI_EDIT },
     { "Reset calibration",  nullptr,        tmPelletsOpen, "Forget the measured cycles (asks for confirmation)", TI_ASK },
+    { "Price per bag",      tmPelletsValue, tmPelletsOpen, "For the cost per day / month", TI_EDIT },
+    { "Bag weight",         tmPelletsValue, tmPelletsOpen, "Kg in one bag", TI_EDIT },
+    { "Bags in stock",      tmPelletsValue, tmPelletsOpen, "Every refill takes its kg from it", TI_EDIT },
 };
-static const TmMenu TM_PELLETS = { "Pellets", TM_PELLETS_ITEMS, 3, tmPelletsInfo, 5000 };
+static const TmMenu TM_PELLETS = { "Pellets", TM_PELLETS_ITEMS, 6, tmPelletsInfo, 5000 };
 
 // ─────────────────────────────────────────────────────────────────────
 // Errors, events and history

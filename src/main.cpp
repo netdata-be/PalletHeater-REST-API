@@ -146,6 +146,7 @@ static void registerRoutes()
     wm.server->on("/api/history", authed(handleRouteHistory));
     wm.server->on("/api/events", authed(handleRouteEvents));
     wm.server->on("/api/pellets", authed(handleRoutePellets));
+    wm.server->on("/api/pellets/days", authed(handleRoutePelletDays));
     wm.server->on("/api/auth", crumbed(handleRouteAuth));   // public: does its own check
     wm.server->on("/api/update", HTTP_POST, crumbed(handleUpdateDone), crumbed(handleUpdateUpload));   // does its own check
     wm.server->on("/api/telnet", authed(handleRouteTelnet));

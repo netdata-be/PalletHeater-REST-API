@@ -24,6 +24,8 @@ Values are plain text (no JSON), retained, under `<prefix>/state/<name>` (prefix
 | `brazier_minutes` | Minutes to the next brazier cleaning (empty when the stove is not working) |
 | `error_active`, `error` | `ON` / `OFF`, the active error (`E9 Ignition …`) or `none` |
 | `low_pellets` | `ON` / `OFF` |
+| `pellets_kg`, `pellets_hours` | Pellets left until the low pellet alarm (kg) and hours at the average use (empty until calibrated) |
+| `pellets_kg_today`, `pellets_kg_per_day`, `pellets_cost_month`, `pellets_stock_bags` | Pellets burned today (kg), per day over the last 7 days, € per month (needs a price per bag) and bags in stock (empty when not known / not kept) |
 | `hours_service`, `total_hours`, `starts`, `wifi_rssi` | Counters and WiFi signal (dBm) |
 
 Commands go to `<prefix>/set/<name>`. The result is published (not retained) on `<prefix>/result`, e.g. `setpoint 21: ok`.
@@ -78,7 +80,7 @@ Every screen starts with a status header: stove state, room temperature and set 
 | Live values | Chosen groups printed every 2 s (scrolls), e.g. to watch a start-up |
 | Control | Power (asks for confirmation; refused while the pellets are used up, as on the API), set point, flame power, room fan, energy saving stop / restart, combustion and pellet quality, beep, stove clock to NTP |
 | Timers | PR1 - PR6: enabled, on / off time, set point, flame, fan, days |
-| Pellets | Estimate until the low pellet alarm, calibration cycles, pellets added by hand, refill amount, reset calibration (the same data as [`/api/pellets`](api.md#apipellets)) |
+| Pellets | Estimate until the low pellet alarm, use today / per day / € per month, calibration cycles, pellets added by hand, refill amount, reset calibration, price per bag, bag weight, bags in stock (the same data as [`/api/pellets`](api.md#apipellets)) |
 | Errors and history | Error memory (and clearing it), the event log, the last 3 hours of history |
 | Network | WiFi, IPv4 and IPv6 addresses, drops, network watchdog; hostname and IP settings (saved like in the web app, used after a restart, with the same 5 minute confirmation: opening the web app *or* a telnet session on the new address confirms it) |
 | Device | GitHub firmware update (check, install, automatic check); services: MQTT (on / off, broker, port, user, password, topic prefix, Home Assistant discovery and its prefix), HTTPS (on / off, redirect, extra certificate names, new key and certificate), Bluetooth (on / off, applies after a restart), API key (required or not, show it, make a new one), switching telnet off, and an overview with the counters; system (restarts, memory, bus counters), log levels per module, restart |

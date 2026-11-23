@@ -543,7 +543,7 @@ Pellets and burning hours left until the low pellet alarm. The controller counts
 | Method | Parameters |
 |---|---|
 | `GET` | – |
-| `POST` | `add` (kg, 0 – 100), `refillKg` (kg, 1 – 100), `resetCalibration=true` |
+| `POST` | `add` (kg, 0 – 100), `refillKg` (kg, 1 – 100), `resetCalibration=true`, `pricePerBag` (€, 0 – 200, 0 = not kept), `bagKg` (1 – 100), `stockBags` (0 – 10000, `off` = not kept) |
 
 ```json
 {"calibrated": true, "cycles": 3, "low": false, "overdue": false, "lastRefillAt": 1794990120, "lastRefillKg": 15, "remainingKg": 6.2, "hoursLeft": 4.15, "hoursLeftAverage": 9.6,
@@ -565,6 +565,17 @@ Pellets and burning hours left until the low pellet alarm. The controller counts
 | `save` | `agoS` (last NVS write), `unsavedUnits`, `bytes` |
 
 `lastRefillAt` / `lastRefillKg`: time (Unix) and amount of the last refill, detected or entered with `add` (`null` before the first one). `hoursLeft` is the time at the current auger value (`null` while the auger does not feed); `hoursLeftAverage` and `alarmExpectedAt` use the average auger value of the hourly history of the last 7 days (from 6 hours of history). After the alarm the stove's own countdown takes over (`pelletReserve` in `/api/state`). `/api/state` has the same estimate under `pellets` (without the calibration detail); MQTT publishes `pellets_kg` and `pellets_hours` (at the average use).
+
+**Use per day and cost.** The controller keeps the auger units of every local day for up to 400 days (SPIFFS `/pellet_days.bin`; the days before this existed are filled in from the 7-day hourly history). Kilograms always use the calibration of now, so older days get more accurate with every cycle too. `usage` in `GET /api/pellets`: `pricePerBag`, `bagKg`, `pricePerKg`, `stockBags`, `days` (closed days kept), `unitsToday`, and `last7` / `last30` / `last365` with `days`, `kg`, `kgPerDay`, `cost`; `stockDays` = (bags × bag kg + what is left above the alarm level) / kg per day of the last 7 days. Every refill (detected or entered with `add` while not low) takes its kg from `stockBags`. `/api/state` → `pellets` has `kgToday`, `kgPerDay` (7 days), `costPerMonth` (kg per day × 30.44 × price per kg) and `stockBags`; `null` while not calibrated / no price / no stock. MQTT: `pellets_kg_today`, `pellets_kg_per_day`, `pellets_cost_month`, `pellets_stock_bags`; metrics: `stove_pellets_kg_today`, `stove_pellets_kg_per_day`, `stove_pellet_stock_bags`.
+
+### `/api/pellets/days`
+
+`GET /api/pellets/days?days=31` (1 – 400): the use per day, oldest first, today (so far) last. `kg` and `cost` use the calibration and price of now (`null` before the first calibration / without a price).
+
+```json
+{"kgPerUnit": 0.000061239, "pricePerKg": 0.363,
+ "days": [{"d": "2026-11-22", "units": 102240, "kg": 6.26, "cost": 2.27}, {"d": "2026-11-23", "units": 63000, "kg": 3.86, "cost": 1.40}]}
+```
 
 ### `/api/bluetooth`
 

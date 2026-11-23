@@ -515,6 +515,47 @@ static void test_pellet_self_correcting()
     TEST_ASSERT_FALSE(std::isnan(p.predKg[0]));       // the first cycle (NAN) is gone
 }
 
+static void test_pellet_usage()
+{
+    pc::PelletUsage u;
+    TEST_ASSERT_FALSE(u.roll(20261121, 1000));        // first call: starts the day
+    TEST_ASSERT_EQUAL_FLOAT(250, (float)u.unitsToday(1250));
+    TEST_ASSERT_FALSE(u.roll(20261121, 1500));        // same day
+    TEST_ASSERT_TRUE(u.roll(20261122, 1600));         // day closed with all its units
+    TEST_ASSERT_EQUAL(1, u.n);
+    TEST_ASSERT_EQUAL_UINT32(20261121, u.closed(0).day);
+    TEST_ASSERT_EQUAL_FLOAT(600, u.closed(0).units);
+    TEST_ASSERT_EQUAL_FLOAT(0, (float)u.unitsToday(1600));
+    // off for two days: everything counted until then belongs to the last day it ran
+    TEST_ASSERT_TRUE(u.roll(20261125, 2000));
+    TEST_ASSERT_EQUAL_UINT32(20261122, u.closed(0).day);
+    TEST_ASSERT_EQUAL_FLOAT(400, u.closed(0).units);
+    int got = 0;
+    TEST_ASSERT_EQUAL_FLOAT(1000, (float)u.unitsClosed(7, &got));
+    TEST_ASSERT_EQUAL(2, got);
+    // the ring keeps the last MAX_DAYS days
+    for (int i = 0; i < pc::PelletUsage::MAX_DAYS + 5; i++) u.roll(30000000 + i, 3000.0 + i * 10);
+    TEST_ASSERT_EQUAL(pc::PelletUsage::MAX_DAYS, u.n);
+    TEST_ASSERT_EQUAL_FLOAT(10, u.closed(0).units);
+    char t[11]; pc::dayText(20261123, t);
+    TEST_ASSERT_EQUAL_STRING("2026-11-23", t);
+}
+static void test_pellet_cost()
+{
+    pc::PelletCost c;
+    TEST_ASSERT_EQUAL_FLOAT(0, (float)c.pricePerKg());      // no price set
+    c.pricePerBag = 6.0f; c.bagKg = 15;
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f, 0.4f, (float)c.pricePerKg());
+    c.take(15);                                             // stock not kept: nothing happens
+    TEST_ASSERT_EQUAL_FLOAT(-1, c.stockBags);
+    c.stockBags = 10; c.take(15);
+    TEST_ASSERT_EQUAL_FLOAT(9, c.stockBags);
+    c.take(7.5f);
+    TEST_ASSERT_EQUAL_FLOAT(8.5f, c.stockBags);
+    c.stockBags = 0.5f; c.take(15);
+    TEST_ASSERT_EQUAL_FLOAT(0, c.stockBags);                // never below 0
+}
+
 static void test_hour_acc()
 {
     pc::HourAcc a;
@@ -583,5 +624,7 @@ int main(int, char**)
     RUN_TEST(test_pellet_tracker);
     RUN_TEST(test_pellet_units_capped);
     RUN_TEST(test_pellet_self_correcting);
+    RUN_TEST(test_pellet_usage);
+    RUN_TEST(test_pellet_cost);
     return UNITY_END();
 }
