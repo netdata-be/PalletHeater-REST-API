@@ -85,15 +85,23 @@ inline int roomFanIsRunning(int power, int flagD3)
 }
 
 // ── Pellet reserve ─────────────────────────────────────────────────────────
-// RAM 0xA4: 0 = enough pellets, 5 = low (the reserve countdown in RAM 0x89 runs). 4 was seen
-// for ~40 s during a reserve (20/11/2026) without the countdown changing, and at the refill
-// it went 5 -> 3 -> 0 within seconds: every value 1 - 5 counts as "reserve active".
+// RAM 0xA4 is not an on / off sensor but a counter 0 - 5 the stove keeps itself:
+//   - no pellets at the level sensor: straight to 5 (the reserve countdown in RAM 0x89 runs)
+//   - pellets seen: one step down per reading, about every 37 s while burning (23/11/2026:
+//     refill at 09:12:29, 5 -> 4 -> 3 -> 2 -> 1 -> 0 at 09:16:12; on 20/11 after the
+//     switch-off it went 5 -> 3 -> 0 within seconds). 0 = the stove has confirmed the pellets.
+//   - a single 4 between two 5's: pellets sliding past the sensor, not a refill (09:01:54)
+// So 1 - 5: the stove has not confirmed pellets yet; 1 - 3: a refill is being confirmed
+// (one 4 can still be a flicker).
 inline bool reserveSensorLow(int sensor) { return sensor >= 1 && sensor <= 5; }
+inline bool reserveRefilling(int sensor) { return sensor >= 1 && sensor <= 3; }
+static const int RESERVE_STEP_S = 37;   // one step of RAM 0xA4 while burning (23/11/2026)
 // Alarm (the remote shows PELLET RESERVE) when the sensor (RAM 0xA4) is low and the 20 min
 // countdown (RAM 0x89) has run down (confirmed 17/11 and 20/11/2026; <= 1 is one minute early).
+// Not while a refill is being confirmed (1 - 3).
 inline int pelletsLow(int sensor, int counter)
 {
-    return reserveSensorLow(sensor) && counter >= 0 && counter <= 1 ? 1 : 0;
+    return reserveSensorLow(sensor) && !reserveRefilling(sensor) && counter >= 0 && counter <= 1 ? 1 : 0;
 }
 
 // ── Errors ─────────────────────────────────────────────────────────────────

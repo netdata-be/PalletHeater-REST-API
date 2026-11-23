@@ -108,7 +108,12 @@ static void test_pellets_low()
     TEST_ASSERT_EQUAL_INT(0, pc::pelletsLow(0, 0));
     TEST_ASSERT_EQUAL_INT(1, pc::pelletsLow(4, 0));    // 4: seen briefly during the reserve
     TEST_ASSERT_EQUAL_INT(0, pc::pelletsLow(4, 20));
-    TEST_ASSERT_EQUAL_INT(1, pc::pelletsLow(3, 0));    // 3: seen during the refill (5 -> 3 -> 0)
+    TEST_ASSERT_EQUAL_INT(0, pc::pelletsLow(3, 0));    // 3 - 1: a refill is being confirmed (23/11/2026)
+    TEST_ASSERT_EQUAL_INT(0, pc::pelletsLow(1, 0));
+    TEST_ASSERT_TRUE(pc::reserveRefilling(3));
+    TEST_ASSERT_FALSE(pc::reserveRefilling(4));        // one 4 can be pellets sliding past the sensor
+    TEST_ASSERT_FALSE(pc::reserveRefilling(0));
+    TEST_ASSERT_TRUE(pc::reserveSensorLow(2));         // not confirmed by the stove yet
     TEST_ASSERT_EQUAL_INT(0, pc::pelletsLow(6, 0));    // never seen: not low
 }
 static void test_error_confirm_prewarning_ignored()

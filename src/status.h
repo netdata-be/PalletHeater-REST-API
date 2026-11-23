@@ -123,7 +123,12 @@ void getStatus()
         // after the switch-off (20/11/2026): 0x91 = 0 and the stove in final cleaning / off
         bool reserveOff = slowOk && pelletsEmptyOff();
         pr["switchedOff"] = reserveOff;   // the stove switched itself off: pellets used up
-        if (slowOk && cachedPelletShutdown >= 0 && !reserveOff) pr["shutdownMinutes"] = (cachedPelletShutdown + 1) / 2; else pr["shutdownMinutes"] = nullptr;
+        // RAM 0xA4 counting down 3 -> 0: pellets seen, the stove confirms the refill (one step
+        // about every 37 s while burning, 23/11/2026); not "pellets used up" any more
+        bool refilling = slowOk && pc::reserveRefilling(cachedPelletSensor);
+        pr["refilling"] = refilling;
+        if (refilling) pr["refillConfirmSeconds"] = cachedPelletSensor * pc::RESERVE_STEP_S; else pr["refillConfirmSeconds"] = nullptr;
+        if (slowOk && cachedPelletShutdown >= 0 && !reserveOff && !refilling) pr["shutdownMinutes"] = (cachedPelletShutdown + 1) / 2; else pr["shutdownMinutes"] = nullptr;
     }
     pelletsJson(json.createNestedObject("pellets"), false);   // estimate until the low pellet alarm (pellets.h)
     KNOWN(slowOk, json["stoveBeepEnabled"], cachedBeepEnabled);

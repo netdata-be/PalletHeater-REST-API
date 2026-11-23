@@ -147,7 +147,9 @@
                   "pelletReserve": {
                     "enabled": true,
                     "sensor": 0,
-                    "counter": 20
+                    "counter": 20,
+                    "refilling": false,
+                    "refillConfirmSeconds": null
                   },
                   "brazierCleaning": {
                     "minutesLeft": 12,
@@ -4766,6 +4768,15 @@
               "switchedOff": {
                 "type": "boolean",
                 "description": "true once the stove switched itself off because the pellet reserve ran out"
+              },
+              "refilling": {
+                "type": "boolean",
+                "description": "RAM 0xA4 counts down 3 -> 0 after a refill: the stove confirms the pellets (one step about every 37 s while burning). shutdownMinutes is null and lowPalletAlarm false meanwhile; switchedOff and the PELLETS error stay until the sensor is 0."
+              },
+              "refillConfirmSeconds": {
+                "type": "integer",
+                "nullable": true,
+                "description": "Estimated seconds until the stove has confirmed the refill (sensor x 37 s); null when no refill is being confirmed"
               }
             }
           },

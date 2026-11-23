@@ -36,13 +36,16 @@ static void tmAlerts()
         tpl(A_RED " ! No answer from the stove (serial link down)" A_RST);
     } else {
         if (confirmedCurrentError) tpf(A_RED " ! Error %s: %s" A_RST A_EOL, pc::errorCode(confirmedCurrentError), pc::errorDesc(confirmedCurrentError));
-        else if (lastSlowStatesAt && pelletsEmptyOff()) tpl(A_RED " ! PELLETS: pellets used up, the stove switched itself off - refill the hopper" A_RST);
+        else if (lastSlowStatesAt && pelletsEmptyOff() && !pc::reserveRefilling(cachedPelletSensor)) tpl(A_RED " ! PELLETS: pellets used up, the stove switched itself off - refill the hopper" A_RST);
         if (cachedCurrentError > 0 && cachedCurrentError != confirmedCurrentError) {
             tpf(A_YEL " ! Stove reports %s (%s)", pc::errorCode(cachedCurrentError), pc::errorDesc(cachedCurrentError));
             if (cachedErrorCountdown >= 0) tpf(" - acts in %d s", cachedErrorCountdown);
             tpl(A_RST);
         }
-        if (lastSlowStatesAt && !pelletsEmptyOff()) {
+        if (lastSlowStatesAt && pc::reserveRefilling(cachedPelletSensor)) {
+            tpf(A_GRN " Pellets refilled: the stove confirms them (level sensor 0xA4 = %d, about %d s)%s" A_RST A_EOL,
+                cachedPelletSensor, cachedPelletSensor * pc::RESERVE_STEP_S, pelletsEmptyOff() ? " - switching on is possible after that" : "");
+        } else if (lastSlowStatesAt && !pelletsEmptyOff()) {
             if (cachedPelletShutdown >= 0) tpf(A_YEL " ! Pellet reserve: the stove switches itself off in about %d min" A_RST A_EOL, (cachedPelletShutdown + 1) / 2);
             else if (cachedLowPallet) tpl(A_YEL " ! Low pellets - refill the hopper" A_RST);
             else if (pc::reserveSensorLow(cachedPelletSensor) && cachedPelletCounter >= 0)
@@ -98,12 +101,13 @@ static void tmReserveLines()
 {
     if (!lastSlowStatesAt) { tkv("Pellet reserve", "not read yet"); return; }
     String s = cachedPelletReserveOn < 0 ? String("?") : cachedPelletReserveOn ? String("enabled") : String("disabled");
-    if (pelletsEmptyOff()) s += " - pellets used up, the stove switched itself off";
+    if (pc::reserveRefilling(cachedPelletSensor)) s += " - refilled, the stove confirms the pellets";
+    else if (pelletsEmptyOff()) s += " - pellets used up, the stove switched itself off";
     else if (cachedPelletShutdown >= 0) s += String(" - running: the stove switches off in about ") + ((cachedPelletShutdown + 1) / 2) + " min";
     else if (pc::reserveSensorLow(cachedPelletSensor) && cachedPelletCounter >= 0) s += String(" - level sensor low, alarm in about ") + cachedPelletCounter + " min";
     else if (cachedLowPallet) s += " - low pellet alarm";
     tkv("Pellet reserve", "%s", s.c_str());
-    tkv("Level sensor", "RAM 0xA4 = %d%s, counter RAM 0x89 = %d", cachedPelletSensor, pc::reserveSensorLow(cachedPelletSensor) ? " (low)" : "", cachedPelletCounter);
+    tkv("Level sensor", "RAM 0xA4 = %d%s, counter RAM 0x89 = %d", cachedPelletSensor, pc::reserveRefilling(cachedPelletSensor) ? " (refill being confirmed)" : pc::reserveSensorLow(cachedPelletSensor) ? " (low)" : "", cachedPelletCounter);
 }
 
 // The estimate until the low pellet alarm (pellets.h, lib/pelletcore PelletTracker)

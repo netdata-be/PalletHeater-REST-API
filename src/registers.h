@@ -188,7 +188,7 @@ static String getRamValueTxt(byte addr, int val)
         case 0x91: snprintf(buf, sizeof(buf), "%d (reserve phase 2: off in %d min)", val, (val + 1) / 2); return buf;
         case 0x89: snprintf(buf, sizeof(buf), "%d min until the pellet reserve alarm (counts down while RAM 0xA4 = 5, 20 = full)", val); return buf;
         case 0xB2: snprintf(buf, sizeof(buf), "%d (auger motor: ~200 running, 0 stopped)", val); return buf;
-        case 0xA4: snprintf(buf, sizeof(buf), "%d (level sensor: %s)", val, val == 5 ? "pellets low" : val == 0 ? "pellets OK" : val >= 1 && val <= 4 ? "between low and OK (seen briefly)" : "unknown value"); return buf;
+        case 0xA4: snprintf(buf, sizeof(buf), "%d (level sensor: %s)", val, val == 5 ? "pellets low" : val == 0 ? "pellets OK" : val >= 1 && val <= 3 ? "pellets seen, the stove confirms the refill (counts down to 0)" : val == 4 ? "pellets seen (refill starting, or pellets sliding past the sensor)" : "unknown value"); return buf;
         case 0xAC: snprintf(buf, sizeof(buf), "%d (copy of the level sensor 0xA4)", val); return buf;
         case 0xB7: snprintf(buf, sizeof(buf), "%d (hours since last service, low byte; copy of EEPROM 0xE7)", val); return buf;
         case 0xB8: snprintf(buf, sizeof(buf), "%d (hours since last service, high byte; copy of EEPROM 0xE8)", val); return buf;
