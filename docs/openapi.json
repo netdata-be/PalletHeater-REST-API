@@ -1314,6 +1314,28 @@
         }
       }
     },
+    "/api/plan": {
+      "get": {
+        "summary": "Read plan of the background task",
+        "description": "Every group of registers the sensor task reads: priority, the interval that applies now, seconds since the last read, reads and failed reads. See docs/api.md.",
+        "responses": {
+          "200": {
+            "description": "Read plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Device"
+        ]
+      }
+    },
     "/api/timers": {
       "get": {
         "tags": [

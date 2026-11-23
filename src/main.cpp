@@ -145,6 +145,7 @@ static void registerRoutes()
     wm.server->on("/app", HTTP_GET, crumbed(httpsOr(handleRouteWebApp)));   // also served on / (kept for old links)
     wm.server->on("/api/history", authed(handleRouteHistory));
     wm.server->on("/api/events", authed(handleRouteEvents));
+    wm.server->on("/api/plan", authed(handleRoutePlan));
     wm.server->on("/api/pellets", authed(handleRoutePellets));
     wm.server->on("/api/pellets/days", authed(handleRoutePelletDays));
     wm.server->on("/api/auth", crumbed(handleRouteAuth));   // public: does its own check
@@ -182,7 +183,8 @@ void setup()
     coreDumpReport(); // after a crash: task, PC and backtrace from the core dump
     // bus: a transaction that failed for good is a warning; retried attempts and the
     // frames of the telnet bus debug are debug
-    Stove::writeHook = stoveWriteLogger;   // every write with its source (liveDebug.h)
+    // every write with its source (liveDebug.h); the read planner reads that register again at once
+    Stove::writeHook = [](uint8_t type, uint8_t addr, uint8_t value, bool ok) { stoveWriteLogger(type, addr, value, ok); if (ok) planWritten(type, addr); };
     Stove::logger = [](bool failed, const char* line) { if (failed && !stove.linkDown) LOGW("bus", "%s", line); else LOGD("bus", "%s", line); };
     
     spiffsMounted = SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED); // Mount SPIFFS

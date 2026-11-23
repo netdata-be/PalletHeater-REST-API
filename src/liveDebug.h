@@ -239,7 +239,7 @@ void diagTick()
     uint32_t heap = ESP.getFreeHeap(), minHeap = ESP.getMinFreeHeap(), block = ESP.getMaxAllocHeap();
     int rssi = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0;
     uint32_t avgFast = diagFastCycles ? diagFastSumMs / diagFastCycles : 0;
-    LOGI("sys", "health: up %s | heap %lu KB free (lowest %lu KB, largest block %lu KB) | WiFi %d dBm | bus %lu transactions in %lu min, %lu retries, %lu failed | sensor cycle avg %lu ms, max %lu ms, slow max %lu ms, longest wait for the bus %lu ms",
+    LOGI("sys", "health: up %s | heap %lu KB free (lowest %lu KB, largest block %lu KB) | WiFi %d dBm | bus %lu transactions in %lu min, %lu retries, %lu failed | sensor reads avg %lu ms per group, max %lu ms (settings / rare: max %lu ms), longest wait for the bus %lu ms",
          uptimeStr().c_str(), (unsigned long)(heap / 1024), (unsigned long)(minHeap / 1024), (unsigned long)(block / 1024), rssi,
          (unsigned long)dTx, (unsigned long)minutes, (unsigned long)dRt, (unsigned long)dFl,
          (unsigned long)avgFast, (unsigned long)diagFastMaxMs, (unsigned long)diagSlowMaxMs, (unsigned long)diagLockWaitMaxMs);

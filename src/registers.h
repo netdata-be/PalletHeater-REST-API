@@ -489,6 +489,8 @@ void handleRouteDump()
     });
 }
 
+int planRemoteMenuFresh();   // stoveCache.h
+int planStoveLanguage();
 void handleRouteRemote()
 {
     StaticJsonDocument<200> json;
@@ -500,7 +502,10 @@ void handleRouteRemote()
         return;
     }
 
-    int menuId = stove.read(ram, displayMenuAddr);
+    // menu and language from the read planner when it has them (stoveCache.h): on the main screen this
+    // route then needs no bus read at all; the selected parameter and its value only while a menu is open
+    int menuId = planRemoteMenuFresh();
+    if (menuId < 0) menuId = stove.read(ram, displayMenuAddr);
     if (menuId < 0)
     {
         json["error"] = "Failed to read remote menu - RS232 error";
@@ -513,13 +518,14 @@ void handleRouteRemote()
     json["diplayed_menu"]  = menuName;  // deprecated misspelled alias, kept for existing clients
 
     json["menuId"] = menuId;
-    int paramId = stove.read(ram, selectedParamAddr);
+    int paramId = menuId > 0 ? stove.read(ram, selectedParamAddr) : 0;
     json["selected_parameter"] = (paramId >= 0) ? getSelectedParameterName(paramId) : "Unknown";
     if (paramId >= 0) json["parameterId"] = paramId;          // RAM 0x18, 0 = not editing
-    int editVal = stove.read(ram, menuEditValueAddr);
+    int editVal = menuId > 0 ? stove.read(ram, menuEditValueAddr) : -1;
     if (editVal >= 0) json["editValue"] = editVal;            // RAM 0x19: value the remote shows while editing
 
-    int langId = stove.read(eeprom, languageAddr);
+    int langId = planStoveLanguage();
+    if (langId < 0) langId = stove.read(eeprom, languageAddr);
     if (langId < 0)
     {
         json["language"] = "Unknown";

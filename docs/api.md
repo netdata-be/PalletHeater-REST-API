@@ -23,7 +23,7 @@ The HTTP REST API of the controller. The OpenAPI 3 specification is [openapi.jso
   | `503` | The stove bus is busy (another request held it for more than 5 s). Retry. |
   | `503` | While the controller installs a firmware from GitHub (`/api/firmware`): `{"error":"Firmware update in progress - try again later","firmwareUpdate":true,"progress":42,"retryAfter":30}` with a `Retry-After: 30` header. The TLS download needs most of the memory, so every route except `/api/firmware`, `/api/health`, the web app page and its icons is refused until the controller restarts on the new firmware (or the install fails). |
 
-- **Caching:** `/api/state` and `/metrics` are served from a cache that a background task keeps up to date. All other endpoints talk to the stove directly, so each call takes a few serial round trips.
+- **Caching:** `/api/state`, `/metrics` and (on the main screen) `/api/remote` are served from a cache that a background task keeps up to date with a **read planner**: every value has its own interval (one table in `src/stoveCache.h`, live with `GET /api/plan`), e.g. the stove state every second, fumes and auger every 2 s while the stove is active, the room temperature every 10 s, settings every 10 – 60 s, each timer program at least every 60 s, error memory and counters every 5 – 10 min, the stove's firmware version and serial number at a (re)connect of the serial link. A register is read again at once after a write to it; while the remote control shows a menu its settings (and in the chrono menu the timers) are read every few seconds, and once more when it returns to the main screen. Spare bus time (up to 50 %) refreshes settings and timers more often. Other endpoints talk to the stove directly, so each call takes a few serial round trips.
 - **Bus locking:** the serial bus is shared with the background sensor task and BLE. Every endpoint that talks to the stove takes the bus lock first, so requests are handled one at a time on the bus.
 - **Retries:** every serial read and write is retried up to 3 times by the firmware before an endpoint reports a `500`. Clients do not need their own retry logic. Failures and retries are counted in `/metrics` (`stove_serial_read_errors_total`, `stove_serial_write_errors_total`, `stove_serial_retries_total`).
 
@@ -75,6 +75,7 @@ scrape_configs:
 | `GET` `PATCH` | [`/api/time`](#apitime) | Stove clock vs NTP, sync clock |
 | `GET` `POST` | [`/api/errors`](#apierrors) | Error memory (5 positions) |
 | `GET` `POST` | [`/api/timers`](#apitimers) | All chrono programs PR1 – PR6 |
+| `GET` | [`/api/plan`](#get-apiplan) | Read plan of the background task: intervals and age per group of registers |
 | `GET` `POST` `PATCH` `DELETE` | [`/api/timers/pr{1-6}`](#apitimerspr1-6) | Single chrono program |
 | `GET` | [`/api/remote`](#get-apiremote) | Current menu on the remote / display |
 | `GET` | [`/api/dump`](#get-apidump) | Raw RAM / EEPROM register dump |
@@ -168,7 +169,7 @@ curl http://openpelletbridge.local/api/state
 | `RemoteControlLastSeen` | Seconds since the last contact with the remote control, `-1` when unknown. |
 | `previousErrors` | `false` when the error memory is empty, otherwise an object with the non-empty positions. See [`/api/errors`](#apierrors). |
 | `time.delta` | NTP time minus stove time, in seconds. |
-| `dataAge` | Seconds since the cache was last refreshed: `fastSeconds` (state, flame, fan, fumes; every ~2 – 4 s) and `slowSeconds` (temperatures, settings, timers; every ~16 – 60 s). `null` until the first refresh. A large value means the stove is not answering. |
+| `dataAge` | `fastSeconds`: since the stove state was last read (every second); `slowSeconds`: age of the oldest regular value or setting (temperatures, pellet sensor, settings; intervals of 5 – 60 s, see `GET /api/plan`). `null` until everything was read once after a (re)connect. A large value means the stove is not answering. |
 | `serial` | Serial bus counters since boot: reads / writes that failed after all retries, and individual retries. |
 | `currentError` | Active error: `false`, or `{ "id", "error", "desc", "source" }`. `source` `stove`: an error code of the stove (RAM `0x33`, like the error memory). `source` `controller`: `{"id": -1, "error": "LINK", "desc": "No answer from the stove (serial link down)"}` while the stove does not answer; `{"id": -2, "error": "PELLETS", "desc": "Pellets used up: …"}` once the stove switched itself off at the end of the pellet reserve (the stove stores no error for this; it clears when the level sensor sees pellets again after a refill). |
 | Unknown values | Values never read from the stove since the start are `null`; once read, the last known value stays (see `dataAge`). While the stove does not answer `stoveState.poweredOn` and `brazierCleaning.active` are `null` too. |
@@ -340,6 +341,18 @@ curl -X POST "http://openpelletbridge.local/api/errors?MemoryPos_1=0"
 | Parameter | Values |
 |---|---|
 | `MemoryPos_1` … `MemoryPos_5` | Error id, see [error codes](#error-codes). `0` clears the position. Unknown ids return `400` and nothing is written. |
+
+### `GET /api/plan`
+
+The read plan of the background task: which groups of registers it reads, how often, and how old each value is. For troubleshooting and tuning.
+
+```json
+{"active": true, "remoteMenu": 0, "busPercent": 39, "fullRead": true,
+ "groups": [{"name": "state", "prio": 1, "intervalS": 1, "ageS": 0, "reads": 3121, "fails": 0},
+            {"name": "timer PR1", "prio": 4, "intervalS": 60, "ageS": 17, "reads": 52, "fails": 0}]}
+```
+
+`active`: the stove is starting, burning, cleaning or in alarm (the "active" intervals apply). `remoteMenu`: the menu on the remote control (RAM 0x1A, 0 = main screen). `busPercent`: share of the last ~5 s the bus was busy with planned reads. `fullRead`: everything was read once since the last (re)connect. Per group: priority (1 live – 5 static), the interval that applies now (longer while a Bluetooth client is connected), seconds since the last read, reads and failed reads since the start.
 
 ### `/api/timers`
 

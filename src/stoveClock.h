@@ -45,13 +45,3 @@ bool getStoveDateTime()
 
 // The stove clock is read from the stove every 5 min once a valid time is known
 // (in between stoveTimeNow() extrapolates it), and every 10 s until then.
-static void stoveTimeTick()
-{
-    static unsigned long lastAttempt = 0;
-    static bool known = false;
-    unsigned long interval = known ? STOVE_TIME_READ_MS : STOVE_TIME_RETRY_MS;
-    if (lastAttempt != 0 && millis() - lastAttempt < interval) return;
-    lastAttempt = millis();
-    if (lastAttempt == 0) lastAttempt = 1;
-    known = getStoveDateTime();
-}
