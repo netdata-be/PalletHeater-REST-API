@@ -5287,6 +5287,20 @@
           "largestBlock": {
             "type": "integer",
             "description": "Largest free heap block now (bytes). HTTPS needs about 20 KB"
+          },
+          "trial": {
+            "type": "boolean",
+            "description": "The running firmware is on trial after an update: confirmed after 2 minutes with WiFi; a restart before that rolls back to the previous firmware"
+          },
+          "trialSecondsLeft": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Seconds until the trial ends (with WiFi); null when not on trial"
+          },
+          "rolledBack": {
+            "type": "string",
+            "nullable": true,
+            "description": "Version of the last update that did not start properly and was rolled back; null if none"
           }
         }
       },

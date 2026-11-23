@@ -151,4 +151,13 @@ curl -X POST "http://openpelletbridge.local/api/firmware?autoCheck=false"
 | `lastAttempt` | Last step of an install that did not finish (the controller restarted or was powered off during it) or failed (`failed: …`), with free heap, largest heap block, WiFi signal and uptime at that moment. Kept in NVS, so it survives a power cut; removed when an install succeeds. Logged at the next start. |
 | `freeHeap`, `largestBlock` | Memory now. HTTPS needs about 45 KB free with a 20 KB block; with less, check and install are refused ("restart the controller and try again") instead of risking a hang. |
 
+### Rollback of an update that does not start
+
+Every way of updating (GitHub, `POST /api/update`, espota, Bluetooth) ends the same way: the new firmware starts **on trial**. It is confirmed once it has run 2 minutes with WiFi connected. A restart before that (crash, watchdog reset, power cut) makes the bootloader start the previous firmware again, which logs `the update to … did not start properly and was rolled back` and shows it in `rolledBack` (and in the web app and telnet) until the next update. Without WiFi for 10 minutes after an update the controller goes back to the previous firmware by itself: a controller that cannot be reached right after an update most likely has a broken update. Starting another update during the trial confirms the running firmware first. Implemented in [src/otaVerify.h](../src/otaVerify.h); tested on 23/11/2026 with a build that crashes on purpose 30 s into its trial (`-DOTA_ROLLBACK_TEST`, crashes only once so a bootloader without rollback would not loop): the controller came back on the previous firmware. Rollback needs the bootloader of the Arduino-ESP32 2.0.17 framework (`CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE`); a controller flashed over USB with this project has it.
+
+| Field | Meaning |
+|---|---|
+| `trial` | The running firmware is on trial (`trialSecondsLeft` until it is confirmed with WiFi) |
+| `rolledBack` | Version of the last update that did not start properly and was rolled back, `null` if none (cleared by the next successful update) |
+
 `action=install` without `force` is refused (`400`) when there is no newer release; `409` while a check or update is already running. Poll `GET` to follow the progress; the controller is unreachable for about a minute while it restarts. The web app shows this under *Device* → *OpenPelletBridge firmware*.

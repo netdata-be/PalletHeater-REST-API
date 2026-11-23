@@ -55,6 +55,7 @@ void handleUpdateUpload()
         otaActive = true;                                   // pause the sensor task
         if (bleEnabled) NimBLEDevice::stopAdvertising();    // give WiFi the radio
         LOGI("update", "upload started: %s", up.filename.c_str());
+        otaConfirmBeforeUpdate();   // a firmware on trial is confirmed first (otaVerify.h)
         if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) { updFail(String("begin failed: ") + Update.errorString()); return; }
         updStarted = true;
         break;

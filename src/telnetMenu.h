@@ -841,6 +841,8 @@ static void tmFirmwareInfo()
     bool dev = !parsed || v.ahead > 0 || v.dirty;
     tkv("This firmware", "%s%s", BUILD_VERSION, dev ? " (development build)" : "");
     tkv("Built", "%s (%s), for a %s", BUILD_TIME, BUILD_ENV, BUILD_STOVE_MODEL);
+    if (otaTrial) tkv("Trial", A_YEL "on trial, confirmed in %lu s with WiFi (a restart before that goes back)" A_RST, (unsigned long)otaTrialSecondsLeft());
+    if (otaRolledBack.length()) tkv("Rolled back", A_RED "the update to %s did not start properly" A_RST, otaRolledBack.c_str());
     int st = fwState;
     String state = FW_STATE_STR[st];
     if ((st == FW_DOWNLOADING || st == FW_RESTARTING) && fwTotal) state += String(" ") + (unsigned)(fwDone * 100 / fwTotal) + " %";

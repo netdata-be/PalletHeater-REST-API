@@ -173,6 +173,7 @@ static String fwDoInstall()
     fwTotal = len; fwDone = 0;
     int lastPct = 0;
     fwPauseOthers(true);
+    otaConfirmBeforeUpdate();   // a firmware on trial is confirmed first (otaVerify.h)
     if (!Update.begin(len, U_FLASH)) {
         String e = String("begin failed: ") + Update.errorString();
         http.end(); fwPauseOthers(false);
@@ -355,6 +356,10 @@ void handleRouteFirmware()
 
     int st = fwState;
     json["current"] = BUILD_VERSION;
+    // rollback of a failed update (otaVerify.h)
+    json["trial"] = otaTrial;
+    if (otaTrial) json["trialSecondsLeft"] = otaTrialSecondsLeft(); else json["trialSecondsLeft"] = nullptr;
+    if (otaRolledBack.length()) json["rolledBack"] = otaRolledBack; else json["rolledBack"] = nullptr;
     pc::Version v;
     bool parsed = pc::parseVersion(BUILD_VERSION, v);
     json["devBuild"] = !parsed || v.ahead > 0 || v.dirty;

@@ -3,6 +3,7 @@
 #include <ArduinoOTA.h>
 #include <ota.h>
 #include <constants.h>
+#include "otaVerify.h"  // rollback of an update that does not start properly
 #include <setupWifi.h>
 #include <FS.h>
 #include <SPIFFS.h>
@@ -173,8 +174,10 @@ void setup()
     pinMode(ENABLE_RX, OUTPUT);
     digitalWrite(ENABLE_RX, HIGH); // The led of the optocoupler is off
 
+    otaVerifySetup(); // first: note the version on trial (rollback of a failed update, otaVerify.h)
     Serial.begin(115200);
     liveLogSetup();   // also capture ESP-IDF log output for /api/log; reset reason, log of the previous run
+    otaVerifyReport();
     coreDumpReport(); // after a crash: task, PC and backtrace from the core dump
     // bus: a transaction that failed for good is a warning; retried attempts and the
     // frames of the telnet bus debug are debug
@@ -326,6 +329,7 @@ void loop()
     crumb("MQTT");    mqttLoop();
     crumb("network"); netLoop();
     crumb("firmware update check"); fwLoop();
+    crumb("firmware confirm"); otaVerifyLoop();   // confirm a new firmware after 2 min with WiFi (otaVerify.h)
     crumb("diagnostics"); diagTick();   // health line, clock drift, remote control (liveDebug.h)
 
     // Sensor cache is refreshed by a background task on the second core.

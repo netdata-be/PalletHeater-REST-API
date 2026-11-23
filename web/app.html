@@ -765,7 +765,7 @@ const I18N = {
     themeTitle:"Theme: {0} (click to change)", theme_auto:"automatic (follows the device)", theme_light:"light", theme_dark:"dark",
     apiKeyLbl:"API key", lastStart:"Last start", ctrlStarts:"Controller starts", ctrlStartsVal:"{0} ({1} after a crash)", wifiDrops:"Connection drops", wifiDropsVal:"{0} · last {1} ago: {2}",
     logLevels:"Log levels per module", logLevelSaved:"Log level {0} = {1}",
-    ghLastUnfinished:"The previous install did not finish; last step: {0}.", ghLastFailed:"The previous install failed: {0}.",
+    ghLastUnfinished:"The previous install did not finish; last step: {0}.", ghTrial:"This firmware is on trial: confirmed in {0} s if it keeps running with WiFi; a restart before that goes back to the previous firmware.", ghRolledBack:"The update to {0} did not start properly and was rolled back to this firmware.", ghLastFailed:"The previous install failed: {0}.",
     updBadge:"Update", updBadgeTitle:"New firmware {0} available – show it under Device", helpFor:"Explanation",
     pelMarkLow:"Pellets low", pelMarkOut:"Pellets used up", pelMarkRefill:"Refilled", pelMarkRefillKg:"Refilled {0} kg", esStopL:"energy saving stop {0}°", esStartL:"restart {0}°", timerBand:"Timer on", timerNote:"Light band: a timer program has the stove on.", noDataWin:"No data in this period.", zoomOut:"Zoom out", histPrev:"‹ Earlier", histNext:"Later ›", zoomHint:"Drag across the chart to zoom in; scroll sideways (or Shift + wheel) to move in time.", zoomedTo:"Showing {0} – {1}: double-click the chart or use Zoom out to go back.", histWeekNote:"Hourly averages, last 7 days (burning = share of the hour the stove was heating), stored on the controller.", burnPct:"Burning", fumeMax:"Fume max.",
     liveTitle:"Live debugging", liveLog:"Firmware log", liveBus:"Stove bus", livePause:"Pause", liveResume:"Resume", liveClear:"Clear", liveDl:"Download",
@@ -936,6 +936,7 @@ pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low 
     themeTitle:"Thema: {0} (klik om te wijzigen)", theme_auto:"automatisch (volgt het toestel)", theme_light:"licht", theme_dark:"donker",
     apiKeyLbl:"API-key", lastStart:"Laatste start", ctrlStarts:"Starts controller", ctrlStartsVal:"{0} ({1} na een crash)", wifiDrops:"Verbrekingen", wifiDropsVal:"{0} · laatste {1} geleden: {2}",
     logLevels:"Logniveaus per module", logLevelSaved:"Logniveau {0} = {1}",
+    ghTrial:"Deze firmware staat op proef: bevestigd over {0} s als ze met wifi blijft draaien; een herstart voordien gaat terug naar de vorige firmware.", ghRolledBack:"De update naar {0} startte niet goed en is teruggedraaid naar deze firmware.",
     ghLastUnfinished:"De vorige installatie is niet afgerond; laatste stap: {0}.", ghLastFailed:"De vorige installatie is mislukt: {0}.",
     updBadge:"Update", updBadgeTitle:"Nieuwe firmware {0} beschikbaar – toon ze bij Toestel", helpFor:"Uitleg",
     pelMarkLow:"Pellets laag", pelMarkOut:"Pellets op", pelMarkRefill:"Bijgevuld", pelMarkRefillKg:"Bijgevuld {0} kg", esStopL:"energy saving stop {0}°", esStartL:"herstart {0}°", timerBand:"Timer aan", timerNote:"Lichte band: een timerprogramma heeft de kachel aan.", noDataWin:"Geen gegevens in deze periode.", zoomOut:"Uitzoomen", histPrev:"‹ Eerder", histNext:"Later ›", zoomHint:"Sleep over de grafiek om in te zoomen; scroll opzij (of Shift + muiswiel) om in de tijd te schuiven.", zoomedTo:"Getoond: {0} – {1}: dubbelklik op de grafiek of gebruik Uitzoomen om terug te gaan.", histWeekNote:"Uurgemiddelden, laatste 7 dagen (brandt = deel van het uur dat de kachel verwarmde), opgeslagen op de controller.", burnPct:"Brandt", fumeMax:"Rookgas max.",
@@ -1643,6 +1644,9 @@ function renderFw() {
   else txt = t("ghUpToDate", f.latest);
   // an earlier install that did not finish (restart / power cut during it) or failed
   if (f.lastAttempt && !working) txt += " " + t(f.lastAttempt.startsWith("failed") ? "ghLastFailed" : "ghLastUnfinished", f.lastAttempt.replace(/^failed: /, ""));
+  // rollback of a failed update (otaVerify.h): on trial for 2 min, or the last update was rolled back
+  if (f.trial) txt += " " + t("ghTrial", f.trialSecondsLeft ?? 0);
+  if (f.rolledBack) txt += " " + t("ghRolledBack", f.rolledBack);
   hint.textContent = txt;
   notes.hidden = !f.releaseUrl || working; if (f.releaseUrl) notes.href = f.releaseUrl;
   $("ghCheck").disabled = working;

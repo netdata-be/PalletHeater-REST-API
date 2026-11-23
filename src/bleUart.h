@@ -1,4 +1,5 @@
 #pragma once
+void otaConfirmBeforeUpdate();   // otaVerify.h
 #include <NimBLEDevice.h>
 #include <esp_ota_ops.h>
 #include <WiFi.h>
@@ -523,6 +524,7 @@ class OtaCtrlCB : public NimBLECharacteristicCallbacks {
             otaPartition = esp_ota_get_next_update_partition(nullptr);
             if (!otaPartition) { otaNotify(0xFF); return; }
 
+            otaConfirmBeforeUpdate();   // a firmware on trial is confirmed first (otaVerify.h)
             if (esp_ota_begin(otaPartition, size ? size : OTA_SIZE_UNKNOWN, &otaHandle) != ESP_OK) {
                 otaNotify(0xFF); return;
             }

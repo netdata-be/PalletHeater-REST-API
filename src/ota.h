@@ -1,3 +1,4 @@
+void otaConfirmBeforeUpdate();   // otaVerify.h
 #include <ArduinoOTA.h>
 #include <NimBLEDevice.h>
 #include <Preferences.h>
@@ -20,6 +21,7 @@ void enableOTA(const String& password){
     ArduinoOTA.setPort(3232);
     ArduinoOTA.setPassword(password.c_str());
     ArduinoOTA.onStart([](){
+        otaConfirmBeforeUpdate();   // a firmware on trial is confirmed first (otaVerify.h)
         otaActive = true;   // pauses the sensor task: no serial traffic, more time for WiFi
         // Stop BLE advertising so it stops competing with WiFi for the shared radio.
         if (bleEnabled) NimBLEDevice::stopAdvertising();
