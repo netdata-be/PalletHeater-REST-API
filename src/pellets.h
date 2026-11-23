@@ -77,9 +77,13 @@ static void pelUseLoad()
     } else LOGW("stove", "pellets: %s has another layout - day totals start again", PELDAYS_FILE);
     if (f) f.close();
 }
+// Location for the outdoor temperature (web app: use against the weather, Open-Meteo); rounded
+// to 0.01 deg (~1 km). The controller only keeps it; the browser fetches the weather.
+static float pelLat = NAN, pelLon = NAN;
 static void pelCostLoad()
 {
     Preferences p; p.begin("pelcost", true);
+    pelLat = p.getFloat("lat", NAN); pelLon = p.getFloat("lon", NAN);
     pelCost.pricePerBag = p.getFloat("price", 0);
     pelCost.bagKg       = p.getFloat("bagkg", 15);
     pelCost.stockBags   = p.getFloat("stock", -1);
@@ -89,6 +93,7 @@ static void pelCostSave()
 {
     Preferences p; p.begin("pelcost", false);
     p.putFloat("price", pelCost.pricePerBag); p.putFloat("bagkg", pelCost.bagKg); p.putFloat("stock", pelCost.stockBags);
+    p.putFloat("lat", pelLat); p.putFloat("lon", pelLon);
     p.end();
 }
 // First start with day totals: fill in the days before today from the hourly records of the last
@@ -284,6 +289,8 @@ void pelletsJson(JsonObject o, bool detail)
         u["pricePerKg"] = ppk > 0 ? serialized(String(ppk, 3)) : serialized(String("null"));
         u["stockBags"] = pelCost.stockBags >= 0 ? serialized(String(pelCost.stockBags, 2)) : serialized(String("null"));
         u["days"] = pelUse.n;
+        if (!isnan(pelLat) && !isnan(pelLon)) { JsonObject l = u.createNestedObject("location"); l["lat"] = serialized(String(pelLat, 2)); l["lon"] = serialized(String(pelLon, 2)); }
+        else u["location"] = nullptr;
         u["unitsToday"] = serialized(String(pelUse.unitsToday(pellets.units), 0));
         static const int SPANS[] = { 7, 30, 365 };
         for (int span : SPANS) {
@@ -461,6 +468,15 @@ void handleRoutePellets()
             float v = a == "-" || a == "off" ? -1 : a.toFloat();
             if (v > 10000 || (v < 0 && v != -1)) err = "stockBags must be 0 - 10000, or 'off'";
             else { pelCost.stockBags = v; pelCostSave(); LOGI("stove", "pellets: stock set to %.1f bag(s) by %s", v, clientIp().c_str()); }
+        }
+        if (!err.length() && (wm.server->hasArg("lat") || wm.server->hasArg("lon"))) {
+            String a = wm.server->arg("lat"), b = wm.server->arg("lon");
+            if (a == "off" || a == "-") { pelLat = pelLon = NAN; pelCostSave(); }
+            else {
+                float la = a.toFloat(), lo = b.toFloat();
+                if (!a.length() || !b.length() || la < -90 || la > 90 || lo < -180 || lo > 180) err = "lat (-90 - 90) and lon (-180 - 180) together, or lat=off";
+                else { pelLat = roundf(la * 100) / 100; pelLon = roundf(lo * 100) / 100; pelCostSave(); }
+            }
         }
         if (!err.length() && pc::parseOnOff(wm.server->arg("resetCalibration").c_str()) == 1) {
             pellets.resetCalibration(); pelletsDirty = true;

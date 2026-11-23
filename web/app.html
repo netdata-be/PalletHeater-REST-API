@@ -490,8 +490,12 @@ button.mini{padding:1px 8px;font-size:11px;font-weight:550;border-radius:7px;mar
     <div class="kpis" id="useKpis"></div>
     <div class="chart" id="useChart"><svg role="img"></svg><div class="tip"></div></div>
     <p class="muted" style="font-size:12px;margin:6px 0 0" id="useNote"></p>
-    <div class="actions"><button id="usePrice"></button><button id="useStock"></button></div>
+    <div class="actions"><button id="usePrice"></button><button id="useStock"></button><button id="useLoc"></button></div>
     <details class="tbl"><summary data-i="showTable"></summary><div class="scroll"><table id="useTable"></table></div></details>
+    <div class="tsub" style="margin-top:16px"><span data-i="wxTitle"></span><span data-help="wx"></span></div>
+    <div class="kpis" id="wxKpis"></div>
+    <div class="chart" id="wxChart"><svg role="img"></svg><div class="tip"></div></div>
+    <p class="muted" style="font-size:12px;margin:6px 0 0" id="wxNote"></p>
   </section>
 
   <!-- Remote control -->
@@ -768,6 +772,7 @@ const I18N = {
     mqttEdit:"Settings", mqttEnabled:"MQTT on", mqttUser:"User", mqttPass:"Password", mqttPrefix:"Topic prefix", mqttDisc:"Home Assistant discovery", mqttDiscPrefix:"Discovery prefix",
     mqttNone:"Not available (older firmware)", mqttOff:"Off", mqttConnected:"Connected to {0} – topics {1}/…", mqttDisconnected:"Not connected to {0}: {1}", mqttPassKeep:"unchanged", mqttSaved:"MQTT settings saved", cancel:"Cancel",
     h_mqtt:"Publishes the stove values to an MQTT broker and accepts commands. Values are plain text under <prefix>/state/… (e.g. room_temp = 21.5, power = ON), retained, on change and every 5 min. Commands go to <prefix>/set/…: power and energy_saving (ON / OFF or 1 / 0), mode (heat / off), setpoint (7 – 30), flame_power (1 – 4), fan_speed (off / 0 – 3), es_stop and es_start (0 – 3). <prefix>/status is online / offline. With Home Assistant discovery on, the stove appears in Home Assistant by itself (climate, switches, numbers, sensors). Other systems such as Loxone (through an MQTT gateway) or Node-RED use the same topics; discovery can stay off for them.",
+    wxTitle:"Use against the outdoor temperature", h_wx:"Each dot is one day: the mean outdoor temperature of that day (Open-Meteo, open source weather data, fetched by this browser for the location set with Location…) against the pellets burned. The line is the trend: how many kg per day more for each degree colder. Per degree day: kg per heating degree day (18 °C − the mean outdoor temperature, days above 18 °C count 0), a measure of the efficiency that does not depend on the weather; if it rises over the months, the stove or the house needs more pellets for the same cold (dirt, other pellets, ventilation). Next 7 days: kg per degree day applied to the degree days of the weather forecast, or the trend once it is reliable (10 days, fit at least 50 %). The trend line and 'per degree colder' appear from 10 days; with timers and energy saving they can stay weak (low fit). Today and the first, incomplete day are left out. The location is kept on the controller rounded to ~1 km; only this browser sends it to Open-Meteo.",
     useTitle:"Pellet use", h_use:"Pellets burned per day, from the auger counter (auger value × time, the same as the estimate). Kept per day on the controller for up to 400 days; the days before the feature existed are filled in from the 7-day hourly history. Kilograms use the calibration of now, so older days become more accurate with every refill cycle too. Price…: the price of a bag and its weight (€ per kg follows). Stock…: the bags you have at home; every refill (detected or entered) takes its kg from it, and the stock is shown in days at the use of the last 7 days. Today is drawn lighter: the day is still running.",
     pelDbgTitle:"Pellet estimate (debug)", h_pelDbg:"Everything the pellet estimate is made of, from GET /api/pellets (refreshed every 10 s while debug mode is on). The controller adds up 'auger units': the auger on-time per cycle (RAM 0x0D, at most 12 s) times the seconds it fed. The level sensor (RAM 0xA4) trips at the same height each time, so between two alarms exactly the kg refilled in between were burned: kg per unit = kg / units. Left = kg refilled since the last alarm − kg per unit × units since that alarm; hours = left / (kg per unit × auger value × 3600). The checks at the top flag what usually goes wrong: no alarm or refill seen yet, sensor values the counter ignores, more burned than refilled (wrong refill amount), gaps in the readings, cycles that disagree. 'Copy' puts the raw JSON on the clipboard for a bug report.",
     parTitle:"Parameters (EEPROM)", h_par:"Presets stored in the stove EEPROM, read live (GET /api/dump). 'Verified' = checked on this stove. The presets per power level are the values the stove uses at each flame power; the row of the current actual flame power is highlighted.",
@@ -940,6 +945,7 @@ pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low 
     mqttEdit:"Instellen", mqttEnabled:"MQTT aan", mqttUser:"Gebruiker", mqttPass:"Wachtwoord", mqttPrefix:"Topic-prefix", mqttDisc:"Home Assistant discovery", mqttDiscPrefix:"Discovery-prefix",
     mqttNone:"Niet beschikbaar (oudere firmware)", mqttOff:"Uit", mqttConnected:"Verbonden met {0} – topics {1}/…", mqttDisconnected:"Niet verbonden met {0}: {1}", mqttPassKeep:"ongewijzigd", mqttSaved:"MQTT-instellingen bewaard", cancel:"Annuleren",
     h_mqtt:"Publiceert de waarden van de kachel naar een MQTT-broker en aanvaardt commando's. Waarden staan als gewone tekst onder <prefix>/state/… (bv. room_temp = 21.5, power = ON), retained, bij elke wijziging en elke 5 min. Commando's gaan naar <prefix>/set/…: power en energy_saving (ON / OFF of 1 / 0), mode (heat / off), setpoint (7 – 30), flame_power (1 – 4), fan_speed (off / 0 – 3), es_stop en es_start (0 – 3). <prefix>/status is online / offline. Met Home Assistant discovery aan verschijnt de kachel vanzelf in Home Assistant (thermostaat, schakelaars, getallen, sensoren). Andere systemen zoals Loxone (via een MQTT-gateway) of Node-RED gebruiken dezelfde topics; discovery mag voor hen uit.",
+    wxTitle:"Verbruik tegenover de buitentemperatuur", h_wx:"Elk punt is één dag: de gemiddelde buitentemperatuur van die dag (Open-Meteo, open source weergegevens, opgehaald door deze browser voor de locatie die je met Locatie… instelt) tegenover de verbrande pellets. De lijn is de trend: hoeveel kg per dag meer per graad kouder. Per graaddag: kg per graaddag (18 °C − de gemiddelde buitentemperatuur, dagen boven 18 °C tellen 0), een maat voor het rendement die niet van het weer afhangt; stijgt die over de maanden, dan heeft de kachel of het huis meer pellets nodig voor dezelfde kou (vuil, andere pellets, ventilatie). Komende 7 dagen: kg per graaddag toegepast op de graaddagen van de weersverwachting, of de trend zodra die betrouwbaar is (10 dagen, samenhang minstens 50 %). De trendlijn en 'per graad kouder' verschijnen vanaf 10 dagen; met timers en energy saving kan de samenhang zwak blijven. Vandaag en de eerste, onvolledige dag tellen niet mee. De locatie wordt op de controller bewaard, afgerond op ~1 km; alleen deze browser stuurt ze naar Open-Meteo.",
     useTitle:"Pelletverbruik", h_use:"Verbrande pellets per dag, uit de schroefteller (schroefwaarde × tijd, dezelfde als voor de schatting). Per dag bewaard op de controller, tot 400 dagen; de dagen van vóór deze functie zijn aangevuld uit de uurgeschiedenis van 7 dagen. De kilo's gebruiken de ijking van nu, zodat ook oudere dagen nauwkeuriger worden bij elke bijvulcyclus. Prijs…: de prijs van een zak en zijn gewicht (€ per kg volgt daaruit). Voorraad…: de zakken die je thuis hebt; elke bijvulling (herkend of ingegeven) haalt zijn kilo's daaruit, en de voorraad wordt getoond in dagen bij het verbruik van de laatste 7 dagen. Vandaag is lichter getekend: die dag loopt nog.",
     pelDbgTitle:"Pelletschatting (debug)", h_pelDbg:"Alles waaruit de pelletschatting bestaat, uit GET /api/pellets (elke 10 s ververst zolang debug aan staat). De controller telt 'schroefeenheden' op: de aan-tijd van de schroef per cyclus (RAM 0x0D, hoogstens 12 s) maal het aantal seconden dat ze voedde. De niveausensor (RAM 0xA4) slaat telkens op dezelfde hoogte aan, dus tussen twee alarmen is precies de bijgevulde hoeveelheid verbrand: kg per eenheid = kg / eenheden. Over = kg bijgevuld sinds het laatste alarm − kg per eenheid × eenheden sinds dat alarm; uren = over / (kg per eenheid × schroefwaarde × 3600). De controles bovenaan tonen wat meestal misloopt: nog geen alarm of bijvulling gezien, sensorwaarden die de teller negeert, meer verbrand dan bijgevuld (verkeerde hoeveelheid), gaten in de metingen, cycli die niet overeenkomen. 'Kopieer' zet de ruwe JSON op het klembord voor een foutmelding.",
     parTitle:"Parameters (EEPROM)", h_par:"Presets in het EEPROM van de kachel, live gelezen (GET /api/dump). 'Bevestigd' = nagekeken op deze kachel. De presets per vermogen zijn de waarden die de kachel per vlamvermogen gebruikt; de rij van het huidige werkelijke vlamvermogen is gemarkeerd.",
@@ -3747,6 +3753,7 @@ async function loadUse() {
   } catch (_) {}
   finally { useBusy = false; }
   renderUse();
+  loadWeather();
 }
 setInterval(loadUse, 600000);
 $("useSeg").onclick = e => {
@@ -3868,7 +3875,140 @@ function renderUse() {
   const hr = el("tr"); [L("Dag", "Day"), unit, "€"].forEach(h => hr.appendChild(el("th", "", h))); tb.appendChild(hr);
   for (let i = n - 1; i >= 0; i--) { const d = days[i], tr = el("tr"); tr.append(el("td", "", d.d.split("-").reverse().join("/")), el("td", "", calibrated ? nf(d.kg, 2) : nf(d.units, 0)), el("td", "", d.cost != null ? nf(d.cost, 2) : "–")); tb.appendChild(tr); }
 }
-window.addEventListener("resize", () => { if (useData) renderUse(); });
+window.addEventListener("resize", () => { if (useData) { renderUse(); renderWeather(); } });
+
+// ---------- use against the outdoor temperature (Open-Meteo, fetched by the browser) ----------
+// Daily mean outdoor temperature for the location kept on the controller (usage.location). The
+// forecast API covers the last 92 days and the next week; older days come from the archive API.
+let wx = null, wxKey = "", wxAt = 0, wxErr = "";
+const isoDay = d => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+async function loadWeather() {
+  const loc = usePel && usePel.usage && usePel.usage.location, days = useData && useData.days || [];
+  if (!loc || !days.length) { wx = null; renderWeather(); return; }
+  const first = days[0].d, key = loc.lat + "," + loc.lon + "," + first;
+  if (wx && wxKey === key && Date.now() - wxAt < 3600000) { renderWeather(); return; }
+  const base = `latitude=${loc.lat}&longitude=${loc.lon}&daily=temperature_2m_mean&timezone=auto`;
+  const span = Math.ceil((Date.now() - new Date(first + "T00:00:00")) / 86400000) + 1;
+  try {
+    const temps = {}, fc = [];
+    const f = await (await fetch(`https://api.open-meteo.com/v1/forecast?${base}&past_days=${Math.min(92, span)}&forecast_days=8`)).json();
+    const today = isoDay(new Date());
+    (f.daily.time || []).forEach((t, i) => { const v = f.daily.temperature_2m_mean[i]; if (v == null) return; if (t > today) fc.push(v); else temps[t] = v; });
+    if (span > 92) {
+      const end = new Date(Date.now() - 92 * 86400000);
+      const a = await (await fetch(`https://archive-api.open-meteo.com/v1/archive?${base}&start_date=${first}&end_date=${isoDay(end)}`)).json();
+      (a.daily && a.daily.time || []).forEach((t, i) => { const v = a.daily.temperature_2m_mean[i]; if (v != null && temps[t] === undefined) temps[t] = v; });
+    }
+    wx = { temps, forecast: fc.slice(0, 7) }; wxKey = key; wxAt = Date.now(); wxErr = "";
+  } catch (e) { wxErr = e.message || String(e); }
+  renderWeather();
+}
+$("useLoc").onclick = async () => {
+  const cur = usePel && usePel.usage && usePel.usage.location;
+  const v = prompt(L("Locatie voor de buitentemperatuur: een gemeente (bv. Gent) of 'breedte, lengte' (bv. 51.05, 3.72). Leeg = uit.",
+                     "Location for the outdoor temperature: a town (e.g. Ghent) or 'latitude, longitude' (e.g. 51.05, 3.72). Empty = off."),
+                   cur ? cur.lat + ", " + cur.lon : "");
+  if (v === null) return;
+  const t = v.trim();
+  let lat, lon;
+  if (!t) { try { await write(L("Locatie gewist", "Location cleared"), "POST", "/api/pellets", { lat: "off" }); } catch (_) {} loadUse(); return; }
+  const m = t.match(/^(-?\d+(?:[.,]\d+)?)\s*[;, ]\s*(-?\d+(?:[.,]\d+)?)$/);
+  if (m) { lat = parseFloat(m[1].replace(",", ".")); lon = parseFloat(m[2].replace(",", ".")); }
+  else {
+    try {
+      const g = await (await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(t)}&count=1&language=${lang}&format=json`)).json();
+      const r = g.results && g.results[0];
+      if (!r) { toast(L("Gemeente niet gevonden", "Town not found"), true); return; }
+      if (!confirm(L("Gevonden: ", "Found: ") + r.name + (r.admin1 ? ", " + r.admin1 : "") + ", " + (r.country || "") + ". " + L("Gebruiken?", "Use it?"))) return;
+      lat = r.latitude; lon = r.longitude;
+    } catch (e) { toast(L("Zoeken lukte niet: ", "Search failed: ") + e.message, true); return; }
+  }
+  if (!(lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180)) { toast(L("Ongeldige coördinaten", "Invalid coordinates"), true); return; }
+  try { await write(L("Locatie bewaard", "Location saved"), "POST", "/api/pellets", { lat: lat.toFixed(2), lon: lon.toFixed(2) }); } catch (_) {}
+  wxKey = ""; loadUse();
+};
+function renderWeather() {
+  const loc = lang === "nl" ? "nl-BE" : "en-GB";
+  const nf = (v, d = 1) => v == null || !isFinite(v) ? "–" : Number(v).toLocaleString(loc, { minimumFractionDigits: d, maximumFractionDigits: d });
+  $("useLoc").textContent = L("Locatie…", "Location…");
+  const kp = $("wxKpis"), box = $("wxChart"), svg = box.querySelector("svg"), tip = box.querySelector(".tip"), note = $("wxNote");
+  kp.innerHTML = ""; svg.innerHTML = ""; svg.removeAttribute("viewBox"); tip.style.display = "none";
+  const u = usePel && usePel.usage, days = useData && useData.days || [];
+  if (!u || !u.location) { note.textContent = L("Stel een locatie in (Locatie…) om het verbruik naast de buitentemperatuur te zien.", "Set a location (Location…) to see the use next to the outdoor temperature."); box.style.display = "none"; return; }
+  if (wxErr) { note.textContent = L("Weergegevens niet beschikbaar: ", "Weather data not available: ") + wxErr; box.style.display = "none"; return; }
+  if (!wx) { note.textContent = L("Weergegevens laden…", "Loading weather data…"); box.style.display = "none"; return; }
+  const calibrated = !!useData.kgPerUnit;
+  if (!calibrated) { note.textContent = L("Nog geen ijking: de vergelijking volgt na de eerste volledige bijvulcyclus.", "Not calibrated yet: the comparison follows after the first full refill cycle."); box.style.display = "none"; return; }
+  // days with a temperature; not today (running) and not the first kept day (started partway)
+  const firstKept = u.days < useDays - 1;
+  const pts = days.slice(firstKept ? 1 : 0, -1).filter(d => wx.temps[d.d] != null && d.kg != null).map(d => ({ d: d.d, t: wx.temps[d.d], kg: d.kg }));
+  if (pts.length < 3) { note.textContent = L("Nog te weinig dagen met weergegevens (minstens 3).", "Too few days with weather data yet (at least 3)."); box.style.display = "none"; return; }
+  box.style.display = "";
+  // linear trend kg = a + b * t, and kg per heating degree day (base 18 °C)
+  const n = pts.length, mx = pts.reduce((s, p) => s + p.t, 0) / n, my = pts.reduce((s, p) => s + p.kg, 0) / n;
+  const sxx = pts.reduce((s, p) => s + (p.t - mx) ** 2, 0), sxy = pts.reduce((s, p) => s + (p.t - mx) * (p.kg - my), 0), syy = pts.reduce((s, p) => s + (p.kg - my) ** 2, 0);
+  const b = sxx > 0 ? sxy / sxx : 0, a = my - b * mx, r2 = sxx > 0 && syy > 0 ? sxy * sxy / (sxx * syy) : 0;
+  const hdd = pts.reduce((s, p) => s + Math.max(0, 18 - p.t), 0), kgSum = pts.reduce((s, p) => s + p.kg, 0);
+  const kpi = (k, v, sub) => { const d = el("div", "kpi"); d.append(el("div", "k", k), el("div", "v", v)); if (sub) d.appendChild(el("div", "s", sub)); kp.appendChild(d); };
+  const MIN_TREND = 10;   // days before the trend (per degree colder) is shown
+  if (n >= MIN_TREND) kpi(L("Per graad kouder", "Per degree colder"), (b <= 0 ? "+" : "−") + nf(Math.abs(b), 2) + " kg", L("per dag · samenhang ", "per day · fit ") + nf(r2 * 100, 0) + " %");
+  else kpi(L("Per graad kouder", "Per degree colder"), "–", L("vanaf " + MIN_TREND + " dagen (nu " + n + ")", "from " + MIN_TREND + " days (now " + n + ")"));
+  kpi(L("Per graaddag", "Per degree day"), hdd > 0 ? nf(kgSum / hdd, 2) + " kg" : "–", nf(hdd, 0) + L(" graaddagen in " + n + " d", " degree days in " + n + " d"));
+  // forecast with kg per degree day (colder = more, always), not with the trend line, which is
+  // noisy with few days or when timers / energy saving decide more than the weather
+  // once the trend is reliable (enough days, fit >= 50 %) it is used instead
+  if (wx.forecast.length && hdd > 0) {
+    const useTrend = n >= MIN_TREND && r2 >= 0.5;
+    const fkg = useTrend ? wx.forecast.reduce((s, t) => s + Math.max(0, a + b * t), 0)
+                         : kgSum / hdd * wx.forecast.reduce((s, t) => s + Math.max(0, 18 - t), 0), ppk = u.pricePerKg;
+    kpi(L("Komende " + wx.forecast.length + " dagen", "Next " + wx.forecast.length + " days"), "≈ " + nf(fkg, 0) + " kg",
+        (ppk ? "≈ € " + nf(fkg * ppk, 0) + " · " : "") + L("gem. ", "avg ") + nf(wx.forecast.reduce((s, t) => s + t, 0) / wx.forecast.length, 1) + " °C · " +
+        (useTrend ? L("via de trend", "from the trend") : L("via graaddagen", "from degree days")));
+  }
+  // scatter: x = outdoor temperature, y = kg per day; one series, no legend
+  const W = Math.max(320, box.clientWidth || 800), H = 210, ml = 44, mr = 12, mt = 12, mb = 34, pw = W - ml - mr, ph = H - mt - mb;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("aria-label", L("Pellets per dag tegenover de buitentemperatuur", "Pellets per day against the outdoor temperature"));
+  const tmin = Math.floor(Math.min(...pts.map(p => p.t)) - 1), tmax = Math.ceil(Math.max(...pts.map(p => p.t)) + 1);
+  const kmax = Math.max(...pts.map(p => p.kg), 1), ks = [0.5, 1, 2, 5, 10, 20, 50].find(s => kmax / s <= 4) || 10, ktop = Math.ceil(kmax / ks) * ks;
+  const X = t => ml + (t - tmin) / (tmax - tmin) * pw, Y = k => mt + ph - k / ktop * ph;
+  const NS = "http://www.w3.org/2000/svg", mk = (t, at) => { const e = document.createElementNS(NS, t); for (const k in at) e.setAttribute(k, at[k]); return e; };
+  for (let k = 0; k <= ktop + 1e-9; k += ks) {
+    svg.appendChild(mk("line", { x1: ml, x2: W - mr, y1: Y(k), y2: Y(k), stroke: "var(--grid)" }));
+    const tx = mk("text", { x: ml - 6, y: Y(k) + 4, "text-anchor": "end" }); tx.textContent = nf(k, ks < 1 ? 1 : 0) + (k + ks > ktop + 1e-9 ? " kg" : ""); svg.appendChild(tx);
+  }
+  const ts = (tmax - tmin) > 12 ? 5 : 2;
+  for (let t = Math.ceil(tmin / ts) * ts; t <= tmax; t += ts) {
+    const tx = mk("text", { x: X(t), y: H - 18, "text-anchor": "middle" }); tx.textContent = t + "°"; svg.appendChild(tx);
+  }
+  const xl = mk("text", { x: ml + pw / 2, y: H - 3, "text-anchor": "middle" }); xl.textContent = L("buitentemperatuur (daggemiddelde)", "outdoor temperature (daily mean)"); svg.appendChild(xl);
+  // trend line, clipped at 0 kg
+  if (n >= MIN_TREND && sxx > 0) {
+    let t1 = tmin, t2 = tmax;
+    if (b < 0) t2 = Math.min(t2, -a / b); else if (b > 0) t1 = Math.max(t1, -a / b);
+    if (t2 > t1) {
+      svg.appendChild(mk("line", { x1: X(t1), y1: Y(a + b * t1), x2: X(t2), y2: Y(a + b * t2), stroke: "var(--s1)", "stroke-width": 2, opacity: 0.55 }));
+      const lb = mk("text", { x: X(t2) - 4, y: Y(a + b * t2) - 6, "text-anchor": "end" }); lb.textContent = L("trend", "trend"); svg.appendChild(lb);
+    }
+  }
+  pts.forEach(p => svg.appendChild(mk("circle", { cx: X(p.t), cy: Y(p.kg), r: 4.5, fill: "var(--s1)", stroke: "var(--card)", "stroke-width": 2 })));
+  const hit = mk("rect", { x: ml, y: mt, width: pw, height: ph, fill: "transparent" }); svg.appendChild(hit);
+  const show = ev => {
+    const rc = svg.getBoundingClientRect(), sx = (ev.clientX - rc.left) * W / rc.width, sy = (ev.clientY - rc.top) * H / rc.height;
+    let best = null, bd = 18 * 18;
+    pts.forEach(p => { const d = (X(p.t) - sx) ** 2 + (Y(p.kg) - sy) ** 2; if (d < bd) { bd = d; best = p; } });
+    if (!best) { tip.style.display = "none"; return; }
+    tip.innerHTML = "";
+    tip.append(el("b", "", new Date(best.d + "T12:00:00").toLocaleDateString(loc, { weekday: "short", day: "2-digit", month: "2-digit" })),
+               el("div", "", nf(best.t, 1) + " °C · " + nf(best.kg, 2) + " kg"));
+    tip.style.display = "block";
+    const bx = (X(best.t)) * rc.width / W;
+    tip.style.left = Math.min(Math.max(0, bx - 70), box.clientWidth - 150) + "px"; tip.style.top = "0px";
+  };
+  hit.addEventListener("mousemove", show); hit.addEventListener("touchstart", e => show(e.touches[0]), { passive: true });
+  hit.addEventListener("mouseleave", () => tip.style.display = "none");
+  note.textContent = L("Weergegevens: Open-Meteo (open-meteo.com), locatie ", "Weather data: Open-Meteo (open-meteo.com), location ") + u.location.lat + ", " + u.location.lon + ". " +
+    (n < 14 ? L("Met " + n + " dagen is de trend nog ruw; hij wordt beter met meer dagen en een groter temperatuurbereik.", "With " + n + " days the trend is still rough; it improves with more days and a wider temperature range.") : "");
+}
 
 // ---------- polling ----------
 let pollTimer = null, polling = false;

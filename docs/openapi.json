@@ -3809,6 +3809,22 @@
               "type": "string"
             },
             "description": "Bags in stock (0 - 10000), or off = not kept"
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Latitude for the outdoor temperature (-90 - 90, rounded to 0.01), together with lon; off clears the location"
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "schema": {
+              "type": "number"
+            },
+            "description": "Longitude (-180 - 180, rounded to 0.01)"
           }
         ],
         "responses": {
