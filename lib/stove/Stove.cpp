@@ -23,6 +23,7 @@ static void appendDebugLog(const String& line)
 StoveMonitorFn Stove::monitor = nullptr;
 StoveLogFn     Stove::logger  = nullptr;
 StoveWriteFn   Stove::writeHook = nullptr;
+void         (*Stove::beforeTx)() = nullptr;
 
 Stove::Stove(int uart_nr)
 {
@@ -105,11 +106,13 @@ static void failReason(char* out, size_t sz, const byte* tx, size_t txLen, const
 int Stove::read(byte type, byte address)
 {
     if (linkDown) { skipped++; return -1; }
+    if (beforeTx) beforeTx();
     return readTx(type, address);
 }
 
 int Stove::probe(byte type, byte address)
 {
+    if (beforeTx) beforeTx();
     return readTx(type, address);
 }
 
@@ -194,6 +197,7 @@ int Stove::readTx(byte type, byte address)
 bool Stove::write(byte type, byte address, byte value)
 {
     if (linkDown) { skipped++; return false; }
+    if (beforeTx) beforeTx();
     const byte writeByte     = 0x80;
     uint8_t checksum_calc    = (writeByte + type + address + value) & 0xFF;
     const byte message[4]    = {(byte)(writeByte + type), address, value, checksum_calc};

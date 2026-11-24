@@ -544,6 +544,22 @@ static void planConnect()   // (re)connect: read everything once
     planFullDone = false;
 }
 
+// Before every bus transaction (Stove::beforeTx): in the sensor task, while another task waits for
+// the bus, hand it over now (also in the middle of a group) and go on once nobody waits any more.
+// A command (web, MQTT, telnet, Bluetooth) so waits for one register at most (~40 ms).
+static volatile uint32_t planGiveWays = 0;
+static void planBeforeTx()
+{
+    if (!busWaiters || !stoveMutex || xTaskGetCurrentTaskHandle() != stoveReaderTask) return;
+    int depth = 0;   // the lock is recursive (getStoveDateTime takes it again): give every level
+    while (depth < 8 && xSemaphoreGetMutexHolder(stoveMutex) == stoveReaderTask) { xSemaphoreGiveRecursive(stoveMutex); depth++; }
+    if (!depth) return;
+    planGiveWays++;
+    uint32_t t0 = millis();
+    do { vTaskDelay(1); } while (busWaiters && millis() - t0 < 2000);   // the waiter takes it meanwhile
+    for (int i = 0; i < depth; i++) stoveLockTake();   // back when it is free again (the sensor task is no "waiter")
+}
+
 // Bus time used by the planner, for the spare-time cap
 static uint32_t planBusyMs = 0, planWindowMs = 0, planUtil = 0;
 
@@ -712,6 +728,7 @@ static void sensorTask(void* pvParameters)
         }
         // bus use over the last ~5 s, for the spare-time cap
         if (now - planWindowMs >= 5000) { planUtil = planBusyMs * 100 / (now - planWindowMs); planBusyMs = 0; planWindowMs = now; }
+        if (busWaiters) { vTaskDelay(1); continue; }   // a command waits for the bus: no new group now
         PlanGroup* g = planPick(now);
         if (!g) { vTaskDelay(pdMS_TO_TICKS(50)); continue; }
         planRead(*g);

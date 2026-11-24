@@ -39,6 +39,9 @@ class Stove
     static StoveMonitorFn monitor;   // nullptr = off
     static StoveWriteFn   writeHook; // nullptr = off
     static StoveLogFn     logger;    // nullptr = Serial
+    // Called before every transaction (read, probe, write) when set: lets the background reader
+    // hand the bus over to a waiting command first (src/stoveCache.h). May give and take the lock.
+    static void         (*beforeTx)();
     Stove(int uart_nr);
     // When the link is down (LINK_DOWN_AFTER transactions in a row failed after
     // all attempts) read() returns -1 and write() false at once, without touching

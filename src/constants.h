@@ -76,15 +76,25 @@ SemaphoreHandle_t stoveMutex = NULL;
 // steps of 0.5 s and feeds the task watchdog in between: the loop task is watched
 // (WDT_TIMEOUT), and the sensor task can hold the lock for seconds when the
 // stove answers slowly. Returns false when it gave up.
+// Every task except the sensor task counts as waiting while it waits (busWaiters): the sensor
+// task's background reads then hand the bus over before their next register (stoveCache.h,
+// planBeforeTx), so a command waits for one register at most, not for a whole group of them.
+static TaskHandle_t stoveReaderTask = nullptr;   // the sensor task (main.cpp)
+static volatile uint32_t busWaiters = 0;           // other tasks waiting for the bus lock right now
 static bool stoveLockTake(uint32_t maxMs = 0)
 {
     if (!stoveMutex) return true;
-    uint32_t t0 = millis();
-    while (xSemaphoreTakeRecursive(stoveMutex, pdMS_TO_TICKS(500)) != pdTRUE) {
+    if (xSemaphoreTakeRecursive(stoveMutex, 0) == pdTRUE) return true;
+    bool other = xTaskGetCurrentTaskHandle() != stoveReaderTask;
+    if (other) __atomic_add_fetch(&busWaiters, 1, __ATOMIC_SEQ_CST);
+    uint32_t t0 = millis(), step = maxMs && maxMs < 500 ? maxMs : 500;
+    bool ok = true;
+    while (xSemaphoreTakeRecursive(stoveMutex, pdMS_TO_TICKS(step)) != pdTRUE) {
         esp_task_wdt_reset();   // no effect in a task that is not watched
-        if (maxMs && millis() - t0 >= maxMs) return false;
+        if (maxMs && millis() - t0 >= maxMs) { ok = false; break; }
     }
-    return true;
+    if (other) __atomic_sub_fetch(&busWaiters, 1, __ATOMIC_SEQ_CST);
+    return ok;
 }
 struct StoveBusLock {
     bool held = false;

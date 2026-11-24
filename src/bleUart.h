@@ -874,7 +874,7 @@ void bleLoop() {
     // spacing so back-to-back app writes cannot overlap stove frames.
     BLEWriteJob job;
     if (bleWriteQueueHasJobs() && !bleStoveUartInQuietWindow(now, 150) && stoveMutex &&
-        xSemaphoreTakeRecursive(stoveMutex, pdMS_TO_TICKS(250)) == pdTRUE) {
+        stoveLockTake(250)) {
         CmdSource cs("Bluetooth app");
         if (!bleWriteQueuePop(&job)) {
             xSemaphoreGiveRecursive(stoveMutex);
@@ -922,7 +922,7 @@ void bleLoop() {
 
     // Apply pending timer EEPROM write under mutex.
     if (blePendingTimerWrite.ready && !bleStoveUartInQuietWindow(now, 150) && stoveMutex &&
-        xSemaphoreTakeRecursive(stoveMutex, pdMS_TO_TICKS(250)) == pdTRUE) {
+        stoveLockTake(250)) {
         CmdSource cs("Bluetooth app");
         blePendingTimerWrite.ready = false;
         int idx = blePendingTimerWrite.idx;
