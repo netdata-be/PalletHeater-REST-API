@@ -114,16 +114,23 @@ inline int pelletsLow(int sensor, int counter)
 // right away.
 inline bool transitionalState(int s) { return s == 1 || s == 2 || s == 3 || s == 5 || s == 6; }
 inline bool alarmState(int s) { return s == 8 || s == 9 || s == 10; }
+// countdownS: the stove's own countdown to acting on the error (RAM 0x30), -1 = unknown. While it
+// runs, the error is a warning the stove may still drop (E1 with the hopper lid open while
+// refilling: 51 s countdown, gone after 36 s, 24/11/2026): the highest countdown seen since the
+// error appeared (+ 5 s) is waited for as well.
 struct ErrorConfirm
 {
     int pending = 0;
     uint32_t since = 0;
     int confirmed = 0;
+    int countdownMax = -1;
     int update(int raw, int stoveState, uint32_t nowMs, uint32_t confirmMs,      // millis() is 32 bit
-               uint32_t confirmTransitionalMs = 0)
+               uint32_t confirmTransitionalMs = 0, int countdownS = -1)
     {
-        if (raw != pending) { pending = raw; since = nowMs; }
+        if (raw != pending) { pending = raw; since = nowMs; countdownMax = -1; }
+        if (raw && countdownS > countdownMax && countdownS < 600) countdownMax = countdownS;
         uint32_t need = transitionalState(stoveState) && confirmTransitionalMs > confirmMs ? confirmTransitionalMs : confirmMs;
+        if (countdownMax > 0 && (uint32_t)countdownMax * 1000 + 5000 > need) need = (uint32_t)countdownMax * 1000 + 5000;
         if (raw == 0) confirmed = 0;
         else if (alarmState(stoveState) || (uint32_t)(nowMs - since) >= need) confirmed = raw;
         return confirmed;

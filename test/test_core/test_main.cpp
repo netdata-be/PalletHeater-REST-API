@@ -151,6 +151,21 @@ static void test_error_confirm_after_transition()
     TEST_ASSERT_EQUAL_INT(0,  ec.update(32, 3, 1000, 30000, 180000));
     TEST_ASSERT_EQUAL_INT(32, ec.update(32, 4, 31000, 30000, 180000));
 }
+static void test_error_confirm_waits_for_countdown()
+{
+    // E1 (32) while refilling: the stove counts down 51 s, the lid is closed after 36 s
+    pc::ErrorConfirm ec;
+    TEST_ASSERT_EQUAL_INT(0,  ec.update(32, 4, 1000, 30000, 180000, 51));
+    TEST_ASSERT_EQUAL_INT(0,  ec.update(32, 4, 31000, 30000, 180000, 21));   // 30 s: still counting down
+    TEST_ASSERT_EQUAL_INT(0,  ec.update(0, 4, 37000, 30000, 180000, -1));
+    // the countdown ran out and the error stays: counts 5 s after its end
+    TEST_ASSERT_EQUAL_INT(0,  ec.update(32, 4, 100000, 30000, 180000, 51));
+    TEST_ASSERT_EQUAL_INT(0,  ec.update(32, 4, 155999, 30000, 180000, 0));
+    TEST_ASSERT_EQUAL_INT(32, ec.update(32, 4, 156000, 30000, 180000, 0));
+    // the stove goes into alarm: at once
+    pc::ErrorConfirm e2;
+    TEST_ASSERT_EQUAL_INT(32, e2.update(32, 8, 1000, 30000, 180000, 40));
+}
 static void test_error_confirm_alarm_state_immediate()
 {
     pc::ErrorConfirm ec;
@@ -810,6 +825,7 @@ int main(int, char**)
     RUN_TEST(test_error_confirm_startup_check);
     RUN_TEST(test_error_confirm_after_transition);
     RUN_TEST(test_error_confirm_alarm_state_immediate);
+    RUN_TEST(test_error_confirm_waits_for_countdown);
     RUN_TEST(test_combustion_quality);
     RUN_TEST(test_pellet_quality);
     RUN_TEST(test_address_list);

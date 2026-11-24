@@ -403,8 +403,8 @@ int cachedErrorCountdown = -1;
 // RAM 0x33 also shows short pre-warnings that are not real errors: e.g. E12 (fume
 // fan) for 1-5 s when the stove switches to and from brazier cleaning, while the
 // stove keeps running and nothing is stored in the error memory. An error only
-// counts once it stays for ERROR_CONFIRM_MS, or right away when the stove is in an
-// alarm state (8, 9, 10). Cleared errors are reported right away.
+// counts once it stays for ERROR_CONFIRM_MS and the stove's countdown (RAM 0x30) ran out,
+// or right away when the stove is in an alarm state (8, 9, 10). Cleared errors are reported right away.
 volatile bool netHttpSeen = false;   // any HTTP request received (set in metrics.h, used by wifiInfo.h)
 const unsigned long ERROR_CONFIRM_MS = 30000;
 const unsigned long ERROR_CONFIRM_TRANSITIONAL_MS = 180000;   // start-up, ignition, cleaning, shut-down (E1 at start-up, 17/11/2026)
@@ -412,7 +412,8 @@ int confirmedCurrentError = 0;
 void updateConfirmedError(int stoveStateNow)
 {
     static pc::ErrorConfirm ec;
-    confirmedCurrentError = ec.update(cachedCurrentError, stoveStateNow, millis(), ERROR_CONFIRM_MS, ERROR_CONFIRM_TRANSITIONAL_MS);
+    confirmedCurrentError = ec.update(cachedCurrentError, stoveStateNow, millis(), ERROR_CONFIRM_MS, ERROR_CONFIRM_TRANSITIONAL_MS,
+                                      cachedErrorCountdown);   // the stove's own countdown is waited for too
 }
 int cachedRoomFanControl = -1;  // RAM 0x0A, -1 = not read yet
 int cachedRoomFanRunning = -1;  // RAM 0xD3
