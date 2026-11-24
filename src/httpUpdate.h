@@ -13,6 +13,7 @@
 #include <auth.h>
 #include <Update.h>
 #include <NimBLEDevice.h>
+#include "fwImage.h"
 
 static bool        updAuthorised = false;
 static bool        updStarted    = false;
@@ -64,6 +65,7 @@ void handleUpdateUpload()
         esp_task_wdt_reset();
         if (Update.write(up.buf, up.currentSize) != up.currentSize) { updFail(String("write failed: ") + Update.errorString()); return; }
         updWritten += up.currentSize;
+        if (!fwUpdateChipOk(updWritten, &updError)) { updFail(updError); return; }   // wrong chip (fwImage.h)
         break;
     case UPLOAD_FILE_END:
         if (!updStarted) return;

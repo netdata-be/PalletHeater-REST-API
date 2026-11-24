@@ -347,16 +347,93 @@ static void test_error_table()
         TEST_ASSERT_NULL(strstr(t[i].desc, "allet"));
     }
 }
+// Every asset of a release (.github/workflows/firmware.yml)
+static const char* const RELEASE_ASSETS[] = {
+    "openpelletbridge-firmware.bin", "openpelletbridge-factory.bin", "openpelletbridge-firmware.elf",
+    "openpelletbridge-opb-s3-firmware.bin", "openpelletbridge-opb-s3-factory.bin", "openpelletbridge-opb-s3-firmware.elf",
+    "SHA256SUMS"};
+// firmwareAssetRank as released up to v1.4.7 (git show v1.4.7:lib/pelletcore/src/pelletcore.h):
+// the firmware in the field picks its asset with this
+static int releasedAssetRank(const char* name)
+{
+    if (!name) return 0;
+    if (strcmp(name, "openpelletbridge-firmware.bin") == 0) return 2;
+    if (strcmp(name, "palletheater-firmware.bin") == 0) return 1;
+    return 0;
+}
+static const char* pickAsset(const char* board)
+{
+    const char* best = nullptr; int r = 0;
+    for (const char* n : RELEASE_ASSETS) { int x = pc::firmwareAssetRank(n, board); if (x > r) { r = x; best = n; } }
+    return best;
+}
 static void test_firmware_asset()
 {
-    TEST_ASSERT_EQUAL_INT(2, pc::firmwareAssetRank("openpelletbridge-firmware.bin"));
-    TEST_ASSERT_EQUAL_INT(1, pc::firmwareAssetRank("palletheater-firmware.bin"));   // controllers up to v1.0.0
-    TEST_ASSERT_EQUAL_INT(0, pc::firmwareAssetRank("openpelletbridge-factory.bin")); // never the full flash image
-    TEST_ASSERT_EQUAL_INT(0, pc::firmwareAssetRank("SHA256SUMS"));
-    TEST_ASSERT_EQUAL_INT(0, pc::firmwareAssetRank(""));
-    TEST_ASSERT_EQUAL_INT(0, pc::firmwareAssetRank(nullptr));
+    const char* dk = "esp32-devkit";
+    TEST_ASSERT_EQUAL_INT(2, pc::firmwareAssetRank("openpelletbridge-firmware.bin", dk));
+    TEST_ASSERT_EQUAL_INT(1, pc::firmwareAssetRank("palletheater-firmware.bin", dk));   // controllers up to v1.0.0
+    TEST_ASSERT_EQUAL_INT(0, pc::firmwareAssetRank("openpelletbridge-factory.bin", dk)); // never the full flash image
+    TEST_ASSERT_EQUAL_INT(0, pc::firmwareAssetRank("SHA256SUMS", dk));
+    TEST_ASSERT_EQUAL_INT(0, pc::firmwareAssetRank("", dk));
+    TEST_ASSERT_EQUAL_INT(0, pc::firmwareAssetRank(nullptr, dk));
     // the old name must stay a fallback: it may not win over the current one
-    TEST_ASSERT_TRUE(pc::firmwareAssetRank(PC_FW_ASSET) > pc::firmwareAssetRank(PC_FW_ASSET_OLD));
+    TEST_ASSERT_TRUE(pc::firmwareAssetRank(PC_FW_ASSET, dk) > pc::firmwareAssetRank(PC_FW_ASSET_OLD, dk));
+    // an S3 asset is never chosen by the DevKit, a DevKit asset never by the S3
+    for (const char* n : RELEASE_ASSETS) {
+        if (strstr(n, "opb-s3")) TEST_ASSERT_EQUAL_INT_MESSAGE(0, pc::firmwareAssetRank(n, dk), n);
+        else TEST_ASSERT_EQUAL_INT_MESSAGE(0, pc::firmwareAssetRank(n, "opb-s3"), n);
+    }
+    TEST_ASSERT_EQUAL_INT(0, pc::firmwareAssetRank(PC_FW_ASSET_OLD, "opb-s3"));
+    TEST_ASSERT_EQUAL_INT(2, pc::firmwareAssetRank("openpelletbridge-opb-s3-firmware.bin", "opb-s3"));
+    TEST_ASSERT_EQUAL_STRING("openpelletbridge-firmware.bin", pickAsset(dk));
+    TEST_ASSERT_EQUAL_STRING("openpelletbridge-opb-s3-firmware.bin", pickAsset("opb-s3"));
+    // unknown board: nothing
+    TEST_ASSERT_NULL(pickAsset("esp32-c3"));
+    TEST_ASSERT_NULL(pickAsset(nullptr));
+    TEST_ASSERT_NULL(pc::firmwareAssetName("x"));
+    TEST_ASSERT_EQUAL_STRING(PC_FW_ASSET_S3, pc::firmwareAssetName("opb-s3"));
+    // released firmware: still finds the DevKit asset, never an S3 one; and the DevKit picks the same
+    for (const char* n : RELEASE_ASSETS) {
+        if (strstr(n, "opb-s3")) TEST_ASSERT_EQUAL_INT_MESSAGE(0, releasedAssetRank(n), n);
+        TEST_ASSERT_EQUAL_INT_MESSAGE(releasedAssetRank(n), pc::firmwareAssetRank(n, dk), n);
+    }
+    TEST_ASSERT_EQUAL_INT(2, releasedAssetRank(PC_FW_ASSET));
+}
+
+// Start of an app image: header (24) + segment header (8) + app descriptor magic
+static void makeImage(uint8_t* h, uint16_t chip)
+{
+    memset(h, 0, pc::IMG_HEAD);
+    h[0] = 0xE9; h[12] = (uint8_t)chip; h[13] = (uint8_t)(chip >> 8);
+    h[32] = 0x32; h[33] = 0x54; h[34] = 0xCD; h[35] = 0xAB;
+}
+static void test_firmware_image_check()
+{
+    uint8_t h[pc::IMG_HEAD]; char e[160];
+    makeImage(h, pc::CHIP_ESP32);
+    TEST_ASSERT_TRUE(pc::firmwareImageCheck(h, sizeof(h), pc::CHIP_ESP32, e, sizeof(e)));
+    TEST_ASSERT_FALSE(pc::firmwareImageCheck(h, sizeof(h), pc::CHIP_ESP32S3, e, sizeof(e)));
+    TEST_ASSERT_NOT_NULL(strstr(e, "wrong chip"));
+    TEST_ASSERT_NOT_NULL(strstr(e, "image for ESP32,"));
+    TEST_ASSERT_NOT_NULL(strstr(e, PC_FW_ASSET_S3));          // tells which asset to use
+    makeImage(h, pc::CHIP_ESP32S3);
+    TEST_ASSERT_TRUE(pc::firmwareImageCheck(h, sizeof(h), pc::CHIP_ESP32S3, e, sizeof(e)));
+    TEST_ASSERT_FALSE(pc::firmwareImageCheck(h, sizeof(h), pc::CHIP_ESP32, e, sizeof(e)));
+    TEST_ASSERT_NOT_NULL(strstr(e, "image for ESP32-S3,"));
+    TEST_ASSERT_NOT_NULL(strstr(e, "this controller is ESP32 - use " PC_FW_ASSET));
+    makeImage(h, 0x0005);                                      // ESP32-C3
+    TEST_ASSERT_FALSE(pc::firmwareImageCheck(h, sizeof(h), pc::CHIP_ESP32, e, sizeof(e)));
+    // ESP32 factory image: 0xFF up to the bootloader at 0x1000
+    memset(h, 0xFF, sizeof(h));
+    TEST_ASSERT_FALSE(pc::firmwareImageCheck(h, sizeof(h), pc::CHIP_ESP32, e, sizeof(e)));
+    TEST_ASSERT_NOT_NULL(strstr(e, "not an app image"));
+    // S3 factory image: starts with the bootloader (right chip, but no app descriptor)
+    makeImage(h, pc::CHIP_ESP32S3); memset(h + 32, 0xFF, 4);
+    TEST_ASSERT_FALSE(pc::firmwareImageCheck(h, sizeof(h), pc::CHIP_ESP32S3, e, sizeof(e)));
+    TEST_ASSERT_NOT_NULL(strstr(e, "not an app image"));
+    makeImage(h, pc::CHIP_ESP32);
+    TEST_ASSERT_FALSE(pc::firmwareImageCheck(h, 20, pc::CHIP_ESP32, e, sizeof(e)));   // too short
+    TEST_ASSERT_FALSE(pc::firmwareImageCheck(nullptr, 0, pc::CHIP_ESP32, e, sizeof(e)));
 }
 
 static void test_text_ring()
@@ -749,6 +826,7 @@ int main(int, char**)
     RUN_TEST(test_stove_state);
     RUN_TEST(test_error_table);
     RUN_TEST(test_firmware_asset);
+    RUN_TEST(test_firmware_image_check);
     RUN_TEST(test_text_ring);
     RUN_TEST(test_ring);
     RUN_TEST(test_hour_acc);

@@ -2,7 +2,8 @@
 // Firmware updates from GitHub Releases: GET/POST /api/firmware.
 //
 // The CI workflow (.github/workflows/firmware.yml) publishes a release for every
-// tag vX.Y.Z with the OTA image as asset FW_ASSET. This module
+// tag vX.Y.Z with the OTA image of each board as an asset (FW_ASSET: the one of this
+// board, BOARD_NAME; pc::firmwareAssetRank). This module
 //   - checks the latest release (api.github.com, releases/latest: no pre-releases
 //     or drafts) 2 minutes after boot and then every 24 h, when auto check is on;
 //   - downloads and installs it on request (never by itself), then restarts.
@@ -19,11 +20,13 @@
 #include <esp_bt.h>
 #include <lwip/sockets.h>
 #include "fwBootPage.h"   // status page of an install (GET /update)
+#include "fwImage.h"      // refuses an image for the other chip
 
 #ifndef FW_REPO
 #define FW_REPO "netdata-be/PalletHeater-REST-API"
 #endif
-#define FW_ASSET PC_FW_ASSET   // the old name PC_FW_ASSET_OLD (up to v1.0.0) is the fallback, see pc::firmwareAssetRank
+// this board's asset; DevKit: the old name PC_FW_ASSET_OLD (up to v1.0.0) is the fallback, see pc::firmwareAssetRank
+#define FW_ASSET (pc::firmwareAssetName(BOARD_NAME))
 static const unsigned long FW_FIRST_CHECK_MS = 2UL * 60UL * 1000UL;   // HTTPS off: first check after start-up
 static const unsigned long FW_BOOT_WAIT_MS = 90UL * 1000UL;           // HTTPS on: start-up check only within this time
 static const unsigned long FW_CHECK_EVERY_MS = 24UL * 3600UL * 1000UL;
@@ -37,7 +40,7 @@ static const char* const FW_STATE_STR[] = {"idle", "checking", "downloading", "r
 // route does not read them in that state.
 static volatile int  fwState = FW_IDLE;
 static volatile bool fwBusy = false;        // worker task running
-static String        fwLatest, fwAssetUrl, fwReleaseUrl, fwPublished, fwError;
+static String        fwLatest, fwAssetUrl, fwAssetName, fwReleaseUrl, fwPublished, fwError;
 static volatile size_t fwAssetSize = 0, fwDone = 0, fwTotal = 0;
 static unsigned long fwCheckedAt = 0;       // millis() of the last successful check, 0 = never
 static bool          fwAutoCheck = true;
@@ -149,7 +152,7 @@ static String fwDoCheck()
     String assetUrl, assetName; size_t size = 0; int best = 0;
     for (JsonObject a : doc["assets"].as<JsonArray>()) {
         const char* n = a["name"] | "";
-        int r = pc::firmwareAssetRank(n);
+        int r = pc::firmwareAssetRank(n, BOARD_NAME);
         LOGD("update", "release %s asset %s (%u bytes)%s", tag, n, (unsigned)(a["size"] | 0),
              r == 2 ? " - firmware image" : r == 1 ? " - firmware image (old name)" : "");
         if (r > best) { best = r; assetUrl = a["browser_download_url"] | ""; size = a["size"] | 0; assetName = n; }
@@ -161,9 +164,10 @@ static String fwDoCheck()
     fwReleaseUrl = doc["html_url"] | "";
     fwPublished = doc["published_at"] | "";
     fwAssetUrl = url;
+    fwAssetName = assetName;
     fwAssetSize = size;
     fwCheckedAt = millis();
-    if (!url.length()) return String("release ") + tag + " has no " FW_ASSET;
+    if (!url.length()) return String("release ") + tag + " has no " + FW_ASSET;   // none for this board
     return "";
 }
 
@@ -244,6 +248,7 @@ static String fwDoInstall()
             if (n <= 0) continue;
             if (Update.write(buf, n) != (size_t)n) { err = String("write failed: ") + Update.errorString(); break; }
             fwDone += n;
+            if (!fwUpdateChipOk(fwDone, &err)) break;   // wrong chip (fwImage.h)
             lastData = millis();
             int pct = (int)(fwDone * 100 / fwTotal);
             if (pct / 10 > lastPct / 10) {
@@ -613,6 +618,7 @@ void handleRouteFirmware()
     if (parsed) { json["ahead"] = v.ahead; json["dirty"] = v.dirty; }
     json["repo"] = FW_REPO;
     json["stoveModel"] = BUILD_STOVE_MODEL;
+    json["board"] = BOARD_NAME;
     json["state"] = FW_STATE_STR[st];
     json["autoCheck"] = fwAutoCheck;
     if (st != FW_CHECKING && fwLatest.length()) {
@@ -620,6 +626,8 @@ void handleRouteFirmware()
         json["published"] = fwPublished;
         json["releaseUrl"] = fwReleaseUrl;
         json["assetAvailable"] = fwAssetUrl.length() > 0;
+        // the asset chosen for this board; null: the release has none (lastError names it)
+        json["asset"] = fwAssetUrl.length() ? fwAssetName.c_str() : nullptr;
         json["updateAvailable"] = fwAssetUrl.length() > 0 && pc::updateAvailable(BUILD_VERSION, fwLatest.c_str());
         // what installing the latest release would do: update (newer), reinstall (same),
         // downgrade (older than this build, e.g. a development build after the tag),

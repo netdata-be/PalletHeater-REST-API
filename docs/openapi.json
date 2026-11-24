@@ -2748,7 +2748,7 @@
           "Device"
         ],
         "summary": "Firmware update over HTTP",
-        "description": "Streams a firmware image (multipart field `firmware`) to the OTA partition and restarts the controller on success. Always needs the API key (X-API-Key or Authorization: Bearer), also when it is not required for other routes. The fixed OTA password (X-OTA-Password) of older firmware is gone.",
+        "description": "Streams a firmware image (multipart field `firmware`) to the OTA partition and restarts the controller on success. Always needs the API key (X-API-Key or Authorization: Bearer), also when it is not required for other routes. The fixed OTA password (X-OTA-Password) of older firmware is gone. An image for the other chip or a factory image is refused before anything is written (500).",
         "requestBody": {
           "required": true,
           "content": {
@@ -6129,6 +6129,10 @@
             "type": "string",
             "example": "netdata-be/PalletHeater-REST-API"
           },
+          "board": {
+            "type": "string",
+            "enum": ["esp32-devkit", "opb-s3"]
+          },
           "state": {
             "type": "string",
             "enum": [
@@ -6156,7 +6160,12 @@
           },
           "assetAvailable": {
             "type": "boolean",
-            "description": "The release has openpelletbridge-firmware.bin"
+            "description": "The release has the image of this board"
+          },
+          "asset": {
+            "type": "string",
+            "nullable": true,
+            "description": "Asset chosen from the latest release (openpelletbridge-firmware.bin, opb-s3: openpelletbridge-opb-s3-firmware.bin); null: none for this board"
           },
           "updateAvailable": {
             "type": "boolean"
