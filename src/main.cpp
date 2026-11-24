@@ -156,6 +156,7 @@ static void registerRoutes()
     wm.server->on("/api/wifi/scan", authed(handleRouteWifiScan));
     wm.server->on("/api/wifi", authed(handleRouteWifi));
     wm.server->on("/api/firmware", authed(handleRouteFirmware));
+    wm.server->on("/update", HTTP_GET, crumbed(handleRouteUpdatePage));   // status page of an install from GitHub (public)
     wm.server->on("/api/log", authed(handleRouteLog));
     wm.server->on("/api/busmon", authed(handleRouteBusmon));
     wm.server->on("/api/loglevel", authed(handleRouteLogLevel));
@@ -198,6 +199,7 @@ void setup()
     }
     netEventsSetup();   // log why WiFi drops (before WiFi starts)
     setup_wifi();
+    fwBootInstall();    // install from GitHub asked before the restart: download now, before the rest starts (fwUpdate.h)
     {
         // mDNS name = the configured hostname (IP settings), default openpelletbridge
         Preferences prefs;

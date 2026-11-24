@@ -4243,6 +4243,49 @@
           }
         }
       }
+    },
+    "/update": {
+      "get": {
+        "summary": "Status page of an install from GitHub",
+        "description": "HTML page that follows GET /api/firmware through the restart, the download after the restart (minimal server) and the restart into the new firmware, then returns to the web app. Public. Opened by the web app after Install.",
+        "parameters": [
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Release tag being installed"
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "nl",
+                "en"
+              ]
+            }
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "HTML page",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Device"
+        ]
+      }
     }
   },
   "components": {
@@ -5543,6 +5586,21 @@
             "type": "string",
             "nullable": true,
             "description": "Version of the last update that did not start properly and was rolled back; null if none"
+          },
+          "bootInstall": {
+            "type": "boolean",
+            "description": "Only from the minimal server during the download after the restart of an install from GitHub (the regular web server is not running then)"
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "connecting",
+              "downloading",
+              "installing",
+              "restarting",
+              "failed"
+            ],
+            "description": "Step of the download after the restart (with bootInstall)"
           }
         }
       },

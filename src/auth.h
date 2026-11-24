@@ -145,7 +145,7 @@ static bool httpRefusedForUpdate()
 {
     if (!fwInstallBusy()) return false;
     const String& u = wm.server->uri();
-    if (u == "/api/firmware" || u == "/api/health") return false;
+    if (u == "/api/firmware" || u == "/api/health" || u == "/update") return false;
     wm.server->sendHeader("Retry-After", "30");
     // the web app (about 60 KB) is not served either: its socket buffers would cost the download
     // its margin (fwUpdate.h). An open web app keeps showing the progress; a new page gets this.
