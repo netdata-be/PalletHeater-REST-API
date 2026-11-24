@@ -556,6 +556,15 @@ static void test_pellet_cost()
     TEST_ASSERT_EQUAL_FLOAT(0, c.stockBags);                // never below 0
 }
 
+static void test_room_source()
+{
+    TEST_ASSERT_EQUAL(pc::RS_STOVE,  pc::roomSourceOf(20.5f, 20.5f, 21.5f, pc::RS_UNKNOWN));   // remote not heard: own sensor
+    TEST_ASSERT_EQUAL(pc::RS_REMOTE, pc::roomSourceOf(16.0f, 20.0f, 16.0f, pc::RS_STOVE));     // 24/11/2026 08:41: remote switched on
+    TEST_ASSERT_EQUAL(pc::RS_REMOTE, pc::roomSourceOf(20.0f, 20.0f, 20.0f, pc::RS_REMOTE));    // both equal: keep
+    TEST_ASSERT_EQUAL(pc::RS_STOVE,  pc::roomSourceOf(20.0f, 20.0f, 20.0f, pc::RS_STOVE));
+    TEST_ASSERT_EQUAL(pc::RS_UNKNOWN, pc::roomSourceOf(19.0f, 20.0f, 21.0f, pc::RS_UNKNOWN));  // neither: keep
+}
+
 static void test_hour_acc()
 {
     pc::HourAcc a;
@@ -626,5 +635,6 @@ int main(int, char**)
     RUN_TEST(test_pellet_self_correcting);
     RUN_TEST(test_pellet_usage);
     RUN_TEST(test_pellet_cost);
+    RUN_TEST(test_room_source);
     return UNITY_END();
 }

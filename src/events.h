@@ -13,7 +13,9 @@
 // recorded with its exact time. The last EVT_SIZE changes are kept in RAM and
 // persisted in /events.bin (one small append per change, so very few flash writes;
 // the file is compacted when it reaches 2 * EVT_SIZE records).
-enum : uint8_t { EVT_STATE = 0, EVT_ERROR = 1, EVT_PELLET = 2, EVT_LINK = 3 };   // EVT_PELLET: code = RAM address, from/to = values
+enum : uint8_t { EVT_STATE = 0, EVT_ERROR = 1, EVT_PELLET = 2, EVT_LINK = 3, EVT_SOURCE = 4 };   // EVT_PELLET: code = RAM address, from/to = values
+// EVT_SOURCE: the sensor the stove regulates on changed, from / to = pc::RoomSource (1 stove, 2 remote
+// control), code = the room temperature x 2 at that moment
 // EVT_LINK: serial link to the stove lost (to = 0) or back (to = 1)
 struct __attribute__((packed)) StateEvent { uint32_t t; uint8_t kind; int8_t from; int8_t to; uint8_t code; };
 struct __attribute__((packed)) StateEventV1 { uint32_t t; int8_t from; int8_t to; };   // PHE1 file layout
@@ -27,6 +29,7 @@ static int            evtLastState = -1;   // last known state (from the log or 
 static int            evtLastError = 0;    // last logged error value (0 = none)
 static int            evtLastPellet[2] = { -1, -1 };   // last logged RAM 0xA4 / 0x89
 static int            evtLastLink = -1;    // last logged serial link state (0 down, 1 up, -1 none)
+static int            evtLastSource = 0;   // last logged room temperature source (0 none)
 
 static void evtPush(const StateEvent& e)
 {
@@ -102,6 +105,7 @@ static void eventsLoad()
         if (e.kind == EVT_STATE && !gotState) { evtLastState = e.to; gotState = true; }
         if (e.kind == EVT_ERROR && !gotError) { evtLastError = e.code; gotError = true; }
         if (e.kind == EVT_LINK && evtLastLink == -1) evtLastLink = e.to;
+        if (e.kind == EVT_SOURCE && !evtLastSource) evtLastSource = e.to;
         if (e.kind == EVT_PELLET) {
             int k = e.code == palletSensorAddr ? 0 : e.code == palletLevelAddr ? 1 : -1;
             if (k >= 0 && evtLastPellet[k] == -1) evtLastPellet[k] = e.to;
@@ -182,6 +186,16 @@ static void eventsTick()
     }
     if (lastFastStatesAt == 0) return;                 // no data from the stove yet
     updateConfirmedError(stoveState);
+    {   // the sensor the stove regulates on (stoveCache.h): stove sensor <-> remote control
+        time_t tn = time(nullptr);
+        if (tn > 1700000000 && cachedRoomSource != pc::RS_UNKNOWN && cachedRoomSource != evtLastSource) {
+            if (evtLastSource) {   // not at the first determination after a start
+                StateEvent e = { (uint32_t)tn, EVT_SOURCE, (int8_t)evtLastSource, (int8_t)cachedRoomSource, (uint8_t)(ambTemp * 2) };
+                evtStore(e);
+            }
+            evtLastSource = cachedRoomSource;
+        }
+    }
     time_t t = time(nullptr);
     if (t < 1700000000) return;                        // no valid time yet: wait, changes are logged once NTP is in
     int s = stoveState;
@@ -272,6 +286,9 @@ void handleRouteEvents()
                      first ? "" : ",", (unsigned long)e.t, e.code, from, e.to);
         } else if (e.kind == EVT_LINK) {
             snprintf(row, sizeof(row), "%s{\"t\":%lu,\"type\":\"link\",\"up\":%s}", first ? "" : ",", (unsigned long)e.t, e.to ? "true" : "false");
+        } else if (e.kind == EVT_SOURCE) {
+            snprintf(row, sizeof(row), "%s{\"t\":%lu,\"type\":\"source\",\"from\":\"%s\",\"to\":\"%s\",\"room\":%.1f}", first ? "" : ",",
+                     (unsigned long)e.t, e.from == 2 ? "remote" : "stove", e.to == 2 ? "remote" : "stove", e.code / 2.0);
         } else if (e.kind == EVT_ERROR) {
             if (e.code == 0) snprintf(row, sizeof(row), "%s{\"t\":%lu,\"type\":\"error\",\"id\":0,\"error\":null}", first ? "" : ",", (unsigned long)e.t);
             else snprintf(row, sizeof(row), "%s{\"t\":%lu,\"type\":\"error\",\"id\":%u,\"error\":\"%s\"}", first ? "" : ",",

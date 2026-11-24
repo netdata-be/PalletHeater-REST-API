@@ -24,6 +24,8 @@ Values are plain text (no JSON), retained, under `<prefix>/state/<name>` (prefix
 | `brazier_minutes` | Minutes to the next brazier cleaning (empty when the stove is not working) |
 | `error_active`, `error` | `ON` / `OFF`, the active error (`E9 Ignition …`) or `none` |
 | `low_pellets` | `ON` / `OFF` |
+| `warning_active`, `warning` | `ON` / `OFF`, the active warning (`REMOTE_SENSOR_NOT_USED …`) or `none`: the stove works, but regulates on its own sensor although the wireless sensor is on (remote control not heard) |
+| `room_source` | The sensor the stove regulates on: `stove` or `remote` |
 | `pellets_kg`, `pellets_hours` | Pellets left until the low pellet alarm (kg) and hours at the average use (empty until calibrated) |
 | `pellets_kg_today`, `pellets_kg_per_day`, `pellets_cost_month`, `pellets_stock_bags` | Pellets burned today (kg), per day over the last 7 days, € per month (needs a price per bag) and bags in stock (empty when not known / not kept) |
 | `hours_service`, `total_hours`, `starts`, `wifi_rssi` | Counters and WiFi signal (dBm) |

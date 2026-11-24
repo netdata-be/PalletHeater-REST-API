@@ -45,8 +45,16 @@ void getStatus()
     KNOWN(slowOk, obj_temperatures["room"], ambTemp);
     KNOWN(slowOk, obj_temperatures["stove"], ambTempStove);
     KNOWN(slowOk, obj_temperatures["remoteControl"], ambTempRemoteControl);
+    // the sensor the stove regulates on (stoveCache.h, derived from the readings)
+    if (slowOk && cachedRoomSource) obj_temperatures["roomSource"] = cachedRoomSource == pc::RS_REMOTE ? "remote" : "stove";
+    else obj_temperatures["roomSource"] = nullptr;
     KNOWN(slowOk, obj_temperatures["setPoint"], setPointTemp);
     KNOWN(fastOk, obj_temperatures["fume"], fumesTemp);
+    {   // warnings: the stove works, but probably not as intended (not currentError, which blocks / alarms)
+        JsonArray w = json.createNestedArray("warnings");
+        String rs = remoteSensorWarningText();
+        if (rs.length()) { JsonObject o = w.createNestedObject(); o["id"] = "REMOTE_SENSOR_NOT_USED"; o["desc"] = rs; }
+    }
     KNOWN(slowOk, json["wirelessSensor"], wirelessSensorStr());
     if (stoveState == UNKNOWN) {
         // no answer from the stove: an error of the controller side (id -1), not a stove error code

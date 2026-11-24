@@ -52,6 +52,11 @@ static void tmAlerts()
                 tpf(A_YEL " ! Pellet level sensor low: low pellet alarm in about %d min" A_RST A_EOL, cachedPelletCounter);
         }
     }
+    {   // warning: the stove regulates on its own sensor although the wireless sensor is on
+        if (remoteSensorNotUsed())
+            tpf(A_YEL " ! Stove regulates on its own sensor (%.1f C), not the remote (%.1f C)%s" A_RST A_EOL,
+                ambTempStove, ambTempRemoteControl, cachedRemoteControlLastSeen < 0 ? ": remote not heard" : "");
+    }
     if (fwState == FW_DOWNLOADING && fwTotal) tpf(A_CYN " Firmware update: downloading %u %%" A_RST A_EOL, (unsigned)(fwDone * 100 / fwTotal));
     if (fwState == FW_RESTARTING) tpl(A_CYN " Firmware update installed - restarting" A_RST);
 }

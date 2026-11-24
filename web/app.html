@@ -806,6 +806,7 @@ const I18N = {
     mqttNeedHost:"Set the broker first", mqttOnToast:"MQTT on", mqttOffToast:"MQTT off",
     reset:"Reset", resetConfirm:"Reset the {0}?", resetDone:"{0} reset", crashCounter:"crash counter", serialCounters:"serial counters", serialSkipped:"{0} skipped (link down)",
     evLinkDown:"Serial lost", evLinkUp:"Serial back", evtLink:"Serial link",
+    wRemoteSensor:"The stove regulates on its own sensor, not on the remote control", wRemoteSensorOff:"The wireless sensor is on, but the remote control is not heard (switched off, empty battery or out of range?). The stove sensor ({0}) sits in the stove and follows the room slowly; the remote control last measured {1}.", wRemoteSensorOn:"The wireless sensor is on and the remote control is heard, yet the stove uses its own sensor ({0}; remote control {1}).",
     busRead:"read", busWrite:"write", busFailed:"FAILED after {0} attempts", busWas:"was {0}", busFirst:"first reading", busUnknown:"(no description known)",
     busHTime:"Time", busHAction:"Action", busHReg:"Register", busHValue:"Value", busHMeaning:"Meaning",
     lgFirst:"first reading of a register", lgSame:"same value as before", lgChanged:"value changed (← previous value)", lgWrite:"write to the stove", lgFailed:"failed after all attempts",
@@ -853,6 +854,7 @@ const I18N = {
     stoveOk:"Stove OK", stoveNoAnswer:"Stove does not answer", stoveUnknown:"Stove ?", connCtlTitle:"Controller: connection of this page with the OpenPelletBridge controller",
     connStoveTitle:"Stove: serial connection of the controller with the stove",
     roomSrc:"Room ({0})", srcRemote:"remote", srcStove:"stove", srcLabel:"Temperature source", srcRemoteLong:"Remote control sensor", srcStoveLong:"Stove sensor", unknown:"Unknown",
+    notUpdated:"(not updated)", remoteStaleNote:"Dotted remote control line: its value was not used by the stove there (remote control not heard), so it is an old value.",
     roomTemp:"Room temperature", stoveSensor:"Stove sensor", remoteSensor:"Remote control sensor", fumeFan:"Fume fan", auger:"Auger speed",
     pelletLevel:"Pellet level", low:"Low", ok:"OK", remoteSeen:"Remote last seen", secAgo:"{0} s ago", waterPres:"Water pressure", waterTemp:"Water temperature",
     fw:"Stove firmware", serial:"Serial number (MATR)", starts:"Number of starts", hours:"Working hours", service:"Hours since service", uptime:"Controller uptime", serialErr:"Serial errors (read / write)", retries:"Serial retries",
@@ -980,6 +982,7 @@ pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low 
     mqttNeedHost:"Stel eerst de broker in", mqttOnToast:"MQTT aan", mqttOffToast:"MQTT uit",
     reset:"Reset", resetConfirm:"De {0} op nul zetten?", resetDone:"{0} op nul gezet", crashCounter:"crashteller", serialCounters:"seriële tellers", serialSkipped:"{0} overgeslagen (link weg)",
     evLinkDown:"Serieel weg", evLinkUp:"Serieel terug", evtLink:"Seriële link",
+    wRemoteSensor:"De kachel regelt op haar eigen sensor, niet op de afstandsbediening", wRemoteSensorOff:"De draadloze sensor staat aan, maar de afstandsbediening wordt niet gehoord (uit, lege batterij of buiten bereik?). De sensor van de kachel ({0}) zit in de kachel en volgt de kamer traag; de afstandsbediening mat laatst {1}.", wRemoteSensorOn:"De draadloze sensor staat aan en de afstandsbediening wordt gehoord, maar de kachel gebruikt toch haar eigen sensor ({0}; afstandsbediening {1}).",
     busRead:"lezen", busWrite:"schrijven", busFailed:"MISLUKT na {0} pogingen", busWas:"was {0}", busFirst:"eerste lezing", busUnknown:"(geen beschrijving gekend)",
     busHTime:"Tijd", busHAction:"Actie", busHReg:"Register", busHValue:"Waarde", busHMeaning:"Betekenis",
     lgFirst:"eerste lezing van een register", lgSame:"zelfde waarde als ervoor", lgChanged:"waarde gewijzigd (← vorige waarde)", lgWrite:"schrijfopdracht naar de kachel", lgFailed:"mislukt na alle pogingen",
@@ -1027,6 +1030,7 @@ pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low 
     stoveOk:"Kachel OK", stoveNoAnswer:"Kachel antwoordt niet", stoveUnknown:"Kachel ?", connCtlTitle:"Controller: verbinding van deze pagina met de OpenPelletBridge-controller",
     connStoveTitle:"Kachel: seriële verbinding van de controller met de kachel",
     roomSrc:"Kamer ({0})", srcRemote:"afstandsbed.", srcStove:"kachel", srcLabel:"Temperatuurbron", srcRemoteLong:"Sensor afstandsbediening", srcStoveLong:"Sensor kachel", unknown:"Onbekend",
+    notUpdated:"(niet bijgewerkt)", remoteStaleNote:"Gestippelde lijn van de afstandsbediening: de kachel gebruikte haar waarde daar niet (afstandsbediening niet gehoord), het is dus een oude waarde.",
     roomTemp:"Kamertemperatuur", stoveSensor:"Sensor kachel", remoteSensor:"Sensor afstandsbediening", fumeFan:"Rookgasventilator", auger:"Schroef",
     pelletLevel:"Pelletniveau", low:"Laag", ok:"OK", remoteSeen:"Afstandsbed. laatst gezien", secAgo:"{0} s geleden", waterPres:"Waterdruk", waterTemp:"Watertemperatuur",
     fw:"Firmware kachel", serial:"Serienummer (MATR)", starts:"Aantal starts", hours:"Werkuren", service:"Uren sinds onderhoud", uptime:"Uptime controller", serialErr:"Seriële fouten (lezen / schrijven)", retries:"Seriële herhalingen",
@@ -1129,6 +1133,7 @@ function setLang(l) {
 function t(key, ...a) { let s = (I18N[lang][key] ?? I18N.en[key] ?? key); a.forEach((v, i) => s = s.replace("{" + i + "}", v)); return s; }
 // The stove switched itself off at the end of the pellet reserve (controller error PELLETS):
 // switching on is refused until the hopper is refilled
+const tp0w = s => s.temperatures || {};
 function pelletsEmpty(s) { return !!(s && ((s.pelletReserve && s.pelletReserve.switchedOff) || (s.currentError && s.currentError.error === "PELLETS"))); }
 function errDesc(e) { return lang === "nl" && ERR_NL[e.id] ? ERR_NL[e.id] : e.desc; }
 
@@ -2251,6 +2256,13 @@ function renderAlerts() {
   else if (pr.shutdownMinutes != null) add("critical", t("aLow"), t("aLowOff", pr.shutdownMinutes));   // phase 2: the stove switches off
   else if (state.lowPalletAlarm) add("warning", t("aLow"), t("aLowSub"));
   else if (prLow && pr.minutesLeft > 0) add("warning", t("aLow"), t("aLowMin", pr.minutesLeft));
+  // warnings: the stove works, but probably not as intended (not an error, see /api/state warnings)
+  for (const w of state.warnings || []) {
+    if (w.id === "REMOTE_SENSOR_NOT_USED")
+      add("warning", t("wRemoteSensor"), t(state.RemoteControlLastSeen == null || state.RemoteControlLastSeen < 0 ? "wRemoteSensorOff" : "wRemoteSensorOn",
+          fmtTemp(tp0w(state).stove), fmtTemp(tp0w(state).remoteControl)));
+    else add("warning", w.id, w.desc);
+  }
   const age = state.dataAge ? state.dataAge.fastSeconds : null;
   if (age !== null && age !== undefined && age > 30) add("warning", t("aStale", age), t("aStaleSub"));
 }
@@ -2297,7 +2309,8 @@ function render(s) {
   // Which sensor does the room temperature (RAM 0x01) come from? The MULTICOMFORT
   // setting is not readable, so derive it from the readings.
   const tp = s.temperatures || {};
-  const src = tp.room == null ? null   // null: not read yet (null === null would match a sensor)
+  // from the firmware (stoveCache.h, temperatures.roomSource); older firmware: derived here
+  const src = tp.roomSource !== undefined ? tp.roomSource : tp.room == null ? null   // null: not read yet (null === null would match a sensor)
     : (s.RemoteControlLastSeen != null && s.RemoteControlLastSeen >= 0 && tp.room === tp.remoteControl) ? "remote"
     : tp.room === tp.stove ? "stove" : tp.room === tp.remoteControl ? "remote" : null;
   $("tRoom").textContent = fmtTemp(tp.room);
@@ -3019,7 +3032,7 @@ function renderHistory() {
   markSeg2(); renderToggles();
   const weekData = hist && hist.interval === 3600;
   const zd = z => fmtDate(new Date(z * 1000)) + " " + fmtHM(new Date(z * 1000));
-  $("histNote").textContent = t(weekData ? "histWeekNote" : "histNote") + (timersData ? " " + t("timerNote") : "") + " " + (histZoom ? t("zoomedTo", zd(histZoom[0]), zd(histZoom[1])) : t("zoomHint"));
+  $("histNote").textContent = t(weekData ? "histWeekNote" : "histNote") + (timersData ? " " + t("timerNote") : "") + (histVis.remote ? " " + t("remoteStaleNote") : "") + " " + (histZoom ? t("zoomedTo", zd(histZoom[0]), zd(histZoom[1])) : t("zoomHint"));
   $("zoomReset").hidden = !histZoom; $("zoomReset").textContent = t("zoomOut");
   $("histPrev").textContent = t("histPrev"); $("histNext").textContent = t("histNext");
   const empty = $("histEmpty"), charts = $("histCharts");
@@ -3040,6 +3053,13 @@ function renderHistory() {
   empty.style.display = "none"; charts.style.display = "";
   const f = hist.fields, col = n => f.includes(n) ? samples.map(r => r[f.indexOf(n)]) : samples.map(() => null);
   const times = col("t"), states = col("state");
+  // The remote control's value was not used (so not kept up to date) where the room temperature
+  // equals the stove sensor and not the remote control's: the same rule as the firmware
+  // (pc::roomSourceOf); when it equals both or neither, the previous answer stays
+  const remoteStale = (() => {
+    const room = col("room"), st = col("stove"), rc = col("remote"); let prev = false;
+    return room.map((v, i) => { if (v == null) return prev; const a = v === st[i], b = v === rc[i]; if (a && !b) prev = true; else if (b && !a) prev = false; return prev; });
+  })();
   const cs = getComputedStyle(document.documentElement), color = n => cs.getPropertyValue(n).trim();
   // Serial link down (link events): nothing was measured, keep the chart empty there.
   // Older firmware still stored samples with the last known values in that time.
@@ -3163,15 +3183,23 @@ function renderHistory() {
       if (last !== null) svg.appendChild(svgEl("text", { x: W - m.r - 4, y: Y(last) + (e.k === "stop" ? -3 : 11), "text-anchor": "end", style: "font-size:10px" }, t(e.k === "stop" ? "esStopL" : "esStartL", last)));
     }
     for (const s of ls) {
-      let d = "", prevT = null;
+      // the remote control's line: a thin dotted line where its value was not used (not up to date)
+      const staleAt = i => s.key === "remote" && remoteStale[i];
+      let d = "", dStale = "", prevT = null, prevPt = null, prevStale = null;
       s.values.forEach((v, i) => {
-        if (v === null || isNaN(v)) { prevT = null; return; }
+        if (v === null || isNaN(v)) { prevT = null; prevPt = null; return; }
         const brk = prevT === null || times[i] - prevT > gapS || crossesDown(prevT, times[i]);   // 5 intervals without samples, or the serial link was down in between: gap
-        if (s.step && !brk) d += `H${X(times[i]).toFixed(1)}V${Y(v).toFixed(1)}`;
-        else d += `${brk ? "M" : "L"}${X(times[i]).toFixed(1)},${Y(v).toFixed(1)}`;
-        prevT = times[i];
+        const x = X(times[i]).toFixed(1), y = Y(v).toFixed(1), stale = staleAt(i);
+        // a segment belongs to the kind of its end point; a change of kind starts a new piece at the previous point
+        if (!brk && prevPt && stale !== prevStale) {
+          if (stale) dStale += `M${prevPt[0]},${prevPt[1]}`; else d += `M${prevPt[0]},${prevPt[1]}`;
+        }
+        const seg = !brk && prevPt && stale === prevStale ? (s.step ? `H${x}V${y}` : `L${x},${y}`) : !brk && prevPt ? (s.step ? `H${x}V${y}` : `L${x},${y}`) : `M${x},${y}`;
+        if (stale) dStale += seg; else d += seg;
+        prevT = times[i]; prevPt = [x, y]; prevStale = stale;
       });
-      svg.appendChild(svgEl("path", { d, fill: "none", stroke: s.stroke, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round", "stroke-dasharray": s.dash ? "5 3" : "none" }));
+      if (d) svg.appendChild(svgEl("path", { d, fill: "none", stroke: s.stroke, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round", "stroke-dasharray": s.dash ? "5 3" : "none" }));
+      if (dStale) svg.appendChild(svgEl("path", { d: dStale, fill: "none", stroke: s.stroke, "stroke-width": 1.5, "stroke-linecap": "round", "stroke-dasharray": "1.5 4", opacity: 0.8 }));
     }
     // direct labels at the line ends (ink text + a short color key)
     const ends = ls.map(s => { const vs = s.values; let i = vs.length - 1; while (i >= 0 && (vs[i] === null || isNaN(vs[i]))) i--; return i >= 0 ? { s, v: vs[i] } : null; })
@@ -3222,7 +3250,7 @@ function renderHistory() {
       dots[k].setAttribute("visibility", ok ? "visible" : "hidden");
       if (ok) { dots[k].setAttribute("cx", cx); dots[k].setAttribute("cy", scales[s.lane](v)); }
       const row = el("div", "tr"), lab = el("span"), key = el("i"); key.style.borderColor = s.stroke; if (s.dash) key.style.borderTopStyle = "dashed";
-      lab.append(key, document.createTextNode(s.label())); row.append(lab, el("b", "", fmtVal(s, v))); tip.appendChild(row);
+      lab.append(key, document.createTextNode(s.label())); row.append(lab, el("b", "", fmtVal(s, v) + (ok && s.key === "remote" && remoteStale[i] ? " " + t("notUpdated") : ""))); tip.appendChild(row);
     });
     tip.style.display = "block";
     const left = (cx / W) * r.width; tip.style.left = Math.min(Math.max(0, left + 12), r.width - tip.offsetWidth) + "px"; tip.style.top = "20px";
@@ -3359,12 +3387,15 @@ function renderEvents() {
     // (20/11/2026, ~40 s, twice during the reserve): meaning not known
     const pelVal = (ev, to) => { const v = to ? ev.to : ev.from; return v == null ? "–" : ev.register !== "0xA4" ? String(v)
                                  : v === 0 ? t("pelV0") : v === 5 ? t("pelV5") : v >= 1 && v <= 4 ? t("pelVr", v) : t("pelVx", v); };
+    const srcName = v => v === "remote" ? t("srcRemoteLong") : t("srcStoveLong");
     const cells = kind === "link" ? [t("evtLink"), t(e.up ? "evLinkUp" : "evLinkDown"), e.up ? "" : dur]
+                : kind === "source" ? [t("srcLabel") + ": " + srcName(e.from), srcName(e.to) + " (" + fmtTemp(e.room) + ")", dur]
                 : isErr ? [t("evtError"), e.id ? t("evtErrOn", e.error) : t("evtErrOff"), e.id ? dur : ""]
                 : kind === "pellet" ? [pelName + ": " + pelVal(e), pelName + ": " + pelVal(e, true), dur]
                 : [name(e.from), name(e.to), dur];
     [fmtDate(d) + " " + fmtHM(d) + ":" + pad(d.getSeconds()), ...cells].forEach(x => tr.appendChild(el("td", "", x)));
-    if ((isErr && e.id) || (kind === "link" && !e.up) || (kind !== "link" && [8, 9, 10].includes(e.to))) tr.style.color = "var(--err)";
+    if (kind === "source") { if (e.to === "stove") tr.style.color = "var(--warn)"; }
+    else if ((isErr && e.id) || (kind === "link" && !e.up) || (kind !== "link" && [8, 9, 10].includes(e.to))) tr.style.color = "var(--err)";
     else if (kind === "link") tr.style.color = "var(--ok)";
     tbl.appendChild(tr);
   }

@@ -382,8 +382,22 @@ static bool gMenu()
     if (m != cachedRemoteMenu) { int from = cachedRemoteMenu; cachedRemoteMenu = m; if (from >= 0) planMenuChanged(from, m); }
     return true;
 }
-static bool gRoom()     { getAmbTemp(); return true; }
-static bool gRoomSensors() { getAmbTempStove(); getAmbTempRemoteControl(); return true; }
+// Which sensor the stove regulates on (pc::roomSourceOf); a change is logged here and becomes an
+// event in events.h. cachedRoomSource: 0 unknown, 1 stove sensor, 2 remote control.
+int      cachedRoomSource = pc::RS_UNKNOWN;
+uint32_t roomSourceSince  = 0;   // millis() of the last change
+static void roomSourceUpdate()
+{
+    int s = pc::roomSourceOf(ambTemp, ambTempStove, ambTempRemoteControl, cachedRoomSource);
+    if (s == cachedRoomSource) return;
+    if (cachedRoomSource != pc::RS_UNKNOWN)
+        LOGI("stove", "room temperature now from the %s (%.1f C; stove sensor %.1f C, remote control %.1f C)",
+             s == pc::RS_REMOTE ? "remote control" : "stove's own sensor", ambTemp, ambTempStove, ambTempRemoteControl);
+    cachedRoomSource = s;
+    roomSourceSince = millis();
+}
+static bool gRoom()     { getAmbTemp(); roomSourceUpdate(); return true; }
+static bool gRoomSensors() { getAmbTempStove(); getAmbTempRemoteControl(); roomSourceUpdate(); return true; }
 static bool gFan()
 {
     bool a = readKeep(cachedRoomFanControl, ram, roomFanControlAddr);
@@ -655,8 +669,27 @@ long planTimerAgeS(int idx)
     return g.okMs ? (long)((millis() - g.okMs) / 1000) : -1;
 }
 
+// ── Warnings (not errors: the stove works, but probably not as intended) ──
+// REMOTE_SENSOR_NOT_USED: the wireless sensor (INSTELL WIRELESS) is on, but for 2 min or more the
+// stove regulates on its own sensor (RAM 0x01 = RAM 0x44): the remote control is off, out of range
+// or its battery is empty. The stove sensor sits in the stove and follows the room slowly: on
+// 24/11/2026 it read 20.5 C while the room (remote control) was 16 C. Text: "" = no warning.
+bool remoteSensorNotUsed()
+{
+    return planFullDone && cachedWirelessSensor == 1 && cachedRoomSource == pc::RS_STOVE && millis() - roomSourceSince >= 120000;
+}
+String remoteSensorWarningText()
+{
+    if (!remoteSensorNotUsed()) return "";
+    char b[200];
+    snprintf(b, sizeof(b), "The wireless sensor is on, but the stove regulates on its own sensor (%.1f C) instead of the remote control (last %.1f C): %s",
+             ambTempStove, ambTempRemoteControl,
+             cachedRemoteControlLastSeen < 0 ? "the remote control is not heard (switched off, empty battery or out of range?)" : "the remote control is heard, yet the stove does not use it");
+    return b;
+}
+
 // The remote control's menu from the planner when it is fresh (read every 2 s), -1 = read it
-int planRemoteMenuFresh() { return planGroups[6].lastMs && millis() - planGroups[6].lastMs < 3000 ? cachedRemoteMenu : -1; }
+int planRemoteMenuFresh() { return planGroups[PLAN_MENU].lastMs && millis() - planGroups[PLAN_MENU].lastMs < 3000 ? cachedRemoteMenu : -1; }
 int planStoveLanguage() { return cachedStoveLanguage; }
 
 // Full refresh (start-up): let the sensor task read every group once and wait for it (at most

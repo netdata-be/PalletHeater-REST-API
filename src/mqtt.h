@@ -165,6 +165,13 @@ static void mqttPublishStates(bool force)
                                     : empty ? String("PELLETS ") + PELLETS_EMPTY_DESC : String("none"), force);
     }
     mqttState("low_pellets",    onOff(cachedLowPallet != 0), force);
+    // warning (not an error) and the sensor the stove regulates on (stoveCache.h)
+    {
+        String w = remoteSensorWarningText();
+        mqttState("warning_active", onOff(w.length() > 0), force);
+        mqttState("warning",        w.length() ? String("REMOTE_SENSOR_NOT_USED ") + w : String("none"), force);
+        mqttState("room_source",    cachedRoomSource == pc::RS_REMOTE ? "remote" : cachedRoomSource == pc::RS_STOVE ? "stove" : "", force);
+    }
     {
         // estimate until the low pellet alarm (pellets.h); empty = not known yet
         double rem = pellets.remainingKg(), h = pellets.hoursAt(pelletsAvgAuger());
@@ -260,6 +267,9 @@ static void mqttPublishDiscovery()
     mqttDiscoveryEntity("binary_sensor", "fan_running", "Ventilator draait", [](JsonObject& o) { o["device_class"] = "running"; }, false);
     mqttDiscoveryEntity("binary_sensor", "error_active", "Fout actief", [](JsonObject& o) { o["device_class"] = "problem"; }, false);
     mqttDiscoveryEntity("binary_sensor", "low_pellets", "Pellets bijna op", [](JsonObject& o) { o["device_class"] = "problem"; }, false);
+    mqttDiscoveryEntity("binary_sensor", "warning_active", "Waarschuwing actief", [](JsonObject& o) { o["device_class"] = "problem"; }, false);
+    mqttDiscoveryEntity(sensor, "warning", "Waarschuwing", nullptr, false);
+    mqttDiscoveryEntity(sensor, "room_source", "Bron kamertemperatuur", [](JsonObject& o) { o["icon"] = "mdi:thermometer-lines"; }, false);
     mqttDiscoveryEntity(sensor, "pellets_kg", "Pellets tot alarm", [](JsonObject& o) { o["unit_of_measurement"] = "kg"; o["device_class"] = "weight"; o["state_class"] = "measurement"; }, false);
     mqttDiscoveryEntity(sensor, "pellets_hours", "Branduren tot pelletalarm", [](JsonObject& o) { o["unit_of_measurement"] = "h"; o["device_class"] = "duration"; o["state_class"] = "measurement"; }, false);
     mqttDiscoveryEntity(sensor, "pellets_kg_today", "Pelletverbruik vandaag", [](JsonObject& o) { o["unit_of_measurement"] = "kg"; o["device_class"] = "weight"; o["state_class"] = "total_increasing"; }, false);

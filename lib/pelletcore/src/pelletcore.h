@@ -679,6 +679,20 @@ private:
     }
 };
 
+// ── Room temperature source ──────────────────────────────────────────────────────────
+// The stove regulates on RAM 0x01: its own sensor (RAM 0x44) or, with the wireless sensor
+// on, the remote control's (RAM 0x8F) while the remote is heard. Which one is not readable;
+// it is the one RAM 0x01 equals (all in steps of 0.5 C, so exact). When it equals both or
+// neither, the previous answer stays. 0 = not known, 1 = stove sensor, 2 = remote control.
+enum RoomSource { RS_UNKNOWN = 0, RS_STOVE = 1, RS_REMOTE = 2 };
+inline int roomSourceOf(float room, float stoveSensor, float remoteSensor, int prev)
+{
+    bool s = room == stoveSensor, r = room == remoteSensor;
+    if (s && !r) return RS_STOVE;
+    if (r && !s) return RS_REMOTE;
+    return prev;
+}
+
 // ── Pellet use per day and cost ─────────────────────────────────────────────
 // Auger units per local day (YYYYMMDD), not kg: kg = units x kg per unit of the calibration at
 // the moment it is shown, so old days get more accurate with every calibration cycle too.

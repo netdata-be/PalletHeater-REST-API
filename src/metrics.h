@@ -1,4 +1,5 @@
 double pelKgToday(); double pelKgPerDay7(); double pelStockBags();   // pellets.h (included later)
+bool remoteSensorNotUsed(); extern int cachedRoomSource;              // stoveCache.h (included later)
 #include <constants.h>
 #include <WebServer.h>
 
@@ -239,6 +240,8 @@ String getMetrics() {
 
   // Pellets
   setMetric(&p, "stove_low_pallet_alarm",        "1 if pellet level is low",               String(cachedLowPallet));
+  setMetric(&p, "stove_room_source",             "Sensor the stove regulates on: 1 stove, 2 remote control, 0 unknown", String(cachedRoomSource));
+  setMetric(&p, "stove_warning_remote_sensor_not_used", "1 while the wireless sensor is on but the stove uses its own sensor", String(remoteSensorNotUsed() ? 1 : 0));
   { double t = pelKgToday(), d = pelKgPerDay7(), st = pelStockBags();
     if (t >= 0) setMetric(&p, "stove_pellets_kg_today",     "Pellets burned today (kg, local day)",       String(t, 2));
     if (d >= 0) setMetric(&p, "stove_pellets_kg_per_day",   "Pellets per day, average of the last 7 days", String(d, 2));

@@ -4768,6 +4768,16 @@
               },
               "fume": {
                 "type": "integer"
+              },
+              "roomSource": {
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                  "stove",
+                  "remote",
+                  null
+                ],
+                "description": "The sensor the stove regulates on (derived from the readings)"
               }
             }
           },
@@ -5129,6 +5139,21 @@
               "secondsLeft": {
                 "type": "integer",
                 "nullable": true
+              }
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "description": "Warnings while the stove works (not errors). REMOTE_SENSOR_NOT_USED: wireless sensor on, but the stove regulates on its own sensor (remote control not heard).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "desc": {
+                  "type": "string"
+                }
               }
             }
           }
