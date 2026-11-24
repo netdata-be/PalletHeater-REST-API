@@ -177,6 +177,10 @@ void setup()
     pinMode(ENABLE_RX, OUTPUT);
     digitalWrite(ENABLE_RX, HIGH); // The led of the optocoupler is off
 
+    // the time zone before the first log line: the clock keeps running over a software restart,
+    // so the start-up lines get local time instead of UTC until configTzTime() below
+    setenv("TZ", defaultTimezone, 1);
+    tzset();
     otaVerifySetup(); // first: note the version on trial (rollback of a failed update, otaVerify.h)
     Serial.begin(115200);
     liveLogSetup();   // also capture ESP-IDF log output for /api/log; reset reason, log of the previous run
