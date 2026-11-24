@@ -465,16 +465,18 @@ static bool gStatic()
 static PlanGroup planGroups[] = {
     // name                  prio        active idle  read            registers (for "due after a write")
     { "state",               P_LIVE,      1,    1,   gState,         { R_(stoveStateAddr), END_ } },
-    { "error",               P_LIVE,      1,    2,   gError,         { R_(currentErrorAddr), R_(0x30), END_ } },
     { "fumes",               P_LIVE,      2,   15,   gFume,          { R_(fumesTempAddr), END_ } },
     { "auger",               P_LIVE,      2,   30,   gAuger,         { R_(augerSpeedAddr), END_ } },
-    { "flame actual",        P_LIVE,      2,   30,   gFlameAct,      { R_(flamePowerActualAddr), END_ } },
     { "fume fan",            P_LIVE,      2,   30,   gRpm,           { R_(fumeFanRPMAddr), END_ } },
     { "remote menu",         P_LIVE,      2,    2,   gMenu,          { R_(displayMenuAddr), END_ } },
-    { "room temperature",    P_REGULAR,  10,   10,   gRoom,          { R_(ambTempAddr), END_ } },
-    { "room sensors",        P_REGULAR,  15,   15,   gRoomSensors,   { R_(ambTempStoveAddr), R_(ambTempRemoteAddr), END_ } },
+    // the stove acts on an error only after ~55 s (RAM 0x30): every 5 s is in time
+    { "error",               P_REGULAR,   5,    5,   gError,         { R_(currentErrorAddr), R_(0x30), END_ } },
+    { "flame actual",        P_REGULAR,  30,   30,   gFlameAct,      { R_(flamePowerActualAddr), END_ } },
+    // room temperatures change slowly (0.5 C steps); a change of the sensor used shows within a minute
+    { "room temperature",    P_REGULAR,  60,   60,   gRoom,          { R_(ambTempAddr), END_ } },
+    { "room sensors",        P_REGULAR,  60,   60,   gRoomSensors,   { R_(ambTempStoveAddr), R_(ambTempRemoteAddr), END_ } },
     { "room fan",            P_REGULAR,   5,   30,   gFan,           { R_(roomFanControlAddr), R_(roomFanRunningAddr), R_(hotForFanAddr), END_ } },
-    { "remote seen",         P_REGULAR,   5,    5,   gRemoteSeen,    { R_(remoteControlTTLAddr), END_ } },
+    { "remote seen",         P_REGULAR,  30,   30,   gRemoteSeen,    { R_(remoteControlTTLAddr), END_ } },
     { "pellet sensor",       P_REGULAR,   5,    5,   gPellet,        { R_(palletSensorAddr), R_(palletLevelAddr), R_(0x91), END_ } },
     { "brazier cleaning",    P_REGULAR,  30,  300,   gBrazier,       { R_(brazierCountdownAddr), END_ } },
     { "set point / flame / fan", P_SETTING, 10, 10,  gSetMain,       { E_(TempSetpointAddr), E_(flamePowerEepromAddr), E_(roomFanEepromAddr), END_ } },
@@ -493,9 +495,20 @@ static PlanGroup planGroups[] = {
     { "firmware / serial / language", P_STATIC, 43200, 43200, gStatic, { E_(languageAddr), END_ } },
 };
 static const int PLAN_N = sizeof(planGroups) / sizeof(planGroups[0]);
+static const int PLAN_MENU = 4;               // index of "remote menu"
 static const int PLAN_TIMER0 = 16;            // index of "timer PR1" (6 in a row)
 static const int PLAN_ERRMEM = 22, PLAN_COUNTERS = 23;
-static const uint32_t PLAN_BUS_CAP = 50;      // % of the time the bus may be busy with spare-time reads
+// Spare-time reads, settable (POST /api/plan, NVS "plan"): the bus may be busy up to planBusCap %
+// (commands always get the bus before the next register, so a higher cap does not delay them), and a
+// setting / rare / static group may be read again from planEarly % of its interval.
+static uint32_t planBusCap = 75;              // %
+static uint32_t planEarly  = 25;              // % of the interval
+static void planLoadSettings()
+{
+    Preferences p; p.begin("plan", true);
+    planBusCap = p.getUChar("cap", 75); planEarly = p.getUChar("early", 25);
+    p.end();
+}
 static const uint32_t PLAN_PAUSE_MS = 5;      // after every group: others get the bus
 
 static bool planActive() { return (stoveState >= 1 && stoveState <= 6) || stoveState >= 8; }
@@ -580,13 +593,13 @@ static PlanGroup* planPick(uint32_t now)
     // bus use in the running window (the cap would otherwise only act a window later)
     uint32_t el = now - planWindowMs;
     uint32_t util = el >= 1000 ? planBusyMs * 100 / el : planUtil;
-    if (best || !planFullDone || util >= PLAN_BUS_CAP) return best;
+    if (best || !planFullDone || util >= planBusCap) return best;
     // spare time: the setting / rare / static group read longest ago, relative to its interval
     for (auto& g : planGroups) {
         if (g.prio < P_SETTING) continue;
         uint32_t iv = planIntervalMs(g), age = now - g.lastMs;
         float ratio = (float)age / iv;
-        if (ratio < 0.25f) continue;
+        if (ratio < planEarly / 100.0f) continue;
         if (!best || ratio > bestScore) { best = &g; bestScore = ratio; }
     }
     return best;
@@ -661,17 +674,33 @@ void getStates()
 // GET /api/plan -> the read plan: every group with its interval now, age and reads
 void handleRoutePlan()
 {
+    if (wm.server->method() == HTTP_POST) {
+        int cap = -1, early = -1;
+        if (wm.server->hasArg("busCap") && !pc::parseIntRange(wm.server->arg("busCap").c_str(), 10, 95, cap)) {
+            wm.server->send(400, "application/json", "{\"result\":\"failed - busCap must be 10 - 95 (%)\"}"); return;
+        }
+        if (wm.server->hasArg("early") && !pc::parseIntRange(wm.server->arg("early").c_str(), 5, 100, early)) {
+            wm.server->send(400, "application/json", "{\"result\":\"failed - early must be 5 - 100 (% of the interval)\"}"); return;
+        }
+        Preferences p; p.begin("plan", false);
+        if (cap >= 0)   { planBusCap = cap;  p.putUChar("cap", cap); }
+        if (early >= 0) { planEarly = early; p.putUChar("early", early); }
+        p.end();
+        LOGI("stove", "read planner: spare-time reads up to %lu %% of the bus, from %lu %% of the interval (by %s)",
+             (unsigned long)planBusCap, (unsigned long)planEarly, clientIp().c_str());
+    } else if (wm.server->method() != HTTP_GET) { wm.server->send(405); return; }
     uint32_t now = millis();
     String out; out.reserve(3200);
     char b[200];
-    snprintf(b, sizeof(b), "{\"active\":%s,\"remoteMenu\":%d,\"busPercent\":%lu,\"fullRead\":%s,\"groups\":[",
-             planActive() ? "true" : "false", cachedRemoteMenu, (unsigned long)planUtil, planFullDone ? "true" : "false");
+    snprintf(b, sizeof(b), "{\"active\":%s,\"remoteMenu\":%d,\"busPercent\":%lu,\"busCap\":%lu,\"early\":%lu,\"fullRead\":%s,\"handedOver\":%lu,\"groups\":[",
+             planActive() ? "true" : "false", cachedRemoteMenu, (unsigned long)planUtil, (unsigned long)planBusCap, (unsigned long)planEarly,
+             planFullDone ? "true" : "false", (unsigned long)planGiveWays);
     out += b;
     for (int i = 0; i < PLAN_N; i++) {
         const PlanGroup& g = planGroups[i];
-        snprintf(b, sizeof(b), "%s{\"name\":\"%s\",\"prio\":%d,\"intervalS\":%lu,\"ageS\":%ld,\"reads\":%lu,\"fails\":%lu}",
+        snprintf(b, sizeof(b), "%s{\"name\":\"%s\",\"prio\":%d,\"intervalS\":%lu,\"ageS\":%ld,\"ageMs\":%ld,\"reads\":%lu,\"fails\":%lu}",
                  i ? "," : "", g.name, g.prio, (unsigned long)(planIntervalMs(g) / 1000), g.lastMs ? (long)((now - g.lastMs) / 1000) : -1L,
-                 (unsigned long)g.reads, (unsigned long)g.fails);
+                 g.lastMs ? (long)(now - g.lastMs) : -1L, (unsigned long)g.reads, (unsigned long)g.fails);
         out += b;
     }
     out += "]}";
@@ -684,6 +713,7 @@ static void sensorTask(void* pvParameters)
     static uint32_t lastProbe = 0, downSince = 0;
     static bool wasDown = false;
     planWindowMs = millis();
+    planLoadSettings();
     for (;;)
     {
         unsigned long now = millis();

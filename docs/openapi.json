@@ -1334,6 +1334,50 @@
         "tags": [
           "Device"
         ]
+      },
+      "post": {
+        "summary": "Set the spare-time reads of the read planner",
+        "parameters": [
+          {
+            "name": "busCap",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 10,
+              "maximum": 95
+            },
+            "description": "How busy the bus may get with spare-time reads (%, default 75)"
+          },
+          {
+            "name": "early",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 5,
+              "maximum": 100
+            },
+            "description": "From what % of its interval a setting / rare group may be read again in spare time (default 25)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The read plan with the new settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Value out of range"
+          }
+        },
+        "tags": [
+          "Device"
+        ]
       }
     },
     "/api/timers": {
