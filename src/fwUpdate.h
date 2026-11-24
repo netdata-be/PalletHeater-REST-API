@@ -453,6 +453,9 @@ void fwBootInstall()
     p.remove("bootUrl"); p.remove("bootVer"); p.remove("bootSize");
     p.end();
     fwAssetUrl = url;
+#if BOARD_HAS_WS2812
+    StatusLedUpdate ledUpdate;   // LED1 "update" until it returns or restarts
+#endif
     auto fail = [](const String& e) {
         LOGE("update", "install failed: %s", e.c_str());
         fwProgress("failed: " + e);

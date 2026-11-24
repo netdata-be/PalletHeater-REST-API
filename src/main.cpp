@@ -60,6 +60,8 @@
 
 #include "fwUpdate.h"
 
+#include "statusLedApi.h"   // WS2812 status LEDs: states, /api/leds (board only)
+
 #include "liveDebug.h"
 
 #include "coreDump.h"   // core dump of the last crash, /api/coredump
@@ -171,12 +173,18 @@ static void registerRoutes()
     wm.server->on("/icon.svg", HTTP_GET, crumbed(handleRouteIconSvg));
     wm.server->on("/icon-180.png", HTTP_GET, crumbed(handleRouteIcon180));
     wm.server->on("/restart", authed(handleRouteRestart));
+#if BOARD_HAS_WS2812
+    wm.server->on("/api/leds", authed(handleRouteLeds));
+#endif
 }
 
 void setup()
 {
     esp_log_level_set("*", ESP_LOG_WARN);
     boardPinsSetup();   // ENABLE_RX on the DevKit (board.h)
+#if BOARD_HAS_WS2812
+    statusLedSetup();   // LEDs show "booting" from here on (statusLed.h)
+#endif
 
     // the time zone before the first log line: the clock keeps running over a software restart,
     // so the start-up lines get local time instead of UTC until configTzTime() below

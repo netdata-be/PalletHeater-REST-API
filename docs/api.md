@@ -91,6 +91,7 @@ scrape_configs:
 | `GET` `POST` | [`/api/wifi`](#apiwifi) | WiFi status, network, hostname and DHCP / static IP |
 | `GET` | [`/api/wifi/scan`](#apiwifi) | WiFi networks in range |
 | `GET` `POST` | [`/api/telnet`](#apitelnet) | Enable / disable the telnet menu |
+| `GET` `POST` | [`/api/leds`](#apileds) | Status LEDs of the board: on / off, brightness, night (board only) |
 | `GET` `POST` | [`/api/https`](#apihttps) | HTTPS on port 443: state, certificate, on / off, new key |
 | `GET` `POST` | [`/api/auth`](#authentication) | API key status, require, rotate |
 | `POST` | [`/api/update`](debugging.md#post-apiupdate) | Firmware update over HTTP |
@@ -671,6 +672,46 @@ Switches the telnet debug menu (port 23, IPv4 and IPv6, see [Telnet menu](mqtt.m
 curl -X POST "http://openpelletbridge.local/api/telnet?enabled=false"
 # {"result":"success","enabled":false}
 ```
+
+### `/api/leds`
+
+Only on the OpenPelletBridge board (two WS2812B LEDs; the ESP32 DevKit answers `404`). Settings are applied immediately and stored in NVS. `brightness` is a percentage of the driver's cap: 100 % = 40 % PWM, so both LEDs at full white stay well within the USB fuse (F1) next to WiFi and the buzzer. Night off uses local time and needs the clock (NTP); `nightFrom` = `nightTo` means no night. `sys` / `stove` show the state each LED shows now (short overlays such as the button blink not included).
+
+```bash
+curl http://openpelletbridge.local/api/leds
+# {"enabled":true,"brightness":25,"maxPwmPercent":40,"night":false,"nightFrom":22,"nightTo":7,"nightActive":false,
+#  "sys":"connected","stove":"working","stoveWarning":false}
+
+curl -X POST "http://openpelletbridge.local/api/leds?brightness=10&night=true&nightFrom=23&nightTo=6"
+```
+
+| Parameter (POST) | Values |
+|---|---|
+| `enabled` | `true` / `false` (default `true`) |
+| `brightness` | 1 – 100 (default 25) |
+| `night`, `nightFrom`, `nightTo` | LEDs off from `nightFrom` to `nightTo` (hours 0 – 23, default off, 22 – 7) |
+
+Only the given parameters change. Colours and patterns (one table in src/statusLed.h; patterns repeat every 2 s):
+
+| LED | State (`sys` / `stove`) | Colour | Pattern |
+|---|---|---|---|
+| LED1 system | `booting` | blue | solid, from the start until WiFi is known |
+| | `connecting` | blue | 1 s on / 1 s off: WiFi (re)connecting |
+| | `portal` | purple | double flash: config portal (access point) |
+| | `connected` | green | solid |
+| | `update` | cyan | 4 Hz: firmware update (GitHub, `/api/update`, espota, Bluetooth) |
+| | `error` | red | double flash: the last restart was a crash, watchdog or brown-out, or an update was rolled back; a short press of the button clears it |
+| | button pressed | white | 150 ms |
+| | reconnect, full reset | amber | short flashes |
+| LED2 stove | `off` | – | stove off, or not read yet |
+| | `standby` | green | 125 ms blip every 2 s |
+| | `starting` | orange | 1 s on / 1 s off: starting, pellet loading, ignition |
+| | `working` | orange | solid |
+| | `cleaning` | blue | solid: brazier cleaning |
+| | `extinguishing` | blue | 1 s on / 1 s off: final cleaning |
+| | `alarm` | red | 4 Hz: alarm state, a stove error (`currentError`), pellets used up |
+| | `linkDown` | magenta | 1 s on / 1 s off: the stove does not answer |
+| | warning (`stoveWarning`) | yellow | double flash in the first 0.5 s of every 2 s, over the state: pellet reserve running, an error counting down (`pendingError`), remote sensor not used |
 
 ### `/api/https`
 
