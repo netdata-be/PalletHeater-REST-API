@@ -690,6 +690,11 @@ static void tmEventsRender()
         case EVT_LINK:
             tpf("   %s  link    serial link to the stove %s" A_EOL, t.c_str(), e.to ? "back" : "lost");
             break;
+#if BOARD_HAS_POWER_SENSE
+        case EVT_POWER:
+            tpf("   %s  power   %s -> %s" A_EOL, t.c_str(), e.from == 2 ? "USB" : "stove", e.to == 2 ? "USB" : "stove");
+            break;
+#endif
         }
     }
 }
@@ -1165,6 +1170,18 @@ static void tmSystemRender()
     tkv("Memory", "%u KB free, lowest %u KB, largest block %u KB", (unsigned)(ESP.getFreeHeap() / 1024), (unsigned)(ESP.getMinFreeHeap() / 1024),
         (unsigned)(ESP.getMaxAllocHeap() / 1024));
     tkv("Controller", "%s (%s), built %s", BUILD_VERSION, BUILD_BRANCH, BUILD_TIME);
+#ifdef BOARD_HW_REV
+    tkv("Board", "%s, hardware rev. %s", BOARD_NAME, BOARD_HW_REV);
+#else
+    tkv("Board", "%s", BOARD_NAME);
+#endif
+#if BOARD_HAS_POWER_SENSE
+    tkv("Power", "%s, %lu switchover(s) since the start", powerSrc == PWR_STOVE ? "stove supply" : powerSrc == PWR_USB ? "USB" : "unknown",
+        (unsigned long)powerSwitches);
+#endif
+#if BOARD_HAS_CHIP_TEMP
+    if (!isnan(chipTempC)) tkv("Chip temp.", "%s%.1f °C" A_RST, chipTempHigh ? A_YEL : "", chipTempC);
+#endif
     tkv("Stove", "%s, firmware %s, serial number %ld", BUILD_STOVE_MODEL, cachedFirmwareVersion, cachedSerialNumber);
     tkv("Stove bus", "%s, %lu transactions, %lu retries, %lu read / %lu write errors, %lu skipped", stove.linkDown ? "link DOWN" : "link up",
         (unsigned long)stove.transactions, (unsigned long)stove.retries, (unsigned long)stove.readErrors, (unsigned long)stove.writeErrors,

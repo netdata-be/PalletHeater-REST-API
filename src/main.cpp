@@ -54,6 +54,8 @@
 
 #include "mqtt.h"
 
+#include "boardInfo.h"   // features, power source, chip temperature of the board
+
 #include "wifiInfo.h"
 
 #include "fwUpdate.h"
@@ -329,6 +331,7 @@ void loop()
     crumb("reset button");
     resetButton.read();
     statusLedLoop();
+    crumb("board"); boardTick();   // power source, chip temperature (boardInfo.h)
     crumb("ArduinoOTA");
     ArduinoOTA.handle();
 

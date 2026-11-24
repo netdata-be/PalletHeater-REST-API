@@ -13,10 +13,11 @@
 // recorded with its exact time. The last EVT_SIZE changes are kept in RAM and
 // persisted in /events.bin (one small append per change, so very few flash writes;
 // the file is compacted when it reaches 2 * EVT_SIZE records).
-enum : uint8_t { EVT_STATE = 0, EVT_ERROR = 1, EVT_PELLET = 2, EVT_LINK = 3, EVT_SOURCE = 4 };   // EVT_PELLET: code = RAM address, from/to = values
+enum : uint8_t { EVT_STATE = 0, EVT_ERROR = 1, EVT_PELLET = 2, EVT_LINK = 3, EVT_SOURCE = 4, EVT_POWER = 5 };   // EVT_PELLET: code = RAM address, from/to = values
 // EVT_SOURCE: the sensor the stove regulates on changed, from / to = pc::RoomSource (1 stove, 2 remote
 // control), code = the room temperature x 2 at that moment
 // EVT_LINK: serial link to the stove lost (to = 0) or back (to = 1)
+// EVT_POWER: power source of the board switched, from / to = 1 stove, 2 USB (powerSource.h)
 struct __attribute__((packed)) StateEvent { uint32_t t; uint8_t kind; int8_t from; int8_t to; uint8_t code; };
 struct __attribute__((packed)) StateEventV1 { uint32_t t; int8_t from; int8_t to; };   // PHE1 file layout
 static const int      EVT_SIZE = 200;
@@ -262,6 +263,7 @@ static void evtStore(const StateEvent& e)
 }
 
 // GET /api/events[?hours=1..720] -> { events: [ {t, type:"state", from, to} | {t, type:"error", id, error}, ... ] } (oldest first)
+// type "power" (board with power sense): {t, type:"power", from:"stove"|"usb", to}
 void handleRouteEvents()
 {
     if (wm.server->method() != HTTP_GET) { wm.server->send(405); return; }
@@ -289,6 +291,11 @@ void handleRouteEvents()
         } else if (e.kind == EVT_SOURCE) {
             snprintf(row, sizeof(row), "%s{\"t\":%lu,\"type\":\"source\",\"from\":\"%s\",\"to\":\"%s\",\"room\":%.1f}", first ? "" : ",",
                      (unsigned long)e.t, e.from == 2 ? "remote" : "stove", e.to == 2 ? "remote" : "stove", e.code / 2.0);
+#if BOARD_HAS_POWER_SENSE
+        } else if (e.kind == EVT_POWER) {
+            snprintf(row, sizeof(row), "%s{\"t\":%lu,\"type\":\"power\",\"from\":\"%s\",\"to\":\"%s\"}", first ? "" : ",",
+                     (unsigned long)e.t, e.from == 2 ? "usb" : "stove", e.to == 2 ? "usb" : "stove");
+#endif
         } else if (e.kind == EVT_ERROR) {
             if (e.code == 0) snprintf(row, sizeof(row), "%s{\"t\":%lu,\"type\":\"error\",\"id\":0,\"error\":null}", first ? "" : ",", (unsigned long)e.t);
             else snprintf(row, sizeof(row), "%s{\"t\":%lu,\"type\":\"error\",\"id\":%u,\"error\":\"%s\"}", first ? "" : ",",

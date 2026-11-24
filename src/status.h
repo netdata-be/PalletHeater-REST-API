@@ -5,6 +5,7 @@
 // translation unit: the globals live in constants.h).
 
 void pelletsJson(JsonObject o, bool detail);   // pellets.h
+static void boardStateJson(JsonObject root, JsonObject ctrl); static void boardWarnings(JsonArray w);   // boardInfo.h
 
 void getStatus()
 {
@@ -12,7 +13,7 @@ void getStatus()
     {
     //telnet.println("Get status called");
 
-    DynamicJsonDocument json(4096);   // grew with roomFan, pelletReserve, controller, pellets, PELLETS error (3584 overflowed 20/11/2026)
+    DynamicJsonDocument json(4608);   // grew with roomFan, pelletReserve, controller, pellets, PELLETS error (3584 overflowed 20/11/2026), board features / power
     json.clear();
     // Values never read from the stove since the start are null (not the firmware's
     // initial 0). Once read, the last known value stays; dataAge says how old it is.
@@ -54,6 +55,7 @@ void getStatus()
         JsonArray w = json.createNestedArray("warnings");
         String rs = remoteSensorWarningText();
         if (rs.length()) { JsonObject o = w.createNestedObject(); o["id"] = "REMOTE_SENSOR_NOT_USED"; o["desc"] = rs; }
+        boardWarnings(w);   // e.g. CHIP_TEMP_HIGH (boardInfo.h)
     }
     KNOWN(slowOk, json["wirelessSensor"], wirelessSensorStr());
     if (stoveState == UNKNOWN) {
@@ -216,6 +218,7 @@ void getStatus()
 #ifdef BOARD_HW_REV
     obj_ctrl["hwRev"] = BOARD_HW_REV;               // hardware revision, only on the board
 #endif
+    boardStateJson(json.as<JsonObject>(), obj_ctrl);   // features, chipTemp, power (boardInfo.h)
     obj_ctrl["resetReason"] = diagResetText();      // why the controller last (re)started
     obj_ctrl["bootCount"]   = diagBoots;
     obj_ctrl["crashCount"]  = diagCrashes;          // starts after a crash, watchdog or brown-out

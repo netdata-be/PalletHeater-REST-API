@@ -1,5 +1,6 @@
 double pelKgToday(); double pelKgPerDay7(); double pelStockBags();   // pellets.h (included later)
 bool remoteSensorNotUsed(); extern int cachedRoomSource;              // stoveCache.h (included later)
+static void boardMetrics(String* p);                                  // boardInfo.h (included later)
 #include <constants.h>
 #include <WebServer.h>
 
@@ -217,7 +218,8 @@ String getMetrics() {
   // Fan & flame
   setMetric(&p, "stove_flame_power",             "Flame power level setting (1-4)",        String(flamePower));
   p += "# HELP esp32_build_info Controller firmware build (labels), always 1\n# TYPE esp32_build_info gauge\n";
-  p += String("esp32_build_info{version=\"") + BUILD_VERSION + "\",built=\"" + BUILD_TIME + "\",env=\"" + BUILD_ENV + "\",stove_model=\"" + BUILD_STOVE_MODEL + "\"} 1\n";
+  p += String("esp32_build_info{version=\"") + BUILD_VERSION + "\",built=\"" + BUILD_TIME + "\",env=\"" + BUILD_ENV + "\",stove_model=\"" + BUILD_STOVE_MODEL + "\",board=\"" BOARD_NAME "\"} 1\n";
+  boardMetrics(&p);   // power source, chip temperature (boardInfo.h)
   setMetric(&p, "stove_room_fan_actual",          "Speed the room fan really runs at, 0-3 (-1 unknown)", String(roomFanActual()));
   setMetric(&p, "stove_room_fan_running",         "Room fan turning (power RAM 0x0A > 0, -1 unknown)", String(roomFanIsRunning()));
   { const char* m = roomFanMode();

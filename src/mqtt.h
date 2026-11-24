@@ -19,6 +19,7 @@
 #include <constants.h>
 #include <PubSubClient.h>
 #include <Preferences.h>
+static void boardMqttStates(bool force); static void boardMqttDiscovery();   // boardInfo.h (included later)
 
 struct MqttConfig {
     bool   enabled = false;
@@ -41,7 +42,7 @@ static uint32_t     mqttCommands = 0, mqttPublishes = 0;
 static bool         mqttNeedFull = true;
 static int          mqttEsLastStop = 1, mqttEsLastStart = 1;   // restored by energy_saving ON
 
-static const int MQTT_MAX_STATES = 32;
+static const int MQTT_MAX_STATES = 48;   // 37 stove values + the board's; more are published every 5 s
 static String mqttStateKeys[MQTT_MAX_STATES];
 static String mqttStateVals[MQTT_MAX_STATES];
 static int    mqttStateCount = 0;
@@ -126,6 +127,7 @@ static String num1(float v) { return String(v, 1); }
 static void mqttPublishStates(bool force)
 {
     bool stoveOk = stoveState >= 0;
+    boardMqttStates(force);   // power source, chip temperature (boardInfo.h): also without the stove
     mqttState("state",          StoveStateStr, force);
     mqttState("state_code",     String(stoveState), force);
     if (stoveState != UNKNOWN) {   // on / off unknown while the stove does not answer: keep the last value
@@ -276,6 +278,7 @@ static void mqttPublishDiscovery()
     mqttDiscoveryEntity(sensor, "pellets_kg_per_day", "Pelletverbruik per dag (7 d)", [](JsonObject& o) { o["unit_of_measurement"] = "kg"; o["device_class"] = "weight"; o["state_class"] = "measurement"; }, false);
     mqttDiscoveryEntity(sensor, "pellets_cost_month", "Pelletkost per maand", [](JsonObject& o) { o["unit_of_measurement"] = "EUR"; o["device_class"] = "monetary"; }, false);
     mqttDiscoveryEntity(sensor, "pellets_stock_bags", "Pelletvoorraad (zakken)", [](JsonObject& o) { o["unit_of_measurement"] = "zakken"; o["state_class"] = "measurement"; o["icon"] = "mdi:sack"; }, false);
+    boardMqttDiscovery();
 }
 
 // ── Commands ────────────────────────────────────────────────────────────────
