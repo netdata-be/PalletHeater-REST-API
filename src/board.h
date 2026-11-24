@@ -30,7 +30,8 @@
 #define BOARD_HAS_BUZZER        1
 #define BOARD_BUZZER_PIN        21       // PWM ~4 kHz (resonance) via Q1
 #define BOARD_HAS_POWER_SENSE   1
-#define BOARD_POWER_SENSE_PIN   4        // TPS2116 ST: high = stove, low = USB (10 kOhm pull-up on the board)
+#define BOARD_POWER_SENSE_PIN   4
+#define BOARD_HAS_BUTTON_MENU   1        // the button's functions with LED feedback (boardButton.h)        // TPS2116 ST: high = stove, low = USB (10 kOhm pull-up on the board)
 
 #else   // ESP32 DevKit
 
@@ -48,6 +49,7 @@
 #define BOARD_HAS_WS2812        0
 #define BOARD_HAS_BUZZER        0
 #define BOARD_HAS_POWER_SENSE   0
+#define BOARD_HAS_BUTTON_MENU   0        // short press and 5 s full reset only (main.cpp)
 
 #endif
 

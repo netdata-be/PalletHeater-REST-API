@@ -78,7 +78,7 @@ Not yet done: a final manual review of the routing (the autorouter's tracks are 
 | Buzzer | MLT-5020 magnetic transducer 5 × 5 mm on 3.3 V, AO3400A on IO21, 1N4148W flyback diode, 10 kΩ pull-down, 10 µF buffer | Needs a PWM signal (~4 kHz, LEDC); ~110 mA while it sounds. Silent during boot (pull-down). Operating temperature −30 – 70 °C: mind the place inside the stove |
 | Test pads | 9 pads (1.5 mm) on the bottom: 3V3, 5V, GND, TX, RX under the module; 20V, 5V_S, DATA, GND_S on the stove side | Measuring at bring-up without probing the parts |
 | Status LEDs | 2× WS2812B-2020 on IO8 via SN74LV1T34 (R8 10 kΩ pull-down on its input) | LED1 system (WiFi / Bluetooth / telnet / power), LED2 stove state; any colour and blink pattern, one GPIO |
-| Buttons | RESET (EN, 10 kΩ / 1 µF) and BOOT / USER (IO0) | IO0 held during reset = download mode; otherwise a user button |
+| Buttons | RESET (EN, 10 kΩ / 1 µF) and BOOT / USER (IO0) | IO0 held during reset = download mode; otherwise a user button: 1× click / mute an alarm, 2× LEDs on / off, 3× buzzer on / off, hold 3 s = full reset countdown (8 s = reset, release = abort), see src/boardButton.h |
 | Stove connector | Cixi Kefa KF2EDGR-3.5-4P header (LCSC C441173, 3.5 mm, right angle, THT); cable plug **KF2EDGKD-3.5-4P** (LCSC C441073, spring terminals, wires up to 1.5 mm²) | Same series from one maker, both at LCSC, so the plug surely fits; push the wires in, no crimping. Footprint and 3D model from LCSC / EasyEDA (holes 1.4 mm: the Phoenix footprint has 1.2 mm) |
 
 ### Serial interface

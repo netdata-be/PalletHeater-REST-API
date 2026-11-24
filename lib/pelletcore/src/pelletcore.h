@@ -860,4 +860,48 @@ inline uint32_t countdownBeepMs(int leftS)
     return leftS <= 0 ? 0 : leftS <= 5 ? 250 : leftS <= 10 ? 500 : 1000;
 }
 
+// The board's button (BOOT / IO0), one button for several functions (src/boardButton.h):
+// short presses counted (a pause of gapMs ends the count), a hold goes through stages:
+//   held      >= heldMs: "pressed" shown; released here: nothing
+//   countdown >= countdownMs: the full reset counts down; released here: aborted
+//   reset     at resetMs: the full reset, once (whatever the release does after it)
+// A press longer than shortMs but released before countdownMs does nothing either.
+struct ButtonDecoder {
+    enum Event { NONE, PRESSES, ABORTED, RESET };
+    enum Stage { IDLE, DOWN, HELD, COUNTDOWN, DONE };
+    uint32_t shortMs = 600, gapMs = 400, heldMs = 1000, countdownMs = 3000, resetMs = 8000;
+    bool down = false, fired = false;
+    uint32_t downAt = 0, upAt = 0;
+    uint8_t count = 0;
+    // Feed the debounced state; n = the number of short presses with PRESSES
+    Event update(bool pressed, uint32_t now, uint8_t& n)
+    {
+        n = 0;
+        if (pressed && !down) { down = true; fired = false; downAt = now; return NONE; }
+        if (pressed) {
+            if (!fired && now - downAt >= resetMs) { fired = true; count = 0; return RESET; }
+            return NONE;
+        }
+        if (down) {   // released
+            down = false;
+            uint32_t held = now - downAt;
+            if (fired) return NONE;
+            if (held >= countdownMs) { count = 0; return ABORTED; }
+            if (held < shortMs) { count++; upAt = now; }
+            else count = 0;   // too long for a press, too short for the countdown: nothing
+            return NONE;
+        }
+        if (count && now - upAt >= gapMs) { n = count; count = 0; return PRESSES; }
+        return NONE;
+    }
+    Stage stage(uint32_t now) const
+    {
+        if (!down) return IDLE;
+        uint32_t held = now - downAt;
+        return fired ? DONE : held >= countdownMs ? COUNTDOWN : held >= heldMs ? HELD : DOWN;
+    }
+    // Countdown: ms until the reset (0 outside it)
+    uint32_t resetInMs(uint32_t now) const { return stage(now) == COUNTDOWN ? resetMs - (now - downAt) : 0; }
+};
+
 } // namespace pc

@@ -92,6 +92,16 @@ static void buzzerStop() { bzSend(BZQ_STOP); }                     // also mutes
 static void buzzerEvent(int ev) { bzSend(BZQ_EVENT, ev); }         // follows the settings
 // Button press: mutes a sounding error, otherwise the button click
 static void buzzerButton() { if (bzErrorOn) buzzerStop(); else buzzerEvent(BZ_BUTTON); }
+// Buzzer on / off from the button (boardButton.h): saved, and confirmed with a rising /
+// falling tone that plays either way. Returns the new state.
+static bool buzzerToggle()
+{
+    BuzzerCfg c = bzCfg();
+    c.enabled = !c.enabled;
+    buzzerSave(c);
+    buzzerPlay(pc::beepPresetIndex(c.enabled ? "rising" : "falling"));
+    return c.enabled;
+}
 
 static bool bzQuietNow(const BuzzerCfg& c)
 {

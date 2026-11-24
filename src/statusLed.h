@@ -75,6 +75,11 @@ static volatile bool ledBootUpdate = false;      // install from GitHub after a 
 static volatile bool ledBleUpdate = false;       // update over Bluetooth (loop)
 static volatile bool ledNight = false;           // night hours: LEDs off (loop)
 static volatile uint32_t ledButtonUntil = 0, ledFlashStart = 0, ledFlashUntil = 0;
+// The button held (boardButton.h), shown even with the LEDs off or at night:
+//   ledHold 1 = held (LED1 white), 2 = full reset counting down to ledResetAt (both amber,
+//   blinking faster towards the end); ledConfirmUntil: LED1 white for a toggle by the button
+static volatile uint8_t ledHold = 0;
+static volatile uint32_t ledResetAt = 0, ledConfirmUntil = 0;
 static volatile uint16_t ledFlashOn = 0, ledFlashOff = 0;
 static esp_timer_handle_t ledTimer = nullptr;
 
@@ -94,15 +99,32 @@ static uint8_t ledSysNow(uint32_t now)
     if (ledBefore(now, ledButtonUntil)) return LS_BUTTON;
     return ledSysState();
 }
+static void ledRgb(uint8_t* px, uint8_t r, uint8_t g, uint8_t b, uint8_t bright)
+{
+    const uint8_t c[3] = {r, g, b};
+    for (int i = 0; i < 3; i++) {
+        uint8_t v = (uint32_t)c[i] * bright * LED_MAX_PWM / (255 * 100);
+        px[i] = c[i] && !v ? 1 : v;   // keep the hue at low brightness
+    }
+}
 static void ledPut(uint8_t* px, uint8_t s, uint8_t step)
 {
     const LedLook& l = LED_LOOK[s];
-    if (!(l.pattern & (0x8000 >> step))) return;
-    const uint8_t c[3] = {l.r, l.g, l.b};
-    for (int i = 0; i < 3; i++) {
-        uint8_t v = (uint32_t)c[i] * ledCfg.brightness * LED_MAX_PWM / (255 * 100);
-        px[i] = c[i] && !v ? 1 : v;   // keep the hue at low brightness
+    if (l.pattern & (0x8000 >> step)) ledRgb(px, l.r, l.g, l.b, ledCfg.brightness);
+}
+// The button overlay (ledHold, ledConfirmUntil); false = none, draw the states
+static bool ledButtonOverlay(uint8_t* px, uint32_t now)
+{
+    uint8_t bright = ledCfg.brightness < 25 ? 25 : ledCfg.brightness;   // feedback must be seen
+    if (ledHold == 2) {
+        int32_t left = (int32_t)(ledResetAt - now);
+        if (left < 0) left = 0;
+        uint32_t period = 100 + left / 10;   // 5 s before: 0.6 s, at the end: 0.1 s
+        if (now % period < period / 2) { ledRgb(px, 255, 120, 0, bright); ledRgb(px + 3, 255, 120, 0, bright); }
+        return true;
     }
+    if (ledHold == 1 || ledBefore(now, ledConfirmUntil)) { ledRgb(px, 255, 255, 255, bright); return true; }
+    return false;
 }
 // esp_timer task, every 25 ms: only short reads of the states, the RMT write does not wait
 static void ledRender(void*)
@@ -111,7 +133,8 @@ static void ledRender(void*)
     static uint32_t lastSent = 0;
     uint32_t now = millis();
     uint8_t px[6] = {0};
-    if (ledCfg.enabled && !ledNight) {
+    if (ledButtonOverlay(px, now)) {}
+    else if (ledCfg.enabled && !ledNight) {
         uint8_t step = (now / 125) & 15;
         ledPut(px, ledSysNow(now), step);
         uint8_t st = ledStove;

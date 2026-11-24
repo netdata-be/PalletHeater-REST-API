@@ -64,6 +64,8 @@
 
 #include "statusLedApi.h"   // WS2812 status LEDs: states, /api/leds (board only)
 
+#include "boardButton.h"    // the board's button: presses, hold, full reset countdown (board only)
+
 #include "liveDebug.h"
 
 #include "coreDump.h"   // core dump of the last crash, /api/coredump
@@ -268,8 +270,10 @@ void setup()
     }
 
     resetButton.begin();
+#if !BOARD_HAS_BUTTON_MENU   // the board decodes presses and holds itself (boardButton.h)
     resetButton.onPressedFor(5000, fullReset);
     resetButton.onPressed(buttonPressed);
+#endif
 
     LOGI("sys", "ready - firmware %s for %s, IP %s", BUILD_VERSION, BUILD_STOVE_MODEL, WiFi.localIP().toString().c_str());
 
@@ -342,6 +346,9 @@ void loop()
     }
     crumb("reset button");
     resetButton.read();
+#if BOARD_HAS_BUTTON_MENU
+    boardButtonTick();
+#endif
     statusLedLoop();
     crumb("board"); boardTick();   // power source, chip temperature (boardInfo.h)
     crumb("ArduinoOTA");

@@ -682,6 +682,39 @@ static void test_error_countdown()
     TEST_ASSERT_EQUAL_UINT32(0,    pc::countdownBeepMs(0));
 }
 
+static void test_button_decoder()
+{
+    pc::ButtonDecoder b; uint8_t n;
+    // one short press: reported after the gap
+    TEST_ASSERT_EQUAL(pc::ButtonDecoder::NONE, b.update(true, 1000, n));
+    TEST_ASSERT_EQUAL(pc::ButtonDecoder::NONE, b.update(false, 1100, n));
+    TEST_ASSERT_EQUAL(pc::ButtonDecoder::NONE, b.update(false, 1300, n));
+    TEST_ASSERT_EQUAL(pc::ButtonDecoder::PRESSES, b.update(false, 1500, n));
+    TEST_ASSERT_EQUAL(1, n);
+    // three quick presses
+    for (uint32_t t = 2000; t < 2600; t += 200) { b.update(true, t, n); b.update(false, t + 80, n); }
+    TEST_ASSERT_EQUAL(pc::ButtonDecoder::NONE, b.update(false, 2600, n));
+    TEST_ASSERT_EQUAL(pc::ButtonDecoder::PRESSES, b.update(false, 2900, n));
+    TEST_ASSERT_EQUAL(3, n);
+    // 2 s hold: nothing at all
+    b.update(true, 5000, n);
+    TEST_ASSERT_EQUAL(pc::ButtonDecoder::HELD, b.stage(6500));
+    TEST_ASSERT_EQUAL(pc::ButtonDecoder::NONE, b.update(false, 7000, n));
+    TEST_ASSERT_EQUAL(pc::ButtonDecoder::NONE, b.update(false, 9000, n));
+    // countdown, released: aborted
+    b.update(true, 10000, n);
+    TEST_ASSERT_EQUAL(pc::ButtonDecoder::COUNTDOWN, b.stage(14000));
+    TEST_ASSERT_EQUAL(4000u, b.resetInMs(14000));
+    TEST_ASSERT_EQUAL(pc::ButtonDecoder::ABORTED, b.update(false, 14000, n));
+    // held to the end: one reset, the release after it does nothing
+    b.update(true, 20000, n);
+    TEST_ASSERT_EQUAL(pc::ButtonDecoder::NONE, b.update(true, 27999, n));
+    TEST_ASSERT_EQUAL(pc::ButtonDecoder::RESET, b.update(true, 28000, n));
+    TEST_ASSERT_EQUAL(pc::ButtonDecoder::NONE, b.update(true, 29000, n));
+    TEST_ASSERT_EQUAL(pc::ButtonDecoder::NONE, b.update(false, 30000, n));
+    TEST_ASSERT_EQUAL(pc::ButtonDecoder::NONE, b.update(false, 31000, n));
+}
+
 int main(int, char**)
 {
     UNITY_BEGIN();
@@ -731,5 +764,6 @@ int main(int, char**)
     RUN_TEST(test_beep_duty);
     RUN_TEST(test_quiet_hours);
     RUN_TEST(test_error_countdown);
+    RUN_TEST(test_button_decoder);
     return UNITY_END();
 }
