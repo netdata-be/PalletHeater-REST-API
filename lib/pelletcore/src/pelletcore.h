@@ -749,4 +749,115 @@ struct PelletCost {
 // "2026-11-23" from YYYYMMDD
 inline void dayText(uint32_t d, char out[11]) { snprintf(out, 11, "%04u-%02u-%02u", (unsigned)(d / 10000), (unsigned)(d / 100 % 100), (unsigned)(d % 100)); }
 
+// ── Buzzer (S3 board, src/buzzer.h) ─────────────────────────────────────────
+// A pattern is a list of (frequency, on, off) steps, played `repeat` times (0 = until stopped).
+// The transducer (MLT-5020) is loudest near its resonance, ~4 kHz; usable ~1 - 6 kHz.
+struct BeepStep { uint16_t hz, onMs, offMs; };   // hz 0 = a rest
+struct BeepPreset { const char* name; const BeepStep* steps; uint8_t count; uint8_t repeat; };
+inline const BeepPreset* beepPresets(int& count)
+{
+    static const BeepStep click[]   = { { 4000, 25, 0 } };
+    static const BeepStep beep[]    = { { 4000, 120, 0 } };
+    static const BeepStep dbl[]     = { { 4000, 80, 80 }, { 4000, 80, 0 } };
+    static const BeepStep rising[]  = { { 2700, 120, 30 }, { 4000, 200, 0 } };
+    static const BeepStep falling[] = { { 4000, 120, 30 }, { 2700, 200, 0 } };
+    static const BeepStep twoTone[] = { { 3200, 200, 120 }, { 2400, 300, 0 } };
+    static const BeepStep chime[]   = { { 2700, 120, 30 }, { 3400, 120, 30 }, { 4000, 250, 0 } };
+    static const BeepStep tick[]    = { { 4000, 20, 0 } };
+    static const BeepStep pip[]     = { { 5000, 40, 0 } };
+    static const BeepStep lng[]     = { { 4000, 800, 0 } };
+    static const BeepStep alarm[]   = { { 4000, 120, 80 }, { 4000, 120, 80 }, { 4000, 120, 600 } };
+    static const BeepStep siren[]   = { { 3000, 250, 0 }, { 4500, 250, 0 } };
+#define PC_BEEP(n, s, r) { n, s, (uint8_t)(sizeof(s) / sizeof(s[0])), r }
+    static const BeepPreset P[] = {
+        PC_BEEP("click", click, 1), PC_BEEP("beep", beep, 1), PC_BEEP("double", dbl, 1),
+        PC_BEEP("rising", rising, 1), PC_BEEP("falling", falling, 1), PC_BEEP("two_tone", twoTone, 1),
+        PC_BEEP("chime", chime, 1), PC_BEEP("tick", tick, 1), PC_BEEP("pip", pip, 1), PC_BEEP("long", lng, 1),
+        PC_BEEP("alarm", alarm, 0), PC_BEEP("siren", siren, 0),
+    };
+#undef PC_BEEP
+    count = (int)(sizeof(P) / sizeof(P[0]));
+    return P;
+}
+// index of a preset by name, -1 = unknown
+inline int beepPresetIndex(const char* name)
+{
+    int n; const BeepPreset* p = beepPresets(n);
+    for (int i = 0; name && i < n; i++) if (strcmp(p[i].name, name) == 0) return i;
+    return -1;
+}
+
+// Non-blocking player: play() starts a pattern unless one of a higher priority plays,
+// tick() returns the frequency to output now (0 = silent). Exact over a late tick.
+struct BeepPlayer {
+    const BeepPreset* p = nullptr;
+    int prio = 0;
+    uint8_t passes = 0, done = 0, step = 0;   // passes 0 = until stopped
+    bool tone = false;
+    uint32_t at = 0;                          // start of the current on / off phase (millis)
+    uint16_t hz = 0;
+    bool active() const { return p != nullptr; }
+    // passes < 0: the preset's own repeat
+    bool play(const BeepPreset* np, int nprio, uint32_t now, int npasses = -1)
+    {
+        if (!np || !np->count || (p && nprio < prio)) return false;
+        p = np; prio = nprio; passes = (uint8_t)(npasses < 0 ? np->repeat : npasses);
+        done = 0; step = 0; tone = true; at = now; hz = np->steps[0].hz;
+        return true;
+    }
+    void stop() { p = nullptr; prio = 0; hz = 0; }
+    uint16_t tick(uint32_t now)
+    {
+        for (int guard = 0; p && guard < 64; guard++) {
+            const BeepStep& s = p->steps[step];
+            uint32_t d = tone ? s.onMs : s.offMs;
+            if ((uint32_t)(now - at) < d) break;
+            at += d;
+            if (tone) { tone = false; continue; }
+            if (++step >= p->count) { step = 0; if (passes && ++done >= passes) { stop(); break; } }
+            tone = true;
+        }
+        if (p) hz = tone ? p->steps[step].hz : 0;
+        return hz;
+    }
+};
+
+// Volume 0 - 100 % -> LEDC duty at `bits` resolution: 50 % duty is the loudest, the
+// loudness drops roughly with the square of the duty, so the curve is quadratic.
+inline uint32_t beepDuty(int volumePct, int bits)
+{
+    if (volumePct <= 0) return 0;
+    if (volumePct > 100) volumePct = 100;
+    uint32_t half = 1u << (bits - 1);
+    uint32_t d = (uint32_t)((uint64_t)half * (uint32_t)(volumePct * volumePct) / 10000u);
+    return d ? d : 1;
+}
+// Quiet hours from - to (minutes since midnight, local time), across midnight when from > to;
+// from == to = never quiet
+inline bool inQuietHours(int nowMin, int fromMin, int toMin)
+{
+    if (fromMin == toMin) return false;
+    return fromMin < toMin ? nowMin >= fromMin && nowMin < toMin : nowMin >= fromMin || nowMin < toMin;
+}
+// "HH:MM" -> minutes since midnight, -1 = invalid
+inline int clockMinutes(const char* s)
+{
+    int h, m; char extra;
+    if (!s || sscanf(s, "%d:%d%c", &h, &m, &extra) != 2 || h < 0 || h > 23 || m < 0 || m > 59) return -1;
+    return h * 60 + m;
+}
+// E-error countdown (RAM 0x30, read every 5 s): seconds left now, extrapolated from the last
+// reading but by at most maxMs (it may stop counting: never run ahead of the next reading)
+inline int countdownLeft(int readS, uint32_t msSinceRead, uint32_t maxMs)
+{
+    if (readS < 0) return -1;
+    int left = readS - (int)((msSinceRead < maxMs ? msSinceRead : maxMs) / 1000);
+    return left > 0 ? left : 0;
+}
+// Interval between the countdown beeps: every second, faster in the last 10 s; 0 = none
+inline uint32_t countdownBeepMs(int leftS)
+{
+    return leftS <= 0 ? 0 : leftS <= 5 ? 250 : leftS <= 10 ? 500 : 1000;
+}
+
 } // namespace pc
