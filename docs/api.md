@@ -572,7 +572,7 @@ Pellets and burning hours left until the low pellet alarm. The controller counts
 
 ```json
 {"calibrated": true, "cycles": 3, "low": false, "overdue": false, "lastRefillAt": 1794990120, "lastRefillKg": 15, "remainingKg": 6.2, "hoursLeft": 4.15, "hoursLeftAverage": 9.6,
- "alarmExpectedAt": 1795037700, "kgPerHour": 1.49, "refillKg": 15, "kgSinceAlarm": 15.0, "gramsPerUnit": 0.0668,
+ "alarmExpectedAt": 1795037700, "kgPerHour": 1.49, "refillKg": 15, "kgRefilledSinceAlarm": 15.0, "kgBurnedSinceAlarm": 8.81, "gramsPerUnit": 0.0668,
  "spread": 0.041, "averageAuger": 2.91, "averageHours": 168, "unitsSinceAlarm": 131740, "pendingKg": null,
  "history": [{"t": 1794990000, "kg": 15, "units": 224300, "gramsPerUnit": 0.0669, "weight": 1.000, "predKg": -0.42}],
  "debug": {"now": 1795000000, "input": {...}, "tracker": {...}, "constants": {...}, "calc": {...}, "loop": {...}, "save": {...}}}

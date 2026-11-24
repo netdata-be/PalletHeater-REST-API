@@ -310,7 +310,9 @@ void pelletsJson(JsonObject o, bool detail)
             u["stockDays"] = serialized(String((pelCost.stockBags * pelCost.bagKg + (rem > 0 ? rem : 0)) / perDay, 0));
         } else u["stockDays"] = nullptr;
     }
-    o["kgSinceAlarm"] = pellets.cycleStart >= 0 ? serialized(String(pellets.cycleKg, 1)) : serialized(String("null"));
+    // since the last alarm: kg poured in (the refills), and kg burned (auger units x kg per unit)
+    o["kgRefilledSinceAlarm"] = pellets.cycleStart >= 0 ? serialized(String(pellets.cycleKg, 1)) : serialized(String("null"));
+    o["kgBurnedSinceAlarm"] = pellets.cycleStart >= 0 && k > 0 ? serialized(String((pellets.units - pellets.cycleStart) * k, 2)) : serialized(String("null"));
     o["gramsPerUnit"] = k > 0 ? serialized(String(k * 1000.0, 4)) : serialized(String("null"));
     o["spread"] = pellets.nCycles >= 2 ? serialized(String(pellets.spread(), 3)) : serialized(String("null"));
     o["averageAuger"] = avgHours ? serialized(String(avg, 2)) : serialized(String("null"));

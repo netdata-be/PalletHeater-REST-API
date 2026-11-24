@@ -6306,9 +6306,14 @@
             "type": "number",
             "description": "Amount of an automatically detected refill"
           },
-          "kgSinceAlarm": {
+          "kgRefilledSinceAlarm": {
             "type": "number",
-            "description": "kg added since the last alarm",
+            "description": "kg poured in since the last low pellet alarm (the refills of this cycle); null before the first alarm. Was kgSinceAlarm up to v2.0.0",
+            "nullable": true
+          },
+          "kgBurnedSinceAlarm": {
+            "type": "number",
+            "description": "kg burned since the last low pellet alarm: auger units since the alarm x kg per unit; null before the first alarm or without calibration",
             "nullable": true
           },
           "gramsPerUnit": {
