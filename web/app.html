@@ -632,6 +632,27 @@ button.mini{padding:1px 8px;font-size:11px;font-weight:550;border-radius:7px;mar
     </div>
   </section>
 
+  <!-- Status LEDs: only on a board with them (GET /api/leds answers 404 on the DevKit) -->
+  <section class="card" id="ledCard" hidden>
+    <h2><span><span data-i="ledTitle"></span><span data-help="leds"></span></span></h2>
+    <div class="row">
+      <span class="lbl"><span data-i="ledOn"></span><span class="hint" id="ledHint">&nbsp;</span></span>
+      <label class="switch"><input type="checkbox" id="ledToggle"><span></span></label>
+    </div>
+    <div class="row">
+      <span class="lbl"><span data-i="ledBright"></span><span class="hint" id="ledBrightVal">&nbsp;</span></span>
+      <input type="range" id="ledBright" min="1" max="100" step="1" style="width:150px;accent-color:var(--accent)">
+    </div>
+    <div class="row">
+      <span class="lbl"><span data-i="ledNight"></span><span class="hint" data-i="ledNightHint"></span></span>
+      <label class="switch"><input type="checkbox" id="ledNight"><span></span></label>
+    </div>
+    <div class="row" id="ledNightRow">
+      <span class="lbl" data-i="ledNightHours"></span>
+      <span class="keybtns"><select id="ledFrom"></select><select id="ledTo"></select></span>
+    </div>
+  </section>
+
   <!-- Network -->
   <section class="card" id="wifiCard">
     <h2><span><span data-i="wifiTitle"></span><span data-help="wifi"></span></span><span class="keybtns"><button id="wifiNetBtn" data-i="wifiOther"></button><button id="wifiEditBtn" data-i="wifiIpBtn"></button></span></h2>
@@ -898,6 +919,9 @@ pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low 
     cqMin:"{0}: for a flame that is too small because of too much draught",
     pqPlus:"{0}: for a small flame at maximum power, longer pellets or a lower consumption than specified",
     pqMin:"{0}: for a lot of ash in the brazier or a higher consumption than specified",
+    ledTitle:"Status LEDs", ledOn:"LEDs on", ledBright:"Brightness", ledNight:"Off at night", ledNightHint:"Local time; needs the clock (NTP)", ledNightHours:"Night from – to",
+    ledOnHint:"LED1 system, LED2 stove", ledOffHint:"Off", ledNightNow:"Off now: night", ledSaved:"LED settings saved",
+    h_leds:"The two LEDs on the board. LED1 (system): blue = starting / connecting to WiFi, green = WiFi connected, purple double flash = config portal (access point), cyan blinking = firmware update, red double flash = the controller crashed or an update was rolled back (a short press of the button clears it), white blink = button pressed. LED2 (stove): off = stove off, green blip = standby, orange blinking = starting / ignition, orange = burning, blue = brazier cleaning, blue blinking = final cleaning, red fast = alarm / error, magenta blinking = no answer from the stove; a yellow double flash = a warning (pellet reserve, an error counting down, remote sensor not used). 100 % brightness is 40 % of what the LEDs can do (the USB fuse).",
     telnetHint:"Debug menu on port 23, switches immediately", keyRequired:"API key required", keyShow:"Show", keyHide:"Hide", keyCopy:"Copy", keyRotate:"New key",
     httpsOn:"On: https://{0} (port 443)", httpsOff:"Off: only HTTP (port 80)", httpsStarting:"Starting…", httpsCert:"Certificate", httpsValid:"self-signed, ECDSA P-256, valid until {0}",
     httpsOpen:"Open over HTTPS", httpsDl:"Download", httpsNew:"New certificate", httpsFpLbl:"SHA-256 {0}",
@@ -1075,6 +1099,9 @@ pelLeft:"Pellets in de bak", pelLearning:"wordt gemeten: vul bij bij het pellet-
     cqMin:"{0}: voor een te kleine vlam door te veel trek",
     pqPlus:"{0}: voor een kleine vlam bij maximumvermogen, langere pellets of een lager verbruik dan vermeld",
     pqMin:"{0}: voor veel as in de brandkorf of een hoger verbruik dan vermeld",
+    ledTitle:"Statuslampjes", ledOn:"Lampjes aan", ledBright:"Helderheid", ledNight:"'s Nachts uit", ledNightHint:"Lokale tijd; heeft de klok nodig (NTP)", ledNightHours:"Nacht van – tot",
+    ledOnHint:"LED1 systeem, LED2 kachel", ledOffHint:"Uit", ledNightNow:"Nu uit: nacht", ledSaved:"Instellingen lampjes bewaard",
+    h_leds:"De twee lampjes op het bord. LED1 (systeem): blauw = opstarten / verbinden met WiFi, groen = WiFi verbonden, paars dubbel flitsen = configuratieportaal (access point), cyaan knipperend = firmware-update, rood dubbel flitsen = de controller is gecrasht of een update werd teruggedraaid (kort op de knop drukken wist het), wit flitsje = knop ingedrukt. LED2 (kachel): uit = kachel uit, groen flitsje = stand-by, oranje knipperend = opstarten / ontsteking, oranje = brandt, blauw = brander reinigen, blauw knipperend = eindreiniging, rood snel = alarm / fout, magenta knipperend = geen antwoord van de kachel; geel dubbel flitsen = een waarschuwing (pelletreserve, een fout die aftelt, sensor van de afstandsbediening niet gebruikt). 100 % helderheid is 40 % van wat de lampjes kunnen (de USB-zekering).",
     telnetHint:"Debugmenu op poort 23, schakelt meteen", keyRequired:"API-key verplicht", keyShow:"Toon", keyHide:"Verberg", keyCopy:"Kopieer", keyRotate:"Nieuwe key",
     httpsOn:"Aan: https://{0} (poort 443)", httpsOff:"Uit: enkel HTTP (poort 80)", httpsStarting:"Start…", httpsCert:"Certificaat", httpsValid:"zelfondertekend, ECDSA P-256, geldig tot {0}",
     httpsOpen:"Open via HTTPS", httpsDl:"Download", httpsNew:"Nieuw certificaat", httpsFpLbl:"SHA-256 {0}",
@@ -1512,6 +1539,25 @@ async function loadSecurity() {
   try { httpsState = (await api("GET", "/api/https")).data; } catch (_) {}
   renderSecurity(); renderHttps();
 }
+// ---------- Status LEDs (board only: the card stays hidden when /api/leds is not there) ----------
+let leds = null;
+for (let h = 0; h < 24; h++) { const o = String(h).padStart(2, "0") + ":00"; $("ledFrom").add(new Option(o, h)); $("ledTo").add(new Option(o, h)); }
+function renderLeds() {
+  const l = leds; $("ledCard").hidden = !l; if (!l) return;
+  $("ledToggle").checked = !!l.enabled;
+  $("ledHint").textContent = !l.enabled ? t("ledOffHint") : l.nightActive ? t("ledNightNow") : t("ledOnHint");
+  $("ledBright").value = l.brightness; $("ledBrightVal").textContent = l.brightness + " %";
+  $("ledNight").checked = !!l.night; $("ledNightRow").hidden = !l.night;
+  $("ledFrom").value = l.nightFrom; $("ledTo").value = l.nightTo;
+}
+async function loadLeds() { try { leds = (await api("GET", "/api/leds")).data; } catch (_) { leds = null; } renderLeds(); }
+async function saveLeds(p) { try { leds = await write(t("ledSaved"), "POST", "/api/leds", p); } catch (_) {} renderLeds(); }
+$("ledToggle").onchange = e => saveLeds({ enabled: e.target.checked });
+$("ledBright").oninput = e => { $("ledBrightVal").textContent = e.target.value + " %"; };
+$("ledBright").onchange = e => saveLeds({ brightness: e.target.value });
+$("ledNight").onchange = e => saveLeds({ night: e.target.checked });
+$("ledFrom").onchange = e => saveLeds({ nightFrom: e.target.value });
+$("ledTo").onchange = e => saveLeds({ nightTo: e.target.value });
 // ---------- HTTPS (port 443, self-signed certificate made on the controller) ----------
 let httpsState = null;
 function renderHttps() {
@@ -4242,7 +4288,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) { po
 
 applyStatic(); applyExpert(); renderTimers();
 // Read the remote first so the page starts in the right language
-pollRemote().finally(() => poll().then(() => { loadTimers(); loadHistory(); loadBt(); loadSecurity(); loadMqtt(); loadWifi(); loadFw(); loadParams(); loadPelDbg(); loadUse(); }));
+pollRemote().finally(() => poll().then(() => { loadTimers(); loadHistory(); loadBt(); loadSecurity(); loadLeds(); loadMqtt(); loadWifi(); loadFw(); loadParams(); loadPelDbg(); loadUse(); }));
 setInterval(() => { if (!document.hidden && !offline) { loadMqtt(); loadWifi(); if (!fwInfo || !["checking", "downloading", "restarting"].includes(fwInfo.state)) loadFw(); } }, 30000);
 </script>
 </body>
