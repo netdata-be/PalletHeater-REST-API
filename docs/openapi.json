@@ -2855,6 +2855,141 @@
         }
       }
     },
+    "/api/leds": {
+      "get": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "Status LED settings and what they show now (board with WS2812 LEDs only)",
+        "description": "Only on the OpenPelletBridge board (two WS2812 LEDs: LED1 system, LED2 stove); the ESP32 DevKit answers 404. `sys` / `stove`: the state each LED shows (overlays such as the button blink not included). Colours and patterns: docs/api.md.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "enabled": true,
+                  "brightness": 25,
+                  "maxPwmPercent": 40,
+                  "night": false,
+                  "nightFrom": 22,
+                  "nightTo": 7,
+                  "nightActive": false,
+                  "sys": "connected",
+                  "stove": "working",
+                  "stoveWarning": false
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "No status LEDs on this board"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Device"
+        ],
+        "summary": "Change the status LED settings (applied immediately, stored in NVS)",
+        "description": "Only the given parameters change.",
+        "parameters": [
+          {
+            "name": "enabled",
+            "in": "query",
+            "required": false,
+            "description": "LEDs on / off",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "brightness",
+            "in": "query",
+            "required": false,
+            "description": "1 - 100, percent of the driver's cap (40 % PWM)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "night",
+            "in": "query",
+            "required": false,
+            "description": "LEDs off during the night hours (local time, needs NTP)",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "nightFrom",
+            "in": "query",
+            "required": false,
+            "description": "Night starts at this hour",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 23
+            }
+          },
+          {
+            "name": "nightTo",
+            "in": "query",
+            "required": false,
+            "description": "Night ends at this hour",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 23
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "success",
+                  "enabled": true,
+                  "brightness": 25,
+                  "maxPwmPercent": 40,
+                  "night": false,
+                  "nightFrom": 22,
+                  "nightTo": 7,
+                  "nightActive": false,
+                  "sys": "connected",
+                  "stove": "working",
+                  "stoveWarning": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid value"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "No status LEDs on this board"
+          }
+        }
+      }
+    },
     "/api/keywatch": {
       "get": {
         "summary": "Key watch status and log",
