@@ -853,7 +853,7 @@ const I18N = {
     ghConfirmDev:"This controller runs development build {1}. Install release {0} from GitHub instead? It restarts and is unreachable for about a minute; the stove keeps running.",
     ghAuto:"Check for updates automatically", ghAutoHint:"at start-up; daily only while HTTPS is off (GitHub)",
     h_ghUpdate:"New versions of the OpenPelletBridge firmware (the ESP32 controller, NOT the stove) are published as GitHub releases of github.com/netdata-be/PalletHeater-REST-API. The controller checks the latest release (automatically at start-up, daily as well while HTTPS is off, or with the button; with HTTPS on the daily check would take the memory HTTPS needs) and installs it only when you ask: it downloads the image over HTTPS, verifies it and restarts. Settings are kept. A development build (version not from a release tag) is not offered an update, but you can install the release over it.",
-    fwRestarting:"Installed – controller restarts…", fwNoAnswer:"No answer after the restart – reload the page", fwFailed:"Update failed: {0}",
+    fwRestarting:"Installed – controller restarts…", ghRestartInstall:"Controller restarts and downloads the update right after the start-up – unreachable for 1 to 3 minutes; the stove carries on as usual…", fwNoAnswer:"No answer after the restart – reload the page", fwFailed:"Update failed: {0}",
     h_fwUpdate:"This is the firmware of the OpenPelletBridge controller (the ESP32), NOT of the pellet stove itself: the stove firmware cannot be changed this way. Installs it over HTTP (POST /api/update), several times faster than ArduinoOTA. Use the firmware.bin from .pio/build/<environment>/. The controller restarts after the update; the stove itself is not affected. Requires the API key (or the OTA password).", esNoRestartSub:"Energy saving · no automatic restart", stopsAt:"Stops at {0}", useSwitch:"Use the switch to turn energy saving off",
     status:"Status", history:"History", temperatures:"Temperatures", room:"Room", fumeTemp:"Fume temperature", showTable:"Show as table",
     histEmpty:"No history yet. The controller records a point every 2 minutes once it has the time (NTP) and stove data.", histErr:"Could not load history: {0}",
@@ -1030,7 +1030,7 @@ pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low 
     ghConfirmDev:"Deze controller draait ontwikkelversie {1}. Release {0} van GitHub in de plaats installeren? Hij herstart en is ongeveer een minuut onbereikbaar; de kachel blijft gewoon werken.",
     ghAuto:"Automatisch zoeken naar updates", ghAutoHint:"bij het opstarten; dagelijks enkel als HTTPS uit staat (GitHub)",
     h_ghUpdate:"Nieuwe versies van de OpenPelletBridge-firmware (de ESP32-controller, NIET de kachel) verschijnen als GitHub-release van github.com/netdata-be/PalletHeater-REST-API. De controller kijkt de laatste release na (automatisch bij het opstarten, dagelijks enkel als HTTPS uit staat, of met de knop; met HTTPS aan zou de dagelijkse check het geheugen innemen dat HTTPS nodig heeft) en installeert ze enkel als jij dat vraagt: hij downloadt het image via HTTPS, controleert het en herstart. Instellingen blijven bewaard. Een ontwikkelversie (versie niet van een release-tag) krijgt geen update aangeboden, maar je kan de release er wel over installeren.",
-    fwRestarting:"Geïnstalleerd – controller herstart…", fwNoAnswer:"Geen antwoord na de herstart – herlaad de pagina", fwFailed:"Update mislukt: {0}",
+    fwRestarting:"Geïnstalleerd – controller herstart…", ghRestartInstall:"Controller herstart en downloadt de update meteen na het opstarten – 1 à 3 minuten onbereikbaar; de kachel werkt gewoon verder…", fwNoAnswer:"Geen antwoord na de herstart – herlaad de pagina", fwFailed:"Update mislukt: {0}",
     h_fwUpdate:"Dit is de firmware van de OpenPelletBridge-controller (de ESP32), NIET van de pelletkachel zelf: de firmware van de kachel kan je hiermee niet wijzigen. Installeert ze via HTTP (POST /api/update), meerdere keren sneller dan ArduinoOTA. Gebruik firmware.bin uit .pio/build/<omgeving>/. De controller herstart na de update; de kachel zelf merkt er niets van. Vereist de API-key (of het OTA-wachtwoord).", esNoRestartSub:"Energy saving · geen automatische herstart", stopsAt:"Stopt bij {0}", useSwitch:"Gebruik de schakelaar om energy saving uit te zetten",
     status:"Status", history:"Geschiedenis", temperatures:"Temperaturen", room:"Kamer", fumeTemp:"Rookgastemperatuur", showTable:"Toon als tabel",
     histEmpty:"Nog geen geschiedenis. De controller bewaart elke 2 minuten een punt zodra hij de tijd (NTP) en gegevens van de kachel heeft.", histErr:"Geschiedenis laden mislukt: {0}",
@@ -1671,7 +1671,7 @@ function waitRestartThenReload(hint) {
     try { const r = await fetch("/api/state", { cache: "no-store" }); if (r.ok || r.status === 401) { location.reload(); return; } } catch (_) {}
     if (n > 0) setTimeout(() => waitBack(n - 1), 2000); else hint.textContent = t("fwNoAnswer");
   };
-  setTimeout(() => waitBack(60), 5000);
+  setTimeout(() => waitBack(100), 5000);   // up to ~3.5 min: restart, download after the start-up, restart into the new firmware
 }
 // "2 commits after v1.0.1, with local changes"
 function devWhat(f) {
@@ -1692,7 +1692,7 @@ function renderFw() {
   let txt;
   if (f.state === "checking") txt = t("ghChecking");
   else if (f.state === "downloading") txt = t("ghDownloading", pct);
-  else if (f.state === "restarting") txt = t("fwRestarting");
+  else if (f.state === "restarting") txt = t("ghRestartInstall");
   else if (f.state === "error") txt = t("ghError", f.lastError || "?");
   else if (!f.latest) txt = t("ghNever");
   else if (f.updateAvailable) txt = t("ghAvail", f.latest, f.published ? fmtDate(new Date(f.published)) : "?", f.current);
@@ -1742,7 +1742,10 @@ $("ghInstall").onclick = async () => {
             : t("ghConfirmDev", f.latest, f.current);
   if (!confirm(msg)) return;
   const p = { action: "install" }; if (!f.updateAvailable) p.force = true;
-  fwAction(p, t("ghDownloading", 0));
+  // the controller checks GitHub, restarts and downloads after the restart: the status page
+  // (/update, served by the controller in every step) follows that and comes back here
+  try { await api("POST", "/api/firmware", p); location.href = "/update?to=" + encodeURIComponent(f.latest || "") + "&lang=" + lang; }
+  catch (e) { toast(t("failed", t("ghInstall", f.latest), e.message), true); loadFw(); }
 };
 $("ghAuto").onchange = async e => {
   try { fwInfo = await write(t("save2"), "POST", "/api/firmware", { autoCheck: e.target.checked }); renderFw(); }
