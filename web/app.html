@@ -326,6 +326,17 @@ body:not(.debug) .d{display:none!important}
   .bar .brk{display:block;order:2;flex-basis:100%;height:0}
   .bar .xbtn{order:3}
 }
+/* read planner (expert) */
+.plan td{vertical-align:middle}
+.plan .bar{position:relative;height:8px;border-radius:4px;background:var(--seg);min-width:120px;overflow:hidden}
+.plan .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:var(--s1)}
+.plan .bar i.late{background:var(--warn)}
+.plan .bar b{position:absolute;top:0;bottom:0;left:25%;width:2px;background:var(--text);opacity:.35}
+.plan .bar u{position:absolute;top:-1px;bottom:-1px;width:3px;margin-left:-1px;background:var(--ok);border-radius:1px;display:none}
+.plan tr.pr td{background:var(--seg);font-weight:600;font-size:12px;color:var(--muted)}
+.meter{position:relative;height:8px;border-radius:4px;background:var(--line);margin-top:6px;overflow:hidden}
+.meter i{position:absolute;left:0;top:0;bottom:0;background:var(--s1);border-radius:4px}
+.meter b{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--muted)}
 /* pellet use per day */
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:2px 0 10px}
 .kpi{background:var(--seg);border-radius:10px;padding:8px 12px}
@@ -678,6 +689,15 @@ button.mini{padding:1px 8px;font-size:11px;font-weight:550;border-radius:7px;mar
     <p class="muted" style="font-size:12px;margin:8px 0 0" data-i="parNote"></p>
   </section>
 
+  <!-- Read planner of the controller (expert): GET /api/plan, every 2 s while shown -->
+  <section class="card wide x" id="planCard">
+    <h2><span><span data-i="planTitle"></span><span data-help="plan"></span></span><span class="muted" id="planAge" style="text-transform:none;letter-spacing:0;font-weight:400"></span></h2>
+    <div class="kpis" id="planKpis"></div>
+    <div class="hypwrap"><table class="hyp plan" id="planTable"></table></div>
+    <p class="muted" style="font-size:12px;margin:8px 0 0" id="planNote"></p>
+    <div class="actions"><button id="planCapBtn" type="button"></button><button id="planEarlyBtn" type="button"></button></div>
+  </section>
+
   <!-- Pellet estimate: everything the calculation is made of (debug only) -->
   <section class="card wide d" id="pelDbgCard">
     <h2><span><span data-i="pelDbgTitle"></span><span data-help="pelDbg"></span></span><span class="keybtns"><span class="muted" id="pelDbgAge" style="text-transform:none;letter-spacing:0;font-weight:400;align-self:center"></span><button id="pelDbgCopy" data-i="keyCopy"></button><button id="pelDbgReload" data-i="reload"></button></span></h2>
@@ -773,6 +793,7 @@ const I18N = {
     mqttNone:"Not available (older firmware)", mqttOff:"Off", mqttConnected:"Connected to {0} – topics {1}/…", mqttDisconnected:"Not connected to {0}: {1}", mqttPassKeep:"unchanged", mqttSaved:"MQTT settings saved", cancel:"Cancel",
     h_mqtt:"Publishes the stove values to an MQTT broker and accepts commands. Values are plain text under <prefix>/state/… (e.g. room_temp = 21.5, power = ON), retained, on change and every 5 min. Commands go to <prefix>/set/…: power and energy_saving (ON / OFF or 1 / 0), mode (heat / off), setpoint (7 – 30), flame_power (1 – 4), fan_speed (off / 0 – 3), es_stop and es_start (0 – 3). <prefix>/status is online / offline. With Home Assistant discovery on, the stove appears in Home Assistant by itself (climate, switches, numbers, sensors). Other systems such as Loxone (through an MQTT gateway) or Node-RED use the same topics; discovery can stay off for them.",
     wxTitle:"Use against the outdoor temperature", h_wx:"Each dot is one day: the mean outdoor temperature of that day (Open-Meteo, open source weather data, fetched by this browser for the location set with Location…) against the pellets burned. The line is the trend: how many kg per day more for each degree colder. Per degree day: kg per heating degree day (18 °C − the mean outdoor temperature, days above 18 °C count 0), a measure of the efficiency that does not depend on the weather; if it rises over the months, the stove or the house needs more pellets for the same cold (dirt, other pellets, ventilation). Next 7 days: kg per degree day applied to the degree days of the weather forecast, or the trend once it is reliable (10 days, fit at least 50 %). The trend line and 'per degree colder' appear from 10 days; with timers and energy saving they can stay weak (low fit). Today and the first, incomplete day are left out. The location is kept on the controller rounded to ~1 km; only this browser sends it to Open-Meteo.",
+    planTitle:"Read planner", h_plan:"How the controller reads the stove (GET /api/plan, refreshed every 2 s). Every group of registers has its own interval, per stove state (active: starting, burning, cleaning, alarm; idle: off, stand-by). The bar fills up towards the next read: at 100 % the group is due (orange: overdue). The planner reads the most important due group first and holds the bus for one group only; a command (web, MQTT, telnet, Bluetooth) gets the bus before the next register ('handed over'). Spare bus time, up to 50 %, refreshes settings and timers more often. While a menu is open on the remote control its settings are read every few seconds.",
     useTitle:"Pellet use", h_use:"Pellets burned per day, from the auger counter (auger value × time, the same as the estimate). Kept per day on the controller for up to 400 days; the days before the feature existed are filled in from the 7-day hourly history. Kilograms use the calibration of now, so older days become more accurate with every refill cycle too. Price…: the price of a bag and its weight (€ per kg follows). Stock…: the bags you have at home; every refill (detected or entered) takes its kg from it, and the stock is shown in days at the use of the last 7 days. Today is drawn lighter: the day is still running.",
     pelDbgTitle:"Pellet estimate (debug)", h_pelDbg:"Everything the pellet estimate is made of, from GET /api/pellets (refreshed every 10 s while debug mode is on). The controller adds up 'auger units': the auger on-time per cycle (RAM 0x0D, at most 12 s) times the seconds it fed. The level sensor (RAM 0xA4) trips at the same height each time, so between two alarms exactly the kg refilled in between were burned: kg per unit = kg / units. Left = kg refilled since the last alarm − kg per unit × units since that alarm; hours = left / (kg per unit × auger value × 3600). The checks at the top flag what usually goes wrong: no alarm or refill seen yet, sensor values the counter ignores, more burned than refilled (wrong refill amount), gaps in the readings, cycles that disagree. 'Copy' puts the raw JSON on the clipboard for a bug report.",
     parTitle:"Parameters (EEPROM)", h_par:"Presets stored in the stove EEPROM, read live (GET /api/dump). 'Verified' = checked on this stove. The presets per power level are the values the stove uses at each flame power; the row of the current actual flame power is highlighted.",
@@ -948,6 +969,7 @@ pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low 
     mqttNone:"Niet beschikbaar (oudere firmware)", mqttOff:"Uit", mqttConnected:"Verbonden met {0} – topics {1}/…", mqttDisconnected:"Niet verbonden met {0}: {1}", mqttPassKeep:"ongewijzigd", mqttSaved:"MQTT-instellingen bewaard", cancel:"Annuleren",
     h_mqtt:"Publiceert de waarden van de kachel naar een MQTT-broker en aanvaardt commando's. Waarden staan als gewone tekst onder <prefix>/state/… (bv. room_temp = 21.5, power = ON), retained, bij elke wijziging en elke 5 min. Commando's gaan naar <prefix>/set/…: power en energy_saving (ON / OFF of 1 / 0), mode (heat / off), setpoint (7 – 30), flame_power (1 – 4), fan_speed (off / 0 – 3), es_stop en es_start (0 – 3). <prefix>/status is online / offline. Met Home Assistant discovery aan verschijnt de kachel vanzelf in Home Assistant (thermostaat, schakelaars, getallen, sensoren). Andere systemen zoals Loxone (via een MQTT-gateway) of Node-RED gebruiken dezelfde topics; discovery mag voor hen uit.",
     wxTitle:"Verbruik tegenover de buitentemperatuur", h_wx:"Elk punt is één dag: de gemiddelde buitentemperatuur van die dag (Open-Meteo, open source weergegevens, opgehaald door deze browser voor de locatie die je met Locatie… instelt) tegenover de verbrande pellets. De lijn is de trend: hoeveel kg per dag meer per graad kouder. Per graaddag: kg per graaddag (18 °C − de gemiddelde buitentemperatuur, dagen boven 18 °C tellen 0), een maat voor het rendement die niet van het weer afhangt; stijgt die over de maanden, dan heeft de kachel of het huis meer pellets nodig voor dezelfde kou (vuil, andere pellets, ventilatie). Komende 7 dagen: kg per graaddag toegepast op de graaddagen van de weersverwachting, of de trend zodra die betrouwbaar is (10 dagen, samenhang minstens 50 %). De trendlijn en 'per graad kouder' verschijnen vanaf 10 dagen; met timers en energy saving kan de samenhang zwak blijven. Vandaag en de eerste, onvolledige dag tellen niet mee. De locatie wordt op de controller bewaard, afgerond op ~1 km; alleen deze browser stuurt ze naar Open-Meteo.",
+    planTitle:"Leesplanner", h_plan:"Hoe de controller de kachel uitleest (GET /api/plan, elke 2 s ververst). Elke groep registers heeft een eigen interval, per toestand van de kachel (actief: opstarten, branden, reinigen, alarm; rust: uit, stand-by). De balk loopt vol tot de volgende lezing: bij 100 % is de groep aan de beurt (oranje: over tijd). De planner leest eerst de belangrijkste groep die aan de beurt is en houdt de bus maar één groep vast; een opdracht (web, MQTT, telnet, Bluetooth) krijgt de bus vóór het volgende register ('afgestaan'). Vrije bustijd, tot 50 %, ververst instellingen en timers vaker. Staat er een menu open op de afstandsbediening, dan worden die instellingen om de paar seconden gelezen.",
     useTitle:"Pelletverbruik", h_use:"Verbrande pellets per dag, uit de schroefteller (schroefwaarde × tijd, dezelfde als voor de schatting). Per dag bewaard op de controller, tot 400 dagen; de dagen van vóór deze functie zijn aangevuld uit de uurgeschiedenis van 7 dagen. De kilo's gebruiken de ijking van nu, zodat ook oudere dagen nauwkeuriger worden bij elke bijvulcyclus. Prijs…: de prijs van een zak en zijn gewicht (€ per kg volgt daaruit). Voorraad…: de zakken die je thuis hebt; elke bijvulling (herkend of ingegeven) haalt zijn kilo's daaruit, en de voorraad wordt getoond in dagen bij het verbruik van de laatste 7 dagen. Vandaag is lichter getekend: die dag loopt nog.",
     pelDbgTitle:"Pelletschatting (debug)", h_pelDbg:"Alles waaruit de pelletschatting bestaat, uit GET /api/pellets (elke 10 s ververst zolang debug aan staat). De controller telt 'schroefeenheden' op: de aan-tijd van de schroef per cyclus (RAM 0x0D, hoogstens 12 s) maal het aantal seconden dat ze voedde. De niveausensor (RAM 0xA4) slaat telkens op dezelfde hoogte aan, dus tussen twee alarmen is precies de bijgevulde hoeveelheid verbrand: kg per eenheid = kg / eenheden. Over = kg bijgevuld sinds het laatste alarm − kg per eenheid × eenheden sinds dat alarm; uren = over / (kg per eenheid × schroefwaarde × 3600). De controles bovenaan tonen wat meestal misloopt: nog geen alarm of bijvulling gezien, sensorwaarden die de teller negeert, meer verbrand dan bijgevuld (verkeerde hoeveelheid), gaten in de metingen, cycli die niet overeenkomen. 'Kopieer' zet de ruwe JSON op het klembord voor een foutmelding.",
     parTitle:"Parameters (EEPROM)", h_par:"Presets in het EEPROM van de kachel, live gelezen (GET /api/dump). 'Bevestigd' = nagekeken op deze kachel. De presets per vermogen zijn de waarden die de kachel per vlamvermogen gebruikt; de rij van het huidige werkelijke vlamvermogen is gemarkeerd.",
@@ -1128,7 +1150,7 @@ function langFromRemote(code) { return code === "NLD" ? "nl" : "en"; }
 function setLang(l) {
   if (LANG_OVERRIDE || l === lang) return;
   lang = l; try { localStorage.setItem("remoteLang", l); } catch (_) {}   // avoids a flash of the other language on the next load
-  applyStatic(); applyExpert(); if (state) render(state); renderTimers(); renderNext(); renderHistory(); renderEvents(); renderRemote(); renderAlerts(); if (liveReady) renderLive(); renderParams();
+  applyStatic(); applyExpert(); if (state) render(state); renderTimers(); renderNext(); renderHistory(); renderEvents(); renderRemote(); renderAlerts(); if (liveReady) renderLive(); renderParams(); if (planData) renderPlan();
 }
 function t(key, ...a) { let s = (I18N[lang][key] ?? I18N.en[key] ?? key); a.forEach((v, i) => s = s.replace("{" + i + "}", v)); return s; }
 // The stove switched itself off at the end of the pellet reserve (controller error PELLETS):
@@ -3441,7 +3463,7 @@ function applyExpert() {
 }
 $("expertBtn").onclick = () => {
   expert = !expert; try { localStorage.setItem("expert", expert ? "1" : "0"); } catch (_) {}
-  applyExpert(); renderHistory(); renderMqtt(); renderWifi();
+  applyExpert(); renderHistory(); renderMqtt(); renderWifi(); if (expert) loadPlan();
 };
 $("debugBtn").onclick = () => {
   debug = !debug; try { localStorage.setItem("debug", debug ? "1" : "0"); } catch (_) {}
@@ -3787,6 +3809,134 @@ function renderPelDbg() {
     ytb.appendChild(r);
   });
   $("pelDbgCyc").appendChild(ytb);
+}
+
+// ---------- read planner (expert): GET /api/plan ----------
+// One row per group of registers: a bar that fills up towards the next read (age / interval),
+// orange when overdue; reads per minute from the difference between two polls.
+let planData = null, planPrev = null, planAt = 0, planBusy = false, planSnaps = [];   // snapshots of the last ~60 s, for the rates
+async function loadPlan() {
+  if (!expert || offline || planBusy || document.hidden || fwDownloading()) return;
+  planBusy = true;
+  try {
+    const { data } = await api("GET", "/api/plan"); planData = data; planAt = Date.now();
+    planSnaps.push({ data, at: planAt });
+    while (planSnaps.length > 2 && planAt - planSnaps[0].at > 60000) planSnaps.shift();
+    planPrev = planSnaps.length > 1 ? planSnaps[0] : null;   // rates over the last ~60 s
+    if (planPrev && sumR(data.groups) < sumR(planPrev.data.groups)) { planSnaps = [planSnaps[planSnaps.length - 1]]; planPrev = null; }   // controller restarted
+  }
+  catch (_) {}
+  finally { planBusy = false; }
+  renderPlan();
+}
+setInterval(loadPlan, 2000);
+const sumR = g => g.reduce((a, x) => a + x.reads, 0);
+// The table is built once; the bars move smoothly between two polls (requestAnimationFrame):
+// from the age the controller reported (ageMs) plus the time since. A group that is due (or
+// overdue) at the next read restarts at 0, as the planner reads it on time; one the controller
+// reported as overdue stays full and orange until it is read.
+let planRows = null, planKey = "", planRaf = 0, planPerf = 0;
+function renderPlan() {
+  if (!expert) return;
+  const p = planData, loc = lang === "nl" ? "nl-BE" : "en-GB";
+  const kp = $("planKpis"), tb = $("planTable");
+  if (!p) { kp.innerHTML = ""; tb.innerHTML = ""; planKey = ""; $("planNote").textContent = L("Laden… (vereist firmware met de leesplanner)", "Loading… (needs firmware with the read planner)"); return; }
+  $("planAge").textContent = t("updated", new Date(planAt).toLocaleTimeString(loc));
+  kp.innerHTML = "";
+  const kpi = (k, v, sub, meter) => {
+    const d = el("div", "kpi"); d.append(el("div", "k", k), el("div", "v", v));
+    if (meter != null) { const m = el("div", "meter"), i = el("i"), cap = el("b"); i.style.width = Math.min(100, meter) + "%"; cap.style.left = (p.busCap ?? 50) + "%"; cap.title = L("grens vrije-tijd-reads", "spare-time limit"); m.append(i, cap); d.appendChild(m); }
+    if (sub) d.appendChild(el("div", "s", sub)); kp.appendChild(d);
+  };
+  const dt = planPrev ? (planAt - planPrev.at) / 1000 : 0;
+  const rate = planPrev && dt > 0 ? (sumR(p.groups) - sumR(planPrev.data.groups)) / dt : null;
+  kpi(L("Bus bezet", "Bus busy"), p.busPercent + " %", L("planner, laatste ~5 s · grens ", "planner, last ~5 s · limit ") + (p.busCap ?? 50) + " %", p.busPercent);
+  kpi(L("Groepen per seconde", "Groups per second"), rate == null ? "–" : rate.toLocaleString(loc, { maximumFractionDigits: 1 }), rate == null ? "" : L("gemiddeld over ", "average over ") + Math.round(dt) + " s");
+  kpi(L("Stand", "Mode"), p.active ? L("actief", "active") : L("rust", "idle"), p.active ? L("opstarten / branden / alarm", "start-up / burning / alarm") : L("uit / stand-by", "off / stand-by"));
+  kpi(L("Afstandsbediening", "Remote control"), p.remoteMenu > 0 ? L("menu ", "menu ") + p.remoteMenu : p.remoteMenu === 0 ? L("hoofdscherm", "main screen") : "–",
+      p.remoteMenu > 0 ? L("instellingen sneller gelezen", "settings read faster") : "");
+  kpi(L("Afgestaan", "Handed over"), String(p.handedOver ?? 0), L("bus aan een opdracht gegeven", "bus given to a command"));
+  // the table: built once (or when the groups change), then only the values
+  const key = lang + "|" + p.groups.map(g => g.name).join("|");
+  if (key !== planKey) {
+    planKey = key; tb.innerHTML = ""; planRows = [];
+    const PR = { 1: L("1 · live", "1 · live"), 2: L("2 · regelmatig", "2 · regular"), 3: L("3 · instellingen", "3 · settings"), 4: L("4 · zelden", "4 · rare"), 5: L("5 · vast", "5 · static") };
+    const hr = el("tr"); [L("Groep", "Group"), L("Interval", "Interval"), L("Tot de volgende lezing", "Until the next read"), L("Per min", "Per min"), L("Reads", "Reads"), L("Fouten", "Fails")].forEach(h => hr.appendChild(el("th", "", h)));
+    const th = el("thead"); th.appendChild(hr); tb.appendChild(th);
+    const body = el("tbody"); let lastPr = 0;
+    for (const g of p.groups) {
+      if (g.prio !== lastPr) { const r = el("tr", "pr"), c = el("td", "", PR[g.prio] || g.prio); c.colSpan = 6; r.appendChild(c); body.appendChild(r); lastPr = g.prio; }
+      const bar = el("div", "bar"), fill = el("i"), last = el("u"); bar.append(fill, last);
+      last.title = L("hier werd de groep de vorige keer opnieuw gelezen", "where the group was read again last time");
+      // settings, rare and static groups: from a quarter of the interval spare bus time may read them early
+      if (g.prio >= 3) { const mk = el("b"); mk.style.left = (p.early ?? 25) + "%"; mk.title = L("vanaf hier mag vrije bustijd de groep al lezen", "from here spare bus time may read the group early"); bar.appendChild(mk); }
+      const r = el("tr"), cells = [el("td", "", g.name), el("td", "n"), el("td"), el("td", "n"), el("td", "n"), el("td", "n")];
+      cells[2].appendChild(bar); r.append(...cells); body.appendChild(r);
+      planRows.push({ fill, bar, last, iv: cells[1], perMin: cells[3], reads: cells[4], fails: cells[5], lastAt: null, lastReads: 0, period: null });
+    }
+    tb.appendChild(body);
+  }
+  const prevBy = planPrev ? Object.fromEntries(planPrev.data.groups.map(g => [g.name, g.reads])) : {};
+  const fmtS = s => s >= 3600 ? (s / 3600).toLocaleString(loc, { maximumFractionDigits: 1 }) + (lang === "nl" ? " u" : " h") : s >= 120 ? Math.round(s / 60) + " min" : s + " s";
+  p.groups.forEach((g, i) => {
+    const r = planRows[i];
+    const perMin = planPrev && dt > 0 && prevBy[g.name] != null ? (g.reads - prevBy[g.name]) / dt * 60 : null;
+    // the interval is the latest moment; with spare bus time the group is read sooner. The real time
+    // between the last two reads: from the moment of the last read (now - ageMs), over the reads in between
+    r.iv.textContent = fmtS(g.intervalS);
+    const age0 = g.ageMs != null ? g.ageMs : g.ageS * 1000;
+    if (age0 >= 0) {
+      const lastAt = planAt - age0;
+      if (r.lastAt != null && g.reads > r.lastReads && lastAt > r.lastAt + 50) r.period = (lastAt - r.lastAt) / (g.reads - r.lastReads);
+      if (g.reads !== r.lastReads) { r.lastAt = lastAt; r.lastReads = g.reads; }
+    }
+    const per = r.period;
+    if (per != null) {
+      r.last.title = L("vorige keer opnieuw gelezen na ", "last time read again after ") + (per / 1000).toLocaleString(loc, { maximumFractionDigits: 1 }) + " s"; r.last.style.display = "block"; r.last.style.left = Math.min(100, per / (Math.max(1, g.intervalS) * 1000) * 100).toFixed(1) + "%"; }
+    else r.last.style.display = "none";
+    r.perMin.textContent = perMin == null ? "–" : perMin.toLocaleString(loc, { maximumFractionDigits: 1 });
+    r.reads.textContent = g.reads.toLocaleString(loc);
+    r.fails.textContent = String(g.fails); r.fails.style.color = g.fails ? "var(--err)" : "";
+  });
+  $("planNote").textContent = (p.fullRead ? "" : L("Nog niet alles gelezen sinds de laatste (her)verbinding. ", "Not everything read yet since the last (re)connect. ")) +
+    L("Het interval is de uiterste tijd tussen twee lezingen; de balk loopt vol tot die uiterste lezing (oranje: over tijd). Instellingen, timers en tellers worden vaak vroeger gelezen in vrije bustijd (tot " + (p.busCap ?? 50) + " % van de bus), vanaf " + (p.early ?? 25) + " % van hun interval (grijs streepje). Het groene streepje staat waar de groep de vorige keer opnieuw gelezen werd (de tijd tussen de laatste twee lezingen). Groepsnamen zoals in de firmware (GET /api/plan).",
+      "The interval is the longest time between two reads; the bar fills up towards that latest read (orange: overdue). Settings, timers and counters are often read sooner in spare bus time (up to " + (p.busCap ?? 50) + " % of the bus), from " + (p.early ?? 25) + " % of their interval (grey tick). The green tick is where the group was read again last time (the time between the last two reads). Group names as in the firmware (GET /api/plan).");
+  $("planCapBtn").textContent = L("Busgrens ", "Bus limit ") + (p.busCap ?? 50) + " %…";
+  $("planEarlyBtn").textContent = L("Vroeg lezen vanaf ", "Read early from ") + (p.early ?? 25) + " %…";
+  // the grey ticks follow the setting
+  if (planRows) tb.querySelectorAll(".bar b").forEach(b => b.style.left = (p.early ?? 25) + "%");
+  planPerf = performance.now();
+  if (!planRaf) planRaf = requestAnimationFrame(planTick);
+}
+async function planSet(param, question, cur, lo, hi) {
+  const v = prompt(question, cur);
+  if (v === null) return;
+  const n = parseInt(v, 10);
+  if (!(n >= lo && n <= hi)) { toast(L("Geef een getal van " + lo + " tot " + hi, "Enter a number from " + lo + " to " + hi), true); return; }
+  try { await write(L("Leesplanner aangepast", "Read planner changed"), "POST", "/api/plan", { [param]: n }); } catch (_) {}
+  loadPlan();
+}
+$("planCapBtn").onclick = () => planSet("busCap", L("Hoeveel % van de tijd mag de bus bezet zijn met extra reads in vrije tijd? (10 – 95; opdrachten krijgen de bus altijd vóór het volgende register)",
+  "How much % of the time may the bus be busy with extra reads in spare time? (10 – 95; commands always get the bus before the next register)"), planData && planData.busCap || 75, 10, 95);
+$("planEarlyBtn").onclick = () => planSet("early", L("Vanaf hoeveel % van hun interval mogen instellingen, timers en tellers in vrije tijd opnieuw gelezen worden? (5 – 100; 100 = niet vroeger)",
+  "From what % of their interval may settings, timers and counters be read again in spare time? (5 – 100; 100 = not sooner)"), planData && planData.early || 25, 5, 100);
+function planTick() {
+  planRaf = 0;
+  if (!expert || document.hidden || !planRows || !planData) return;
+  const since = performance.now() - planPerf;
+  planData.groups.forEach((g, i) => {
+    const r = planRows[i]; if (!r) return;
+    const iv = Math.max(1, g.intervalS) * 1000;
+    const age0 = g.ageMs != null ? g.ageMs : g.ageS * 1000;   // older firmware: whole seconds
+    let frac, late = false;
+    if (age0 < 0) frac = 0;
+    else if (age0 > iv * 1.5 + 500) { frac = 1; late = true; }     // reported clearly overdue (a few 100 ms late is normal at a busy bus): full until it is read
+    else frac = ((age0 + since) % iv) / iv;                        // on time: restarts at 0 when it is due
+    r.fill.style.width = (frac * 100).toFixed(2) + "%";
+    if (r.fill.classList.contains("late") !== late) r.fill.classList.toggle("late", late);
+    r.bar.title = (age0 < 0 ? L("nog niet gelezen", "not read yet") : Math.round((age0 + since) / 1000) + " s") + " / " + g.intervalS + " s";
+  });
+  planRaf = requestAnimationFrame(planTick);
 }
 
 // ---------- pellet use per day and cost (GET /api/pellets/days + usage of /api/pellets) ----------

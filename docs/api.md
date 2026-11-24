@@ -346,7 +346,7 @@ curl -X POST "http://openpelletbridge.local/api/errors?MemoryPos_1=0"
 
 ### `GET /api/plan`
 
-The read plan of the background task: which groups of registers it reads, how often, and how old each value is. For troubleshooting and tuning.
+The read plan of the background task: which groups of registers it reads, how often, and how old each value is. For troubleshooting and tuning. The web app shows it in expert mode (card *Read planner*: a bar per group that fills up towards its next read, bus use, reads per minute).
 
 ```json
 {"active": true, "remoteMenu": 0, "busPercent": 39, "busCap": 75, "early": 25, "fullRead": true, "handedOver": 7,
