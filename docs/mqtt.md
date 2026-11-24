@@ -29,6 +29,8 @@ Values are plain text (no JSON), retained, under `<prefix>/state/<name>` (prefix
 | `pellets_kg`, `pellets_hours` | Pellets left until the low pellet alarm (kg) and hours at the average use (empty until calibrated) |
 | `pellets_kg_today`, `pellets_kg_per_day`, `pellets_cost_month`, `pellets_stock_bags` | Pellets burned today (kg), per day over the last 7 days, € per month (needs a price per bag) and bags in stock (empty when not known / not kept) |
 | `hours_service`, `total_hours`, `starts`, `wifi_rssi` | Counters and WiFi signal (dBm) |
+| `power_source` | OpenPelletBridge board only: `stove` (the stove's supply) or `usb`; also without data from the stove. Home Assistant: enum sensor *Voeding* (diagnostic) |
+| `chip_temp` | OpenPelletBridge board only: internal temperature of the ESP32-S3 (°C, whole degrees). Home Assistant: temperature sensor *Temperatuur controller* (diagnostic). The warning `CHIP_TEMP_HIGH` is only in `/api/state`, not in `warning` |
 
 Commands go to `<prefix>/set/<name>`. The result is published (not retained) on `<prefix>/result`, e.g. `setpoint 21: ok`.
 

@@ -2447,7 +2447,7 @@
           "Status"
         ],
         "summary": "Log of stove state changes and errors",
-        "description": "Every change of the stove state and of the active error (both read ~1 s), with the exact time. The stove does not store when an error happened; this log is the only source for that. The last 200 entries are kept and persisted to SPIFFS. Recorded once NTP time is available. Oldest first. Errors are only logged once they last 30 s (3 minutes in the transitional states 1, 2, 3, 5, 6) or the stove is in an alarm state. Changes of the pellet reserve sensor (RAM 0xA4) are logged as type pellet; the reserve countdown (RAM 0x89) is not logged (it changes every minute during the reserve; older firmware did, those entries are dropped at the next start).",
+        "description": "Every change of the stove state and of the active error (both read ~1 s), with the exact time. The stove does not store when an error happened; this log is the only source for that. The last 200 entries are kept and persisted to SPIFFS. Recorded once NTP time is available. Oldest first. Errors are only logged once they last 30 s (3 minutes in the transitional states 1, 2, 3, 5, 6) or the stove is in an alarm state. Switchovers of the board's power source (stove supply / USB, OpenPelletBridge board only) are logged as type power. Changes of the pellet reserve sensor (RAM 0xA4) are logged as type pellet; the reserve countdown (RAM 0x89) is not logged (it changes every minute during the reserve; older firmware did, those entries are dropped at the next start).",
         "parameters": [
           {
             "name": "hours",
@@ -2483,17 +2483,28 @@
                             "enum": [
                               "state",
                               "error",
-                              "pellet"
+                              "pellet",
+                              "link",
+                              "source",
+                              "power"
                             ]
                           },
                           "from": {
-                            "type": "integer",
+                            "oneOf": [{ "type": "integer" }, { "type": "string" }],
                             "nullable": true,
-                            "description": "state: previous stove state code, null for the first logged change"
+                            "description": "state: previous stove state code, null for the first logged change; source: stove / remote; power: stove / usb"
                           },
                           "to": {
-                            "type": "integer",
-                            "description": "state: new stove state code"
+                            "oneOf": [{ "type": "integer" }, { "type": "string" }],
+                            "description": "state: new stove state code; source: stove / remote; power: stove / usb"
+                          },
+                          "up": {
+                            "type": "boolean",
+                            "description": "link: true = the stove answers again, false = serial link lost"
+                          },
+                          "room": {
+                            "type": "number",
+                            "description": "source: room temperature at the change"
                           },
                           "id": {
                             "type": "integer",
@@ -5105,6 +5116,21 @@
                 "description": "Hardware revision of the board; not present on the DevKit",
                 "example": "1.0"
               },
+              "features": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["bluetooth", "onboardLed", "ws2812", "buzzer", "powerSense", "chipTemp"]
+                },
+                "description": "What this build and board have (board.h BOARD_HAS_* flags). bluetooth: BLE built in; onboardLed: the DevKit's plain LEDs; ws2812: RGB status LEDs; buzzer; powerSense: power source sensing (see power); chipTemp: internal temperature sensor (see chipTemp). Clients hide what is not listed; new names may be added.",
+                "example": ["bluetooth", "ws2812", "buzzer", "powerSense", "chipTemp"]
+              },
+              "chipTemp": {
+                "type": "number",
+                "nullable": true,
+                "description": "Only with the chipTemp feature (OpenPelletBridge board): internal temperature of the ESP32-S3 in °C, read every 30 s and smoothed; null until the first reading. Warning CHIP_TEMP_HIGH from 70 °C (cleared below 65 °C).",
+                "example": 41.5
+              },
               "resetReason": {
                 "type": "string",
                 "description": "ESP32 reset reason, plus the cause of a restart the firmware did itself, or after a crash / watchdog reset where the loop task was (and for the task watchdog: for how long, and the task running on each CPU)",
@@ -5116,6 +5142,27 @@
               "crashCount": {
                 "type": "integer",
                 "description": "Starts after a crash, watchdog or brown-out"
+              }
+            }
+          },
+          "power": {
+            "type": "object",
+            "description": "Only on a board with the powerSense feature (OpenPelletBridge board): where the board takes its power from (TPS2116 power mux: the stove's 5 V first, USB below ~4.3 V). A switchover is logged in /api/events (type power).",
+            "properties": {
+              "source": {
+                "type": "string",
+                "nullable": true,
+                "enum": ["stove", "usb"],
+                "description": "stove: the stove's supply (JP1 / JP2 closed); usb: USB-C"
+              },
+              "since": {
+                "type": "integer",
+                "nullable": true,
+                "description": "Unix time (UTC) of the switch to this source, or of the start of the controller if there was none; null without a valid clock (NTP)"
+              },
+              "switchovers": {
+                "type": "integer",
+                "description": "Switchovers since the controller started"
               }
             }
           },
@@ -5198,7 +5245,7 @@
           },
           "warnings": {
             "type": "array",
-            "description": "Warnings while the stove works (not errors). REMOTE_SENSOR_NOT_USED: wireless sensor on, but the stove regulates on its own sensor (remote control not heard).",
+            "description": "Warnings while the stove works (not errors). REMOTE_SENSOR_NOT_USED: wireless sensor on, but the stove regulates on its own sensor (remote control not heard). CHIP_TEMP_HIGH (OpenPelletBridge board): the controller chip is at 70 °C or more (controller.chipTemp).",
             "items": {
               "type": "object",
               "properties": {
