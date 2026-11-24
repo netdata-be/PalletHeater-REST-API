@@ -30,6 +30,8 @@
 
 #include "stoveCache.h"
 
+#include "buzzer.h"    // buzzer of the S3 board (BOARD_HAS_BUZZER); empty calls on the DevKit
+
 #include "stoveControl.h"
 
 #include "registers.h"
@@ -163,6 +165,7 @@ static void registerRoutes()
     wm.server->on("/api/diag/reset", authed(handleRouteDiagReset));
     wm.server->on("/api/coredump", authed(handleRouteCoreDump));
     wm.server->on("/api/https", authed(handleRouteHttps));
+    buzzerRoutes();   // /api/buzzer, only with BOARD_HAS_BUZZER (buzzer.h)
     wm.server->on("/", HTTP_GET, crumbed(httpsOr(handleRouteWebApp)));   // the web app is the start page
     wm.server->on("/device", crumbed(httpsOr(handleRouteIndex)));          // small fallback page with links
     wm.server->on("/manifest.webmanifest", HTTP_GET, crumbed(handleRouteManifest));   // home screen install (public)
@@ -281,6 +284,7 @@ void setup()
         setupTelnet();
     }
     mqttSetup();   // connects from loop() once enabled and WiFi is up
+    buzzerSetup(); // S3 board: buzzer task, watches the stove for its events (buzzer.h)
     netSetup();    // waits for confirmation of a new static IP
     stoveMutex = xSemaphoreCreateRecursiveMutex();
     // 5 KB stack: it used 2.3 KB at most (measured, esp32_task_stack_free_bytes)

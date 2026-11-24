@@ -20,6 +20,7 @@ void buttonPressed()
 {
     led.toggle();
     LOGI("sys", "reset button pressed");
+    buzzerButton();   // click, or mutes a sounding error (buzzer.h)
 }
 
 bool setDisplay(int menu)
