@@ -62,6 +62,18 @@ static void jsonEscapeAppend(String& out, const char* s, size_t n)
     }
 }
 
+// Bytes of s[0..n) up to the last whole UTF-8 character: a piece that ends inside "°" (2 bytes)
+// would make the JSON invalid UTF-8; the rest comes with the next piece or poll
+static size_t utf8Whole(const char* s, size_t n)
+{
+    size_t i = n;
+    while (i > 0 && n - i < 3 && ((uint8_t)s[i - 1] & 0xC0) == 0x80) i--;   // continuation bytes at the end
+    if (i == 0) return n;
+    uint8_t lead = (uint8_t)s[i - 1];
+    size_t need = lead >= 0xF0 ? 4 : lead >= 0xE0 ? 3 : lead >= 0xC0 ? 2 : 1;
+    return (need > 1 && n - (i - 1) < need) ? i - 1 : n;
+}
+
 void handleRouteLog()
 {
     if (wm.server->method() != HTTP_GET) { wm.server->send(405); return; }
@@ -80,12 +92,18 @@ void handleRouteLog()
         portENTER_CRITICAL(&logMux);
         n = logRing->read(cur, piece, sizeof(piece), f, l);
         portEXIT_CRITICAL(&logMux);
+        size_t skip = 0;
         if (i == 0) {
-            from = f; lost = l;
+            // the oldest line in the ring can start inside a character: skip its continuation bytes
+            while (skip < n && skip < 3 && ((uint8_t)piece[skip] & 0xC0) == 0x80) skip++;
+            from = f + skip; lost = l;
             out += "{\"from\":"; out += from; out += ",\"lost\":"; out += lost ? "true" : "false"; out += ",\"text\":\"";
         } else if (f != cur) break;   // overwritten meanwhile: the rest comes with the next poll
         if (!n) break;
-        jsonEscapeAppend(out, piece, n);
+        size_t whole = utf8Whole(piece, n);
+        if (whole <= skip) { if (n == sizeof(piece)) whole = n; else break; }   // only a partial character: wait for the rest
+        jsonEscapeAppend(out, piece + skip, whole - skip);
+        n = whole - skip; f += skip;
         httpSendChunk(out);
         cur = f + n; total += n;
     }
