@@ -806,6 +806,7 @@ const I18N = {
     brazier:"Brazier cleaning", brazierIn:"in {0} min", brazierEvery:"in {0} min (every {1} min)", brazierNow:"in progress",
     h_brazier:"While burning the stove cleans the brazier at a fixed interval (EEPROM 0x02, in minutes): the fume fan speeds up and the stove briefly shows 'Brazier cleaning'. RAM 0x32 counts down the minutes to the next cleaning. Only shown while the stove is working.",
     fwUpdate:"Upload OpenPelletBridge firmware", fwHint:"Upload a firmware.bin (from .pio/build/…)", fwPick:"Choose file…", fwBadFile:"Choose the firmware .bin file",
+    fwWrongImg:"Wrong image for this {0} ({1}): other chip or a factory image",
     fwConfirm:"Install {0} ({1} MB)? The controller restarts afterwards; the stove keeps running.", fwProgress:"Uploading… {0}% · {1} KB/s",
     themeTitle:"Theme: {0} (click to change)", theme_auto:"automatic (follows the device)", theme_light:"light", theme_dark:"dark",
     apiKeyLbl:"API key", lastStart:"Last start", ctrlStarts:"Controller starts", ctrlStartsVal:"{0} ({1} after a crash)", wifiDrops:"Connection drops", wifiDropsVal:"{0} · last {1} ago: {2}",
@@ -982,6 +983,7 @@ pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low 
     brazier:"Branderreiniging", brazierIn:"over {0} min", brazierEvery:"over {0} min (elke {1} min)", brazierNow:"bezig",
     h_brazier:"Tijdens het branden reinigt de kachel de brander op een vast interval (EEPROM 0x02, in minuten): de rookgasventilator draait harder en de kachel toont kort 'Brander reinigen'. RAM 0x32 telt de minuten af tot de volgende reiniging. Enkel zichtbaar terwijl de kachel brandt.",
     fwUpdate:"Upload OpenPelletBridge firmware", fwHint:"Upload een firmware.bin (uit .pio/build/…)", fwPick:"Kies bestand…", fwBadFile:"Kies het firmware-bestand (.bin)",
+    fwWrongImg:"Verkeerde image voor deze {0} ({1}): andere chip of een factory-image",
     fwConfirm:"{0} ({1} MB) installeren? De controller herstart daarna; de kachel blijft gewoon werken.", fwProgress:"Uploaden… {0}% · {1} KB/s",
     themeTitle:"Thema: {0} (klik om te wijzigen)", theme_auto:"automatisch (volgt het toestel)", theme_light:"licht", theme_dark:"donker",
     apiKeyLbl:"API-key", lastStart:"Laatste start", ctrlStarts:"Starts controller", ctrlStartsVal:"{0} ({1} na een crash)", wifiDrops:"Verbrekingen", wifiDropsVal:"{0} · laatste {1} geleden: {2}",
@@ -1626,6 +1628,15 @@ $("fwFile").onchange = async () => {
   const file = $("fwFile").files[0]; $("fwFile").value = "";
   if (!file) return;
   if (!/\.bin$/i.test(file.name) || file.size < 100000) { toast(t("fwBadFile")); return; }
+  // image header: magic 0xE9, chip id at 12 (ESP32 0, ESP32-S3 9), app descriptor magic at 32
+  // (not in a factory image); the controller refuses it too (src/fwImage.h), but after the upload started
+  const board = state && state.controller && state.controller.board;
+  if (board) {
+    const h = new Uint8Array(await file.slice(0, 36).arrayBuffer()), s3 = board === "opb-s3";
+    if (h[0] !== 0xE9 || (h[12] | h[13] << 8) !== (s3 ? 9 : 0) || h[32] !== 0x32 || h[33] !== 0x54 || h[34] !== 0xCD || h[35] !== 0xAB) {
+      const m = t("fwWrongImg", s3 ? "ESP32-S3" : "ESP32", board); $("fwHint").textContent = m; toast(m, true); return;
+    }
+  }
   if (!confirm(t("fwConfirm", file.name, (file.size / 1048576).toFixed(2)))) return;
   // the update always needs the key; when it is not required, /api/auth hands it out
   let key = storedKey();
