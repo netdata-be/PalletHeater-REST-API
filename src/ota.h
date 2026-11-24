@@ -3,6 +3,7 @@ void otaConfirmBeforeUpdate();   // otaVerify.h
 #include <NimBLEDevice.h>
 #include <Preferences.h>
 #include "constants.h"
+#include "fwImage.h"
 
 // The OTA password is the controller's API key (auth.h, NVS; /api/auth shows it),
 // not a password in the source code: that one was public in the repository.
@@ -35,6 +36,9 @@ void enableOTA(const String& password){
         markRestart("firmware update (ArduinoOTA)");
     }).onProgress([](unsigned int progress, unsigned int total){
         esp_task_wdt_reset();
+        // wrong chip (fwImage.h), chunks <= 1460 bytes: the abort ends ArduinoOTA's receive
+        // loop, Update.end() fails -> onError, espota reports the failure
+        fwUpdateChipOk(progress);
     }).onError([](ota_error_t error){
         otaActive = false;
         if (bleEnabled) NimBLEDevice::startAdvertising();

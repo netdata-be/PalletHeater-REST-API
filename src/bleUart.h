@@ -5,6 +5,7 @@ void otaConfirmBeforeUpdate();   // otaVerify.h
 #include <WiFi.h>
 #include <Preferences.h>
 #include <constants.h>
+#include "fwImage.h"   // refuses an image for the other chip
 
 // Forward declarations
 bool setFlamePower(int power);
@@ -522,10 +523,12 @@ class OtaCtrlCB : public NimBLECharacteristicCallbacks {
             }
 
             otaPartition = esp_ota_get_next_update_partition(nullptr);
-            if (!otaPartition) { otaNotify(0xFF); return; }
+            if (!otaPartition || size > otaPartition->size) { otaNotify(0xFF); return; }
 
             otaConfirmBeforeUpdate();   // a firmware on trial is confirmed first (otaVerify.h)
-            if (esp_ota_begin(otaPartition, size ? size : OTA_SIZE_UNKNOWN, &otaHandle) != ESP_OK) {
+            // erases nothing yet: each sector right before it is written, so the chip check of the
+            // first packet (OtaDataCB) comes before anything is erased (was: the whole size here)
+            if (esp_ota_begin(otaPartition, OTA_WITH_SEQUENTIAL_WRITES, &otaHandle) != ESP_OK) {
                 otaNotify(0xFF); return;
             }
             otaInProgress   = true;
@@ -559,8 +562,9 @@ class OtaDataCB : public NimBLECharacteristicCallbacks {
         if (!otaInProgress) return;
         size_t len = pChar->getDataLength();
         if (len == 0) return;
-
-        if (esp_ota_write(otaHandle, pChar->getValue().data(), len) != ESP_OK) {
+        // the chip check (fwImage.h) before the first write: the first packet holds the image header
+        if ((otaBytesWritten == 0 && !fwImageOk(pChar->getValue().data(), len)) ||
+            esp_ota_write(otaHandle, pChar->getValue().data(), len) != ESP_OK) {
             esp_ota_abort(otaHandle);
             otaInProgress = false;
             otaNotify(0xFF);

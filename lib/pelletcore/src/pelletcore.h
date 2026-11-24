@@ -398,16 +398,50 @@ inline const char* errorCode(int id) { const ErrorInfo* e = errorInfo(id); retur
 inline const char* errorDesc(int id) { const ErrorInfo* e = errorInfo(id); return e ? e->desc : "Unknown error"; }
 
 // ---- Firmware release asset ----------------------------------------------------
-// Which release asset to download: the current name wins, the name before the
-// rename (PalletHeater, up to v1.0.0) is a fallback. 0 = not a firmware image.
+// Which release asset to download, per board (BOARD_NAME, src/board.h). DevKit: the
+// current name wins, the name before the rename (PalletHeater, up to v1.0.0) is a
+// fallback. The S3 board: its own asset only. 0 = not a firmware image for this board.
+// Released firmware (up to v1.4.x) matches PC_FW_ASSET / PC_FW_ASSET_OLD exactly
+// (strcmp), so it never picks PC_FW_ASSET_S3. Keep the DevKit name as it is.
 #define PC_FW_ASSET     "openpelletbridge-firmware.bin"
 #define PC_FW_ASSET_OLD "palletheater-firmware.bin"
-inline int firmwareAssetRank(const char* name)
+#define PC_FW_ASSET_S3  "openpelletbridge-opb-s3-firmware.bin"
+inline const char* firmwareAssetName(const char* board)
 {
-    if (!name) return 0;
-    if (strcmp(name, PC_FW_ASSET) == 0) return 2;
-    if (strcmp(name, PC_FW_ASSET_OLD) == 0) return 1;
+    if (board && strcmp(board, "esp32-devkit") == 0) return PC_FW_ASSET;
+    if (board && strcmp(board, "opb-s3") == 0) return PC_FW_ASSET_S3;
+    return nullptr;
+}
+inline int firmwareAssetRank(const char* name, const char* board)
+{
+    const char* want = firmwareAssetName(board);
+    if (!name || !want) return 0;
+    if (strcmp(name, want) == 0) return 2;
+    if (strcmp(want, PC_FW_ASSET) == 0 && strcmp(name, PC_FW_ASSET_OLD) == 0) return 1;
     return 0;
+}
+
+// ---- Firmware image check ------------------------------------------------------
+// The start of an app image: esp_image_header_t (magic 0xE9 at 0, chip_id at 12, little
+// endian), the first segment header, then esp_app_desc_t (magic 0xABCD5432 at 32).
+// Chip ids (ESP-IDF esp_chip_id_t): ESP32 0x0000, ESP32-S3 0x0009.
+static const size_t   IMG_HEAD = 36;
+static const uint16_t CHIP_ESP32 = 0x0000, CHIP_ESP32S3 = 0x0009;
+inline const char* chipName(uint16_t id) { return id == CHIP_ESP32 ? "ESP32" : id == CHIP_ESP32S3 ? "ESP32-S3" : "another chip"; }
+// The image start h (n bytes) against the running chip. True when it fits; otherwise
+// false with the reason in err.
+inline bool firmwareImageCheck(const uint8_t* h, size_t n, uint16_t chip, char* err, size_t errLen)
+{
+    const char* use = chip == CHIP_ESP32S3 ? PC_FW_ASSET_S3 : PC_FW_ASSET;
+    uint16_t id = h && n >= IMG_HEAD ? (uint16_t)(h[12] | h[13] << 8) : chip;
+    bool app = h && n >= IMG_HEAD && h[0] == 0xE9 &&
+               ((uint32_t)h[32] | (uint32_t)h[33] << 8 | (uint32_t)h[34] << 16 | (uint32_t)h[35] << 24) == 0xABCD5432;
+    if (h && n >= IMG_HEAD && h[0] == 0xE9 && id != chip)   // also the bootloader of a factory image
+        snprintf(err, errLen, "wrong chip: image for %s, this controller is %s - use %s", chipName(id), chipName(chip), use);
+    else if (!app)
+        snprintf(err, errLen, "not an app image (a factory image?) - use %s", use);
+    else return true;
+    return false;
 }
 
 // ---- Ring buffers for the live views (log, bus monitor) ---------------------------
