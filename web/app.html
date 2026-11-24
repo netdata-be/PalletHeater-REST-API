@@ -1720,7 +1720,8 @@ function renderFw() {
   }
   clearTimeout(fwFastT);
   if (f.state === "restarting") { waitRestartThenReload(hint); return; }
-  if (working) fwFastT = setTimeout(loadFw, 1500);   // follow the check / download closely
+  // follow the check closely; the download every 3 s (every request costs the controller memory it needs for the download)
+  if (working) fwFastT = setTimeout(loadFw, f.state === "downloading" ? 3000 : 1500);
 }
 $("updBadge").onclick = () => { $("devCard").scrollIntoView({ behavior: "smooth", block: "start" }); setTimeout(() => (!$("ghInstall").hidden ? $("ghInstall") : $("ghCheck")).focus({ preventScroll: true }), 400); };
 // While the controller downloads a firmware from GitHub its memory is low (the TLS connection):

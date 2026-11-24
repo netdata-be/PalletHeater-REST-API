@@ -145,8 +145,20 @@ static bool httpRefusedForUpdate()
 {
     if (!fwInstallBusy()) return false;
     const String& u = wm.server->uri();
-    if (u == "/api/firmware" || u == "/api/health" || u == "/" || u == "/app" || u == "/manifest.webmanifest" || u == "/icon.svg" || u == "/icon-180.png") return false;
+    if (u == "/api/firmware" || u == "/api/health") return false;
     wm.server->sendHeader("Retry-After", "30");
+    // the web app (about 60 KB) is not served either: its socket buffers would cost the download
+    // its margin (fwUpdate.h). An open web app keeps showing the progress; a new page gets this.
+    if (u == "/" || u == "/app") {
+        char h[420];
+        snprintf(h, sizeof(h), "<!doctype html><meta charset=utf-8><meta name=viewport content=\"width=device-width\">"
+                 "<meta http-equiv=refresh content=15><title>OpenPelletBridge</title>"
+                 "<body style=\"font-family:sans-serif;padding:16px\"><h3>Firmware update in progress (%d %%)</h3>"
+                 "<p>The controller restarts when it is done. This page reloads by itself. The stove keeps running.</p>",
+                 fwInstallPercent());
+        wm.server->send(503, "text/html", h);
+        return true;
+    }
     char b[160];
     snprintf(b, sizeof(b), "{\"error\":\"Firmware update in progress - try again later\",\"firmwareUpdate\":true,\"progress\":%d,\"retryAfter\":30}", fwInstallPercent());
     wm.server->send(503, "application/json", b);
