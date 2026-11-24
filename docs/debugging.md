@@ -53,7 +53,7 @@ curl -X POST "http://openpelletbridge.local/api/loglevel?wifi=debug&bus=debug"
 
 **Log of the previous run.** The last 2 KB of the log are also kept in RTC memory, which survives a restart, a crash and a watchdog reset (not a power cut). After such a restart the live log starts with `===== log before the restart (<reason>) =====` and those lines, so you can see what happened just before.
 
-**Core dump.** After a crash or task watchdog reset the ESP-IDF stores a core dump in flash (64 KB partition). At the next start the log shows `core dump of the crash: task …, PC 0x…, cause …, backtrace 0x… 0x…`. `GET /api/coredump` returns that summary, `?download=true` the raw dump, `DELETE` erases it. Decode with the `firmware.elf` of the same build (CI artifact `openpelletbridge-elf-<version>`), step by step in [Finding a bug with the core dump](#finding-a-bug-with-the-core-dump):
+**Core dump.** After a crash or task watchdog reset the ESP-IDF stores a core dump in flash (64 KB partition). At the next start the log shows `core dump of the crash: task …, PC 0x…, cause …, backtrace 0x… 0x…`. `GET /api/coredump` returns that summary, `?download=true` the raw dump, `DELETE` erases it. Decode with the `firmware.elf` of the same build (release asset `openpelletbridge-firmware.elf`, on the S3 board `openpelletbridge-opb-s3-firmware.elf`), step by step in [Finding a bug with the core dump](#finding-a-bug-with-the-core-dump):
 
 ```bash
 curl -H "X-API-Key: <key>" -o coredump.bin "http://openpelletbridge.local/api/coredump?download=true"
@@ -89,7 +89,7 @@ The summary in the log already names the crashing task and the program counters 
 1. **Note the crash.** After the restart the live log shows, for example:
    `E [sys] core dump of the crash: task loopTask, PC 0x400d8a1c, cause 28, backtrace 0x400d8a19 0x400d9b2e 0x400e1f04`.
    `GET /api/coredump` returns the same, plus `thisBuild`: `true` when the dump comes from the firmware that is running now.
-2. **Get `firmware.elf` of exactly that build.** For a release: the CI artifact `openpelletbridge-elf-<version>` of the run that built the tag (`gh run download <run-id> -n openpelletbridge-elf-v1.1.7`). For your own build: `.pio/build/<env>/firmware.elf`, as long as you did not rebuild after flashing. Another build gives wrong function names.
+2. **Get `firmware.elf` of exactly that build.** For a release: the asset of the board (`gh release download v1.5.0 -p openpelletbridge-firmware.elf`, S3 board: `-p openpelletbridge-opb-s3-firmware.elf`); releases up to v1.4.x have it only as the CI artifact `openpelletbridge-elf-<version>` of the run that built the tag (`gh run download <run-id> -n openpelletbridge-elf-v1.1.7`). For your own build: `.pio/build/<env>/firmware.elf`, as long as you did not rebuild after flashing. Another build gives wrong function names.
 3. **Quick look: the backtrace.**
    ```bash
    ~/.platformio/packages/toolchain-xtensa-esp32/bin/xtensa-esp32-elf-addr2line -pfiaC -e firmware.elf 0x400d8a19 0x400d9b2e 0x400e1f04
@@ -121,17 +121,29 @@ curl -H "X-API-Key: <key>" -F "firmware=@.pio/build/esp32doit-devkit-v1-http/fir
 
 Errors: `401` (no valid key), `500` with `result` describing the failure (nothing is activated, the current firmware keeps running). The web app has an *Upload OpenPelletBridge firmware* button under *Device* (expert mode).
 
+**Wrong chip.** An ESP32 image does not run on the ESP32-S3 board and the other way round. Every update path (`POST /api/update`, the GitHub install, espota, Bluetooth OTA) reads the image header from the first bytes, before anything is erased or written ([src/fwImage.h](../src/fwImage.h)): magic `0xE9`, `chip_id` at offset 12 (ESP32 `0x0000`, ESP32-S3 `0x0009`) against the running chip, and the app descriptor at offset 32, which a factory image (bootloader first) does not have. A wrong image ends right away:
+`500 {"result":"failed - wrong chip: image for ESP32-S3, this controller is ESP32 - use openpelletbridge-firmware.bin"}` (or `not an app image (a factory image?) - use …`); the log has `image refused: …`. espota then fails with `End failed`, Bluetooth OTA answers `0xFF`. The ESP-IDF would refuse it too, but only at the very end (`esp_ota_end` → `esp_image_verify`: "mismatch chip ID"), after the whole upload and after the other app slot was erased and written. The web app checks the header of the chosen file before it uploads anything.
+
 ## `/api/firmware`
 
-New versions are published as [GitHub releases](https://github.com/netdata-be/PalletHeater-REST-API/releases) (see [CI and releases](development.md#ci-and-releases)). The controller looks up the latest release (`releases/latest`: no drafts or pre-releases) automatically (`autoCheck`, on by default) or on request. With HTTPS on it checks once, right at start-up before HTTPS reserves its TLS buffers; with HTTPS off 2 minutes after start-up and then once a day (the check needs the memory of the HTTPS buffers, see [`/api/https`](api.md#apihttps)). It **never installs on its own**: `action=install` downloads the asset `openpelletbridge-firmware.bin` over HTTPS, the ESP-IDF verifies the image before it is made bootable, and the controller restarts. Settings (NVS) are kept; the stove is not affected.
+New versions are published as [GitHub releases](https://github.com/netdata-be/PalletHeater-REST-API/releases) (see [CI and releases](development.md#ci-and-releases)). The controller looks up the latest release (`releases/latest`: no drafts or pre-releases) automatically (`autoCheck`, on by default) or on request. With HTTPS on it checks once, right at start-up before HTTPS reserves its TLS buffers; with HTTPS off 2 minutes after start-up and then once a day (the check needs the memory of the HTTPS buffers, see [`/api/https`](api.md#apihttps)). It **never installs on its own**: `action=install` downloads the asset of its own board over HTTPS (see below), the ESP-IDF verifies the image before it is made bootable, and the controller restarts. Settings (NVS) are kept; the stove is not affected.
+
+**One asset per board.** A release carries the images of both boards; the controller picks only its own (`pc::firmwareAssetRank` with the board name, [lib/pelletcore](../lib/pelletcore/src/pelletcore.h)):
+
+| Board (`board`) | Asset it installs |
+|---|---|
+| `esp32-devkit` | `openpelletbridge-firmware.bin` (or `palletheater-firmware.bin` of releases up to v1.0.0) |
+| `opb-s3` | `openpelletbridge-opb-s3-firmware.bin` only |
+
+The DevKit name stays as it is: the firmware in the field (up to v1.4.x) compares the asset name exactly with `openpelletbridge-firmware.bin`, so it never takes the S3 image. A release without the asset of this board gives `assetAvailable: false`, `asset: null` and `lastError` `release v1.5.0 has no openpelletbridge-opb-s3-firmware.bin`. Should a wrong image get through anyway, the chip check of the download stops it (see [Wrong chip](#post-apiupdate)).
 
 HTTPS to GitHub is verified against the root CAs in [certs/x509_crt_bundle.bin](../certs/x509_crt_bundle.bin): only the roots GitHub uses (USERTrust ECC for `api.github.com` / `github.com`, ISRG Root X1 for the release downloads) and a few more of the same and other big CAs as margin, listed in [certs/ca_roots.pem](../certs/ca_roots.pem) (4 KB instead of 54 KB for the whole Mozilla store). Regenerate with [scripts/gen_ca_bundle.py](../scripts/gen_ca_bundle.py); if GitHub moves to another CA and the check fails with a certificate error, add its root there. The check needs a valid clock (NTP).
 
 ```bash
 curl http://openpelletbridge.local/api/firmware
-# {"current":"v1.0.0","devBuild":false,"repo":"netdata-be/PalletHeater-REST-API","state":"idle","autoCheck":true,
+# {"current":"v1.0.0","devBuild":false,"repo":"netdata-be/PalletHeater-REST-API","board":"esp32-devkit","state":"idle","autoCheck":true,
 #  "latest":"v1.1.0","published":"2026-11-20T10:00:00Z","releaseUrl":"https://github.com/…/releases/tag/v1.1.0",
-#  "assetAvailable":true,"updateAvailable":true,"checkedSecondsAgo":42,"lastError":null,"lastInstall":null}
+#  "assetAvailable":true,"asset":"openpelletbridge-firmware.bin","updateAvailable":true,"checkedSecondsAgo":42,"lastError":null,"lastInstall":null}
 
 curl -X POST "http://openpelletbridge.local/api/firmware?action=check"     # {"result":"started",…}
 curl -X POST "http://openpelletbridge.local/api/firmware?action=install"   # {"result":"started",…}
@@ -142,6 +154,8 @@ curl -X POST "http://openpelletbridge.local/api/firmware?autoCheck=false"
 |---|---|
 | `current` | Running version (`git describe` at build time) |
 | `devBuild` | The running version is not exactly a release tag (commits after the tag, uncommitted changes or no tag at all). A build without a tag is never offered an update; install a release over it with `action=install&force=true`. |
+| `board` | `esp32-devkit` or `opb-s3`: decides which release asset is installed |
+| `asset` | The asset chosen from `latest` for this board; `null` when the release has none (`lastError` names the missing one) |
 | `state` | `idle`, `checking`, `downloading`, `restarting` or `error` (`lastError`) |
 | `progress` | `{done,total}` bytes while downloading |
 | `bootInstall`, `phase` | Only from the minimal server during the download after the restart (see below): `true`, and `connecting`, `downloading`, `installing`, `restarting` or `failed` |
@@ -163,7 +177,7 @@ Every way of updating (GitHub, `POST /api/update`, espota, Bluetooth) ends the s
 
 **Install from GitHub = check, restart, download.** `action=install` checks GitHub, notes the download in NVS and restarts the controller. Right after the restart, once WiFi is connected and before anything else starts (Bluetooth, the web server, HTTPS, MQTT, telnet, the stove task), `fwBootInstall()` gets the time over NTP, downloads the image in a task of its own and restarts again: into the new firmware (on trial, see below) or, when the download failed, into the old one, which shows the error in `lastError` and `lastAttempt`. One attempt: the note is removed before the download starts.
 
-What protects it: the old firmware stays in its partition and stays the one that starts until the new image is complete and verified (`Update.end`: size, checksum, SHA-256); only then is the other partition made bootable. So a download that fails, stalls (no data for 20 s) or hangs ends in a restart into the old firmware, with nothing to roll back. A hang is caught twice: `setup()`, which runs the minimal server meanwhile, is watched by the task watchdog (10 s, then a restart), and it watches the download task itself: no progress (bytes or step) for 90 s and it restarts into the old firmware. A crash or power cut during the download also starts the old firmware (`lastAttempt` shows the last step), and the download is not tried again. A new firmware that does crash or loses WiFi after the switch goes back by the rollback below. Why: in the running firmware the TLS session (about 50 KB) did not fit next to the rest. Started with 88 KB free, the download fell to 21 KB with a largest block of 2 KB; with MQTT, telnet and the bus reads paused it went from 78 KB to 14 KB; each time the WiFi driver had no receive buffers left and the download stalled at a few percent (24/11/2026). After the restart the same download keeps 60 – 74 KB free (largest block 35 – 53 KB) and takes about 30 s for 1.8 MB; the whole install about 70 s.
+What protects it: an image for the other chip is refused from its first bytes ([Wrong chip](#post-apiupdate)); the old firmware stays in its partition and stays the one that starts until the new image is complete and verified (`Update.end`: size, checksum, SHA-256); only then is the other partition made bootable. So a download that fails, stalls (no data for 20 s) or hangs ends in a restart into the old firmware, with nothing to roll back. A hang is caught twice: `setup()`, which runs the minimal server meanwhile, is watched by the task watchdog (10 s, then a restart), and it watches the download task itself: no progress (bytes or step) for 90 s and it restarts into the old firmware. A crash or power cut during the download also starts the old firmware (`lastAttempt` shows the last step), and the download is not tried again. A new firmware that does crash or loses WiFi after the switch goes back by the rollback below. Why: in the running firmware the TLS session (about 50 KB) did not fit next to the rest. Started with 88 KB free, the download fell to 21 KB with a largest block of 2 KB; with MQTT, telnet and the bus reads paused it went from 78 KB to 14 KB; each time the WiFi driver had no receive buffers left and the download stalled at a few percent (24/11/2026). After the restart the same download keeps 60 – 74 KB free (largest block 35 – 53 KB) and takes about 30 s for 1.8 MB; the whole install about 70 s.
 
 During that download a minimal web server answers on port 80: the status page (`/`, `/app`, `/update`), `GET /api/firmware` with `bootInstall`, `phase` and the progress (no API key), and `503 Firmware update in progress` with `Retry-After: 30` for every other route. The web app opens the status page **`/update?to=<tag>&lang=nl|en`** after *Install*; it is served by the running firmware too and shows the steps: the controller restarts, restarted, downloading (progress bar), installing and restarting, done (back to the app). It reads the API key from the web app's storage. In the running firmware every web request except `/api/firmware`, `/api/health` and `/update` gets the same `503` during the check and the restart (`/` and `/app` a small page that reloads every 15 s); building large answers then starved the TLS session (core dump 23/11/2026).
 

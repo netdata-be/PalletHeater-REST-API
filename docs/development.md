@@ -33,7 +33,7 @@ Partitions: `min_spiffs.csv` (4 MB flash): two OTA slots of 1.9 MB, 128 KB SPIFF
 
 ### OpenPelletBridge board (ESP32-S3)
 
-The board ([hardware/](../hardware/)) has an ESP32-S3-MINI-1-N8 (8 MB flash, no PSRAM) and needs its own image: an S3 image does not run on an ESP32 and the other way round (an update with an image for the other chip fails its check at the end: the chip id in the image header). The build flag `-DBOARD_OPB_S3` selects the pins and what the board has in [src/board.h](../src/board.h); `controller.board` / `controller.hwRev` in `GET /api/state` tell which one runs.
+The board ([hardware/](../hardware/)) has an ESP32-S3-MINI-1-N8 (8 MB flash, no PSRAM) and needs its own image: an S3 image does not run on an ESP32 and the other way round (every update path refuses an image for the other chip from its header, before anything is written: [Wrong chip](debugging.md#post-apiupdate)). The build flag `-DBOARD_OPB_S3` selects the pins and what the board has in [src/board.h](../src/board.h); `controller.board` / `controller.hwRev` in `GET /api/state` tell which one runs.
 
 | Environment | Upload method |
 |---|---|
@@ -53,15 +53,35 @@ Partitions: [partitions/opb_s3_8mb.csv](../partitions/opb_s3_8mb.csv): two OTA s
 
 ## CI and releases
 
-[.github/workflows/firmware.yml](../.github/workflows/firmware.yml) runs the unit tests, checks the web app ([scripts/check_webapp.mjs](../scripts/check_webapp.mjs): script syntax, every text in English and Dutch, no unknown text keys), validates the OpenAPI spec and builds the firmware (plus the BLE OTA environment) on every push to `master`, every pull request and on demand (*Run workflow*). Run the web app check locally with `node scripts/check_webapp.mjs`. The images are kept as workflow artifact `openpelletbridge-<version>` (Actions → run → *Artifacts*):
+[.github/workflows/firmware.yml](../.github/workflows/firmware.yml) runs the unit tests, checks the web app ([scripts/check_webapp.mjs](../scripts/check_webapp.mjs): script syntax, every text in English and Dutch, no unknown text keys), validates the OpenAPI spec and builds the firmware of both boards (plus the BLE OTA environment) on every push to `master`, every pull request and on demand (*Run workflow*). Run the web app check locally with `node scripts/check_webapp.mjs`. The images are kept as workflow artifact `openpelletbridge-<version>` (Actions → run → *Artifacts*):
 
-| File | Use |
-|---|---|
-| `openpelletbridge-firmware.bin` | OTA image: web app upload, `POST /api/update`, `/api/firmware` |
-| `openpelletbridge-factory.bin` | Complete flash image for a new ESP32: `esptool.py --chip esp32 write_flash 0x0 openpelletbridge-factory.bin` |
-| `SHA256SUMS` | Checksums |
+| ESP32 DevKit (`esp32doit-devkit-v1-http`) | OpenPelletBridge board, ESP32-S3 (`opb-s3`) | Use |
+|---|---|---|
+| `openpelletbridge-firmware.bin` | `openpelletbridge-opb-s3-firmware.bin` | OTA image: web app upload, `POST /api/update`, `/api/firmware` |
+| `openpelletbridge-factory.bin` | `openpelletbridge-opb-s3-factory.bin` | Complete flash image for a new chip, written at offset 0 (below) |
+| `openpelletbridge-firmware.elf` | `openpelletbridge-opb-s3-firmware.elf` | Debug symbols of the same build: decode a core dump (`/api/coredump`) or a backtrace |
+| `SHA256SUMS` | | Checksums of all files |
 
-A second artifact `openpelletbridge-elf-<version>` holds `firmware.elf` with the debug symbols of the same build, to decode a core dump (`/api/coredump`) or a backtrace; it is not part of the release.
+Each controller installs only the OTA image of its own board from a release ([/api/firmware](debugging.md#apifirmware)). Do not rename `openpelletbridge-firmware.bin`: the DevKit firmware in the field (up to v1.4.x) looks for exactly that name. The S3 assets have a name that firmware never matches (it compares the whole name), so an old DevKit never downloads an S3 image.
+
+Flashing a factory image (bootloader, partition table, `boot_app0`, app, with `0xFF` in the gaps: it also clears NVS at `0x9000`, so the settings and the API key start fresh; SPIFFS and the core dump further on stay):
+
+```bash
+esptool.py --chip esp32   write_flash 0x0 openpelletbridge-factory.bin          # DevKit
+esptool.py --chip esp32s3 write_flash 0x0 openpelletbridge-opb-s3-factory.bin   # board: hold BOOT, press RESET first
+```
+
+What is in it, at the offsets PlatformIO flashes (`pio project metadata -e <env>`; CI builds it with `esptool.py merge_bin`):
+
+| Part | ESP32 DevKit | ESP32-S3 board |
+|---|---|---|
+| bootloader | `0x1000` | `0x0` |
+| partition table | `0x8000` | `0x8000` |
+| `boot_app0.bin` (otadata) | `0xe000` | `0xe000` |
+| app (`firmware.bin`) | `0x10000` | `0x10000` |
+| flash mode / frequency / size | DIO, 40 MHz, 4 MB | DIO, 80 MHz, 8 MB |
+
+The parts can also be flashed one by one from `.pio/build/<env>/`, e.g. for the board: `esptool.py --chip esp32s3 write_flash 0x0 bootloader.bin 0x8000 partitions.bin 0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin 0x10000 firmware.bin`.
 
 A tag `vX.Y.Z` also creates a GitHub release with these files, which the controllers then offer as update:
 
