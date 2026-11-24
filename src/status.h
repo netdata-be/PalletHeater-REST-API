@@ -212,6 +212,10 @@ void getStatus()
     obj_ctrl["branch"]  = BUILD_BRANCH;
     obj_ctrl["env"]     = BUILD_ENV;
     obj_ctrl["stoveModel"] = BUILD_STOVE_MODEL;
+    obj_ctrl["board"] = BOARD_NAME;                 // board.h: esp32-devkit / opb-s3
+#ifdef BOARD_HW_REV
+    obj_ctrl["hwRev"] = BOARD_HW_REV;               // hardware revision, only on the board
+#endif
     obj_ctrl["resetReason"] = diagResetText();      // why the controller last (re)started
     obj_ctrl["bootCount"]   = diagBoots;
     obj_ctrl["crashCount"]  = diagCrashes;          // starts after a crash, watchdog or brown-out

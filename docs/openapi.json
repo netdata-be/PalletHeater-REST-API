@@ -160,7 +160,8 @@
                     "version": "674b88d-dirty",
                     "built": "2026-11-16T17:05:12Z",
                     "branch": "master",
-                    "env": "esp32doit-devkit-v1-http"
+                    "env": "esp32doit-devkit-v1-http",
+                    "board": "esp32-devkit"
                   }
                 }
               }
@@ -5093,6 +5094,16 @@
               "stoveModel": {
                 "type": "string",
                 "example": "Piazzetta P220 M"
+              },
+              "board": {
+                "type": "string",
+                "enum": ["esp32-devkit", "opb-s3"],
+                "description": "Hardware the firmware is built for: ESP32 DevKit or the OpenPelletBridge board (ESP32-S3)"
+              },
+              "hwRev": {
+                "type": "string",
+                "description": "Hardware revision of the board; not present on the DevKit",
+                "example": "1.0"
               },
               "resetReason": {
                 "type": "string",
