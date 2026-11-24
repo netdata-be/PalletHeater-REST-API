@@ -31,6 +31,26 @@ Building works without the key; only an upload stops and says the key is missing
 
 Partitions: `min_spiffs.csv` (4 MB flash): two OTA slots of 1.9 MB, 128 KB SPIFFS (history, events), 64 KB core dump. The firmware uses about 91 % of a slot; a larger slot is only possible by dropping the core dump or shrinking SPIFFS, and needs a USB flash (an OTA update cannot change the partition table).
 
+### OpenPelletBridge board (ESP32-S3)
+
+The board ([hardware/](../hardware/)) has an ESP32-S3-MINI-1-N8 (8 MB flash, no PSRAM) and needs its own image: an S3 image does not run on an ESP32 and the other way round (an update with an image for the other chip fails its check at the end: the chip id in the image header). The build flag `-DBOARD_OPB_S3` selects the pins and what the board has in [src/board.h](../src/board.h); `controller.board` / `controller.hwRev` in `GET /api/state` tell which one runs.
+
+| Environment | Upload method |
+|---|---|
+| `opb-s3` | USB (native USB of the S3, USB-C on the board) |
+| `opb-s3-http` | WiFi over HTTP (`POST /api/update`), `--upload-port <ip>` |
+
+```bash
+pio run -e opb-s3                    # build only
+pio run -e opb-s3 -t upload          # flash over USB-C
+pio device monitor -e opb-s3         # console (USB CDC)
+pio run -e opb-s3-http -t upload --upload-port <ip>
+```
+
+The first flash of a new board: hold BOOT, press RESET, release BOOT (download mode), then upload. After that no button is needed: esptool resets the S3 into download mode through its USB Serial/JTAG. The console is on the S3's own USB (USB Serial/JTAG): it disappears for a moment at every restart, and output before the host opened the port is lost (the live log `/api/log` has it).
+
+Partitions: [partitions/opb_s3_8mb.csv](../partitions/opb_s3_8mb.csv): two OTA slots of 3 MB, 1.8 MB SPIFFS, 128 KB core dump. Switching an existing board to another partition table needs a USB flash. A core dump of the S3 is decoded with the S3 toolchain (`xtensa-esp32s3-elf-addr2line`, `esp-coredump --chip esp32s3`).
+
 ## CI and releases
 
 [.github/workflows/firmware.yml](../.github/workflows/firmware.yml) runs the unit tests, checks the web app ([scripts/check_webapp.mjs](../scripts/check_webapp.mjs): script syntax, every text in English and Dutch, no unknown text keys), validates the OpenAPI spec and builds the firmware (plus the BLE OTA environment) on every push to `master`, every pull request and on demand (*Run workflow*). Run the web app check locally with `node scripts/check_webapp.mjs`. The images are kept as workflow artifact `openpelletbridge-<version>` (Actions → run → *Artifacts*):

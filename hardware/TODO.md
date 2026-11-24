@@ -66,23 +66,23 @@ Test pads on the bottom: 3V3, 5V, GND, TX, RX (under the module), 20V, 5V_S, DAT
 
 ## Firmware port (ESP32 → ESP32-S3)
 
-- [ ] **PlatformIO environment** for the board: `board = esp32-s3-devkitc-1` (or a custom board JSON for the MINI-1-N8), 8 MB flash, `ARDUINO_USB_CDC_ON_BOOT=1` (console over native USB), partition table for 8 MB (two larger OTA slots, larger SPIFFS, core dump). Keep the DevKit build: both boards must build in CI. A build flag (e.g. `-DBOARD_OPB_S3`) selects the pins.
-- [ ] **Pins in one place** (constants.h / a board header) instead of `RX_PIN` / `TX_PIN` in lib/stove and the defines in constants.h; see the table above.
-- [ ] **Stove UART**: UART1 on IO18 (RX) / IO17 (TX). Check the signal polarity through the optocouplers: TX low → DATA low (not inverted), DATA low → RX low (not inverted) according to the design; confirm with the scope / loopback. Remove `ENABLE_RX` handling for this board.
+- [x] **PlatformIO environment** for the board: `board = esp32-s3-devkitc-1` (or a custom board JSON for the MINI-1-N8), 8 MB flash, `ARDUINO_USB_CDC_ON_BOOT=1` (console over native USB), partition table for 8 MB (two larger OTA slots, larger SPIFFS, core dump). Keep the DevKit build: both boards must build in CI. A build flag (e.g. `-DBOARD_OPB_S3`) selects the pins. Done (24/11/2026): envs `opb-s3` (USB) and `opb-s3-http`, `partitions/opb_s3_8mb.csv` (2 × 3 MB app, 1.8 MB SPIFFS, 128 KB core dump), CI builds `opb-s3`.
+- [x] **Pins in one place** (constants.h / a board header) instead of `RX_PIN` / `TX_PIN` in lib/stove and the defines in constants.h; see the table above. Done: `src/board.h` (pins and `BOARD_HAS_*` flags), lib/stove takes the pins from it.
+- [ ] **Stove UART**: UART1 on IO18 (RX) / IO17 (TX). Check the signal polarity through the optocouplers: TX low → DATA low (not inverted), DATA low → RX low (not inverted) according to the design; confirm with the scope / loopback. Remove `ENABLE_RX` handling for this board. Firmware side done: UART2 on IO18 / IO17, no `ENABLE_RX`, polarity in `BOARD_STOVE_UART_INVERT` (board.h, `false`); the loopback test is still open.
 - [ ] **Echo check**: the bus self-test ("bus not connected" vs "stove does not answer") must work with the optocoupler echo.
-- [ ] **Status LEDs**: WS2812 driver (RMT; e.g. Adafruit NeoPixel or FastLED, both open source) replacing EasyLed. Define the colours / blink patterns: LED1 system (WiFi, Bluetooth, telnet, OTA, error), LED2 stove state (off, starting, working, cleaning, alarm). Brightness setting in the web app.
+- [ ] **Status LEDs**: WS2812 driver (RMT; e.g. Adafruit NeoPixel or FastLED, both open source) replacing EasyLed. Define the colours / blink patterns: LED1 system (WiFi, Bluetooth, telnet, OTA, error), LED2 stove state (off, starting, working, cleaning, alarm). Brightness setting in the web app. Hook: `src/statusLed.h` (on the S3 `led` / `onboardLED` are no-op stand-ins, `statusLedLoop()` runs in loop()).
 - [ ] **Buzzer**: LEDC PWM on IO21 (`ledcWriteTone`). The PWM frequency is the pitch: loudest near the resonance (~4 kHz), usable roughly 1 – 6 kHz, quieter away from 4 kHz; volume coarsely via the duty cycle (50 % = loudest). Non-blocking player (a task or the loop, no `delay()`).
   - [ ] **Tone pattern per event**: a sequence of (frequency, duration, pause) steps, repeated or not. Defaults, e.g.: button press = one short high beep; success / OTA done = rising two tones; pellet reserve = two tones; stove alarm / error = fast repeating high tone; E1 countdown = beep every second, faster near the end.
   - [ ] **Settings in the web app and API**: buzzer on / off, volume (duty), per event on / off and its pattern (choose from presets, a test button that plays it), quiet hours. Stored in NVS.
   - [ ] MQTT / Home Assistant: switch for the buzzer, and a command to play a pattern (e.g. from an automation).
-- [ ] **Button on IO0**: short press and 5 s full reset as now; IO0 is also the boot strap, so nothing may hold it low at reset.
-- [ ] **Core dump, watchdog, breadcrumbs, reset reasons** checked on the S3 (other IDF config, two cores, RTC memory layout). Decode a test core dump with the S3 toolchain.
+- [x] **Button on IO0**: short press and 5 s full reset as now; IO0 is also the boot strap, so nothing may hold it low at reset. Done: EasyButton on `BOARD_BUTTON_PIN` (input with pull-up only); test at bring-up.
+- [ ] **Core dump, watchdog, breadcrumbs, reset reasons** checked on the S3 (other IDF config, two cores, RTC memory layout). Decode a test core dump with the S3 toolchain. Builds unchanged for the S3 (same IDF options: core dump to flash in ELF, task watchdog, RTC_NOINIT); a reset through the native USB is reported as "USB (serial / JTAG)". On hardware still to check.
 - [ ] **BLE**: NimBLE on the S3 (BLE 5), BLE OTA tested.
 - [ ] **HTTPS** (port 443, src/https.h) on the S3: certificate generation, handshake time and free memory with a TLS session open (~40 KB).
 - [ ] **OTA from GitHub**: release assets per board (DevKit and S3), the updater picks the right one; never flash an S3 image on a DevKit or the other way round.
 - [ ] **CI**: build both boards, attach both images and ELFs to the release.
 - [ ] **Power source** on IO4: show stove / USB in the web app, API, MQTT; log the switchovers as events.
-- [ ] **Web app / API**: show the board type and hardware revision; hide what the board does not have (and show the buzzer settings only on the board).
+- [ ] **Web app / API**: show the board type and hardware revision; hide what the board does not have (and show the buzzer settings only on the board). API done: `controller.board` and `controller.hwRev` in `GET /api/state`; the web app is still open.
 - [ ] **Optional, free GPIOs**: stove supply voltage (only with JP1 / JP2 closed), internal temperature sensor of the S3 as a warning.
 
 ## Documentation
