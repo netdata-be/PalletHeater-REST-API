@@ -174,8 +174,7 @@ static void registerRoutes()
 void setup()
 {
     esp_log_level_set("*", ESP_LOG_WARN);
-    pinMode(ENABLE_RX, OUTPUT);
-    digitalWrite(ENABLE_RX, HIGH); // The led of the optocoupler is off
+    boardPinsSetup();   // ENABLE_RX on the DevKit (board.h)
 
     // the time zone before the first log line: the clock keeps running over a software restart,
     // so the start-up lines get local time instead of UTC until configTzTime() below
@@ -329,6 +328,7 @@ void loop()
     }
     crumb("reset button");
     resetButton.read();
+    statusLedLoop();
     crumb("ArduinoOTA");
     ArduinoOTA.handle();
 

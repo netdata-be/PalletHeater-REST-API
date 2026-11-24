@@ -42,7 +42,9 @@ class Stove
     // Called before every transaction (read, probe, write) when set: lets the background reader
     // hand the bus over to a waiting command first (src/stoveCache.h). May give and take the lock.
     static void         (*beforeTx)();
-    Stove(int uart_nr);
+    // Pins and polarity come from the board (src/board.h); invert = the RX and TX
+    // levels inverted by the interface. The defaults are the ESP32 DevKit wiring.
+    Stove(int uart_nr, int8_t rxPin = 16, int8_t txPin = 17, bool invert = false);
     // When the link is down (LINK_DOWN_AFTER transactions in a row failed after
     // all attempts) read() returns -1 and write() false at once, without touching
     // the bus. Only probe() still talks to the stove; one answer brings the link up.

@@ -1,9 +1,9 @@
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
 
+#include "board.h"       // pins and capabilities of the board (DevKit / OpenPelletBridge S3)
 #include <WiFiManager.h>
 #include <WiFiUdp.h>
-#include "EasyLed.h"
 #include <EasyButton.h>
 #include <ctime>
 #include <freertos/FreeRTOS.h>
@@ -19,10 +19,6 @@
 #include "esp_log.h"
 #include <esp_task_wdt.h>
 #include <lwip/sockets.h>   // send() / select() for httpWriteRaw
-#define RESET_PIN 13
-#define ENABLE_RX 18
-#define ONBOARD_LED 2
-#define LED 14
 // Task watchdog for the loop task (and IDLE0), in seconds. Not 5: one
 // WiFiClient::write() to a client that stops reading waits up to 10 x 1 s
 // (WIFI_CLIENT_MAX_WRITE_RETRY) without returning, which reset the controller
@@ -51,7 +47,7 @@ unsigned long lastEntryTime;
 
 WiFiUDP udp;
 WiFiClient espClient;
-EasyButton resetButton(RESET_PIN);
+EasyButton resetButton(BOARD_BUTTON_PIN);
 
 const char * swaggerUI = "<!DOCTYPE html><html lang=\"en\"> <head> <meta charset=\"UTF-8\"> <title>Swagger UI</title> <link rel=\"stylesheet\" type=\"text/css\" href=\"https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.14.2/swagger-ui.css\"/> </head> <body> <div id=\"swagger-ui\"></div><script src=\"https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.14.2/swagger-ui-bundle.js\" charset=\"UTF-8\"> </script> <script src=\"https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.14.2/swagger-ui-standalone-preset.js\" charset=\"UTF-8\"> </script> <script>window.onload=function(){window.ui=SwaggerUIBundle({url: \"api-specs.json\", validatorUrl: null, dom_id: '#swagger-ui', deepLinking: true, presets: [ SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset], plugins: [ SwaggerUIBundle.plugins.DownloadUrl], layout: \"StandaloneLayout\"});}; </script> </body></html>";
 // OpenAPI spec (docs/openapi.json) and web app (web/app.html), embedded gzipped
@@ -65,6 +61,7 @@ extern const char* const BUILD_BRANCH;
 extern const char* const BUILD_TIME;      // UTC, ISO 8601
 extern const char* const BUILD_ENV;       // PlatformIO environment
 extern const char* const BUILD_STOVE_MODEL; // stove the firmware is built for (custom_stove_model in platformio.ini)
+extern const char* const BUILD_BOARD;       // board the image is for, = BOARD_NAME (board.h)
 extern const char webAppHTMLEnd[] asm("_binary_web_app_html_gz_end");
 
 SemaphoreHandle_t stoveMutex = NULL;
@@ -104,9 +101,7 @@ struct StoveBusLock {
     StoveBusLock& operator=(const StoveBusLock&) = delete;
 };
 
-EasyLed led(LED, EasyLed::ActiveLevel::High);
-
-EasyLed onboardLED(ONBOARD_LED, EasyLed::ActiveLevel::High);
+#include "statusLed.h"   // led, onboardLED
 
 WiFiManager wm;
 
@@ -254,8 +249,8 @@ unsigned long debounceDelay = 50;
 String hydro_mode;
 int int_hydro_mode;
 
-// Init the Serial Stove with Hardware UART 2
-Stove stove(2);
+// The stove bus on hardware UART 2, pins from board.h
+Stove stove(2, BOARD_STOVE_RX_PIN, BOARD_STOVE_TX_PIN, BOARD_STOVE_UART_INVERT);
 
 
 bool StoveIsOn = false;

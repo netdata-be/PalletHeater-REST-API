@@ -1,8 +1,6 @@
 #include "Stove.h"
 
 #define SERIAL_MODE SERIAL_8N2 // 8 data bits, parity none, 2 stop bits
-#define RX_PIN 16
-#define TX_PIN 17
 
 // Shared debug buffer — defined in constants.h, accessed via extern
 extern String stoveDebugBuffer;
@@ -25,10 +23,10 @@ StoveLogFn     Stove::logger  = nullptr;
 StoveWriteFn   Stove::writeHook = nullptr;
 void         (*Stove::beforeTx)() = nullptr;
 
-Stove::Stove(int uart_nr)
+Stove::Stove(int uart_nr, int8_t rxPin, int8_t txPin, bool invert)
 {
     StoveSerial = new HardwareSerial(uart_nr);
-    StoveSerial->begin(1200, SERIAL_MODE, RX_PIN, TX_PIN, false, 256);
+    StoveSerial->begin(1200, SERIAL_MODE, rxPin, txPin, invert, 256);
 }
 
 void Stove::setDebug(bool enabled)  { _debugEnabled = enabled; }
