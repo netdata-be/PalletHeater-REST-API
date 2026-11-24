@@ -409,6 +409,7 @@ volatile bool netHttpSeen = false;   // any HTTP request received (set in metric
 const unsigned long ERROR_CONFIRM_MS = 30000;
 const unsigned long ERROR_CONFIRM_TRANSITIONAL_MS = 180000;   // start-up, ignition, cleaning, shut-down (E1 at start-up, 17/11/2026)
 int confirmedCurrentError = 0;
+pc::ReserveStepMeter reserveStep;   // time of one step of RAM 0xA4 after a refill (events.h measures it)
 void updateConfirmedError(int stoveStateNow)
 {
     static pc::ErrorConfirm ec;

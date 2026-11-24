@@ -116,6 +116,23 @@ static void test_pellets_low()
     TEST_ASSERT_TRUE(pc::reserveSensorLow(2));         // not confirmed by the stove yet
     TEST_ASSERT_EQUAL_INT(0, pc::pelletsLow(6, 0));    // never seen: not low
 }
+static void test_reserve_step_meter()
+{
+    pc::ReserveStepMeter m;
+    TEST_ASSERT_EQUAL_INT(60, m.stepS);
+    // flickers 5 -> 4 -> 5 are not steps
+    m.update(5, 1000); m.update(4, 1005); m.update(5, 1011);
+    TEST_ASSERT_EQUAL_INT(0, m.measured);
+    // the refill of 24/11/2026: 4 at 21:10:27, then 58, 63, 58, 64 s
+    m.update(4, 2000); m.update(3, 2058);
+    TEST_ASSERT_EQUAL_INT(58, m.stepS);
+    m.update(2, 2121); m.update(1, 2179); m.update(0, 2243);
+    TEST_ASSERT_EQUAL_INT(4, m.measured);
+    TEST_ASSERT_INT_WITHIN(3, 61, m.stepS);
+    // a jump 5 -> 3 within seconds (after a switch-off) is not a step
+    m.update(5, 9000); m.update(3, 9004);
+    TEST_ASSERT_EQUAL_INT(4, m.measured);
+}
 static void test_error_confirm_prewarning_ignored()
 {
     // E12 (129) shows for a few seconds at brazier cleaning: never confirmed
@@ -826,6 +843,7 @@ int main(int, char**)
     RUN_TEST(test_error_confirm_after_transition);
     RUN_TEST(test_error_confirm_alarm_state_immediate);
     RUN_TEST(test_error_confirm_waits_for_countdown);
+    RUN_TEST(test_reserve_step_meter);
     RUN_TEST(test_combustion_quality);
     RUN_TEST(test_pellet_quality);
     RUN_TEST(test_address_list);

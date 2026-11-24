@@ -87,7 +87,8 @@ inline int roomFanIsRunning(int power, int flagD3)
 // ── Pellet reserve ─────────────────────────────────────────────────────────
 // RAM 0xA4 is not an on / off sensor but a counter 0 - 5 the stove keeps itself:
 //   - no pellets at the level sensor: straight to 5 (the reserve countdown in RAM 0x89 runs)
-//   - pellets seen: one step down per reading, about every 37 s while burning (23/11/2026:
+//   - pellets seen: one step down per reading of the stove, about every 40 - 60 s while burning
+//     (24/11/2026 21:10:27 -> 21:14:30: 4 -> 0 at ~60 s a step; ReserveStepMeter measures it) (23/11/2026:
 //     refill at 09:12:29, 5 -> 4 -> 3 -> 2 -> 1 -> 0 at 09:16:12; on 20/11 after the
 //     switch-off it went 5 -> 3 -> 0 within seconds). 0 = the stove has confirmed the pellets.
 //   - a single 4 between two 5's: pellets sliding past the sensor, not a refill (09:01:54)
@@ -95,7 +96,25 @@ inline int roomFanIsRunning(int power, int flagD3)
 // (one 4 can still be a flicker).
 inline bool reserveSensorLow(int sensor) { return sensor >= 1 && sensor <= 5; }
 inline bool reserveRefilling(int sensor) { return sensor >= 1 && sensor <= 3; }
-static const int RESERVE_STEP_S = 37;   // one step of RAM 0xA4 while burning (23/11/2026)
+// The time of one step of RAM 0xA4 while it counts down after a refill, measured: a step of
+// exactly 1 down within 15 - 150 s of the previous change (the 5 -> 4 -> 5 flickers are not
+// steps). Smoothed over the last steps, 60 s until one was seen.
+struct ReserveStepMeter {
+    static const int DEFAULT_S = 60;
+    int stepS = DEFAULT_S;
+    int lastV = -1;
+    uint32_t lastT = 0;   // seconds
+    int measured = 0;     // steps measured since the start
+    void update(int v, uint32_t t)
+    {
+        uint32_t d = t - lastT;
+        if (lastT && lastV >= 1 && v == lastV - 1 && d >= 15 && d <= 150) {
+            stepS = measured ? (int)((stepS * 2 + d) / 3) : (int)d;
+            measured++;
+        }
+        lastV = v; lastT = t;
+    }
+};
 // Alarm (the remote shows PELLET RESERVE) when the sensor (RAM 0xA4) is low and the 20 min
 // countdown (RAM 0x89) has run down (confirmed 17/11 and 20/11/2026; <= 1 is one minute early).
 // Not while a refill is being confirmed (1 - 3).

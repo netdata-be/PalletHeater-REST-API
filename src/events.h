@@ -236,6 +236,9 @@ static void eventsTick()
         }
         if (evtLastPellet[k] >= 0)
             LOGI("stove", "pellet reserve sensor (RAM 0x%02X) %d -> %d", pa[k], evtLastPellet[k], pv[k]);
+        int stepWas = reserveStep.measured;
+        reserveStep.update(pv[k], (uint32_t)t);
+        if (reserveStep.measured != stepWas) LOGD("stove", "pellet reserve sensor: a step takes ~%d s", reserveStep.stepS);
         StateEvent e = { (uint32_t)t, EVT_PELLET, (int8_t)evtLastPellet[k], (int8_t)pv[k], pa[k] };
         evtLastPellet[k] = pv[k];
         evtStore(e);

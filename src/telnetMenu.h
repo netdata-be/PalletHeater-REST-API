@@ -44,7 +44,7 @@ static void tmAlerts()
         }
         if (lastSlowStatesAt && pc::reserveRefilling(cachedPelletSensor)) {
             tpf(A_GRN " Pellets refilled: the stove confirms them (level sensor 0xA4 = %d, about %d s)%s" A_RST A_EOL,
-                cachedPelletSensor, cachedPelletSensor * pc::RESERVE_STEP_S, pelletsEmptyOff() ? " - switching on is possible after that" : "");
+                cachedPelletSensor, cachedPelletSensor * reserveStep.stepS, pelletsEmptyOff() ? " - switching on is possible after that" : "");
         } else if (lastSlowStatesAt && !pelletsEmptyOff()) {
             if (cachedPelletShutdown >= 0) tpf(A_YEL " ! Pellet reserve: the stove switches itself off in about %d min" A_RST A_EOL, (cachedPelletShutdown + 1) / 2);
             else if (cachedLowPallet) tpl(A_YEL " ! Low pellets - refill the hopper" A_RST);
