@@ -475,8 +475,26 @@ void fwBootInstall()
     // from here on it always restarts, so the Bluetooth memory can go back to the heap
     esp_bt_mem_release(ESP_BT_MODE_BTDM);
     fwState = FW_DOWNLOADING;
+    // Watchdog: setup() (the loop task) is watched by the task watchdog (10 s, restart) and
+    // feeds it here; the download task is not (a TLS connect can block longer than 10 s).
+    // So setup() watches the download task: no progress (bytes or step) for FW_BOOT_HANG_MS =
+    // hanging, and it restarts into the old firmware like a failed download.
+    static const uint32_t FW_BOOT_HANG_MS = 90000;   // connect + redirect + 2 TLS handshakes stay well below it
     if (xTaskCreatePinnedToCore(fwBootTask, "fwBoot", 12288, nullptr, 1, nullptr, 1) != pdPASS) fwBootResult = "could not start the download task (memory)";
-    else while (!fwBootDone) fwServeFor(100);
+    else {
+        unsigned long lastMove = millis(); size_t lastDone = 0; int lastPhase = fwBootPhase;
+        while (!fwBootDone) {
+            fwServeFor(100);
+            if (fwDone != lastDone || fwBootPhase != lastPhase) { lastDone = fwDone; lastPhase = fwBootPhase; lastMove = millis(); }
+            else if (millis() - lastMove > FW_BOOT_HANG_MS) {
+                char b[120];
+                snprintf(b, sizeof(b), "the download hangs: no progress for %lu s (step %s, %u KB) - back to the previous firmware",
+                         (unsigned long)(FW_BOOT_HANG_MS / 1000), FWB_STR[fwBootPhase], (unsigned)(fwDone / 1024));
+                fwBootResult = b;
+                break;
+            }
+        }
+    }
     if (fwBootResult.length()) {
         fail(fwBootResult);
         fwServeFor(4000);   // the status page sees the error
