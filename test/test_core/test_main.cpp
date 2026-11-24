@@ -593,6 +593,95 @@ static void test_hour_acc()
     TEST_ASSERT_EQUAL(0xFF, r.flameAct10); TEST_ASSERT_EQUAL(-1, r.auger10); TEST_ASSERT_EQUAL(0, r.burnPct);
 }
 
+// ── Buzzer ──────────────────────────────────────────────────────────────────
+static void test_beep_presets()
+{
+    int n; const pc::BeepPreset* p = pc::beepPresets(n);
+    TEST_ASSERT_TRUE(n >= 10);
+    for (int i = 0; i < n; i++) {
+        TEST_ASSERT_EQUAL(i, pc::beepPresetIndex(p[i].name));   // unique names
+        TEST_ASSERT_TRUE(p[i].count > 0);
+        for (int s = 0; s < p[i].count; s++) TEST_ASSERT_TRUE(p[i].steps[s].hz == 0 || (p[i].steps[s].hz >= 1000 && p[i].steps[s].hz <= 6000));
+    }
+    TEST_ASSERT_EQUAL(-1, pc::beepPresetIndex("nope"));
+    TEST_ASSERT_EQUAL(-1, pc::beepPresetIndex(nullptr));
+}
+static const pc::BeepPreset& preset(const char* name) { int n; return pc::beepPresets(n)[pc::beepPresetIndex(name)]; }
+static void test_beep_player_steps()
+{
+    pc::BeepPlayer b;
+    TEST_ASSERT_EQUAL(0, b.tick(0));
+    TEST_ASSERT_TRUE(b.play(&preset("rising"), 1, 1000));   // 2700 120/30, 4000 200/0
+    TEST_ASSERT_EQUAL(2700, b.tick(1000));
+    TEST_ASSERT_EQUAL(2700, b.tick(1119));
+    TEST_ASSERT_EQUAL(0,    b.tick(1120));
+    TEST_ASSERT_EQUAL(4000, b.tick(1150));
+    TEST_ASSERT_EQUAL(4000, b.tick(1349));
+    TEST_ASSERT_EQUAL(0,    b.tick(1350));   // played once: done
+    TEST_ASSERT_FALSE(b.active());
+    TEST_ASSERT_TRUE(b.play(&preset("rising"), 1, 2000));
+    TEST_ASSERT_EQUAL(0, b.tick(2500));      // a late tick skips the whole pattern
+    TEST_ASSERT_FALSE(b.active());
+}
+static void test_beep_player_repeat_and_priority()
+{
+    pc::BeepPlayer b;
+    TEST_ASSERT_TRUE(b.play(&preset("alarm"), 5, 0));     // until stopped: 1.12 s per pass
+    for (uint32_t t = 0; t < 1120u * 89; t += 10) b.tick(t);
+    TEST_ASSERT_EQUAL(4000, b.tick(1120u * 89 + 10));     // 89 passes later, in phase
+    TEST_ASSERT_EQUAL(0,    b.tick(1120u * 89 + 130));
+    TEST_ASSERT_TRUE(b.active());
+    TEST_ASSERT_FALSE(b.play(&preset("click"), 1, 100010));   // a click does not interrupt an alarm
+    TEST_ASSERT_TRUE(b.play(&preset("beep"), 5, 100020));     // the same priority replaces it
+    TEST_ASSERT_EQUAL(4000, b.tick(100139));
+    TEST_ASSERT_EQUAL(0, b.tick(100140));
+    TEST_ASSERT_FALSE(b.active());
+    TEST_ASSERT_TRUE(b.play(&preset("click"), 1, 0, 3));  // 3 passes of 25 ms
+    TEST_ASSERT_EQUAL(4000, b.tick(0));
+    TEST_ASSERT_EQUAL(4000, b.tick(26));                  // second pass (no off time)
+    TEST_ASSERT_EQUAL(0, b.tick(75));
+    TEST_ASSERT_FALSE(b.active());
+    TEST_ASSERT_TRUE(b.play(&preset("siren"), 1, 0xFFFFFF00u));   // across the millis() wrap
+    TEST_ASSERT_EQUAL(4500, b.tick(0x00000000u + 100));
+    b.stop();
+    TEST_ASSERT_EQUAL(0, b.tick(200));
+}
+static void test_beep_duty()
+{
+    TEST_ASSERT_EQUAL_UINT32(0, pc::beepDuty(0, 10));
+    TEST_ASSERT_EQUAL_UINT32(512, pc::beepDuty(100, 10));   // 50 %
+    TEST_ASSERT_EQUAL_UINT32(512, pc::beepDuty(150, 10));
+    TEST_ASSERT_EQUAL_UINT32(128, pc::beepDuty(50, 10));
+    TEST_ASSERT_EQUAL_UINT32(1, pc::beepDuty(1, 10));       // never 0 when on
+}
+static void test_quiet_hours()
+{
+    TEST_ASSERT_TRUE(pc::inQuietHours(23 * 60, 22 * 60, 7 * 60));    // across midnight
+    TEST_ASSERT_TRUE(pc::inQuietHours(3 * 60, 22 * 60, 7 * 60));
+    TEST_ASSERT_FALSE(pc::inQuietHours(7 * 60, 22 * 60, 7 * 60));    // to is not included
+    TEST_ASSERT_FALSE(pc::inQuietHours(12 * 60, 22 * 60, 7 * 60));
+    TEST_ASSERT_TRUE(pc::inQuietHours(13 * 60, 12 * 60, 14 * 60));   // same day
+    TEST_ASSERT_FALSE(pc::inQuietHours(14 * 60, 12 * 60, 14 * 60));
+    TEST_ASSERT_FALSE(pc::inQuietHours(600, 600, 600));               // from == to: off
+    TEST_ASSERT_EQUAL(22 * 60, pc::clockMinutes("22:00"));
+    TEST_ASSERT_EQUAL(7 * 60 + 5, pc::clockMinutes("7:05"));
+    TEST_ASSERT_EQUAL(-1, pc::clockMinutes("24:00"));
+    TEST_ASSERT_EQUAL(-1, pc::clockMinutes("12:00x"));
+    TEST_ASSERT_EQUAL(-1, pc::clockMinutes(nullptr));
+}
+static void test_error_countdown()
+{
+    TEST_ASSERT_EQUAL(54, pc::countdownLeft(54, 0, 5000));
+    TEST_ASSERT_EQUAL(51, pc::countdownLeft(54, 3500, 5000));
+    TEST_ASSERT_EQUAL(49, pc::countdownLeft(54, 60000, 5000));   // no reading for long: at most 5 s ahead
+    TEST_ASSERT_EQUAL(0,  pc::countdownLeft(2, 4000, 5000));
+    TEST_ASSERT_EQUAL(-1, pc::countdownLeft(-1, 0, 5000));
+    TEST_ASSERT_EQUAL_UINT32(1000, pc::countdownBeepMs(54));
+    TEST_ASSERT_EQUAL_UINT32(500,  pc::countdownBeepMs(10));
+    TEST_ASSERT_EQUAL_UINT32(250,  pc::countdownBeepMs(5));
+    TEST_ASSERT_EQUAL_UINT32(0,    pc::countdownBeepMs(0));
+}
+
 int main(int, char**)
 {
     UNITY_BEGIN();
@@ -636,5 +725,11 @@ int main(int, char**)
     RUN_TEST(test_pellet_usage);
     RUN_TEST(test_pellet_cost);
     RUN_TEST(test_room_source);
+    RUN_TEST(test_beep_presets);
+    RUN_TEST(test_beep_player_steps);
+    RUN_TEST(test_beep_player_repeat_and_priority);
+    RUN_TEST(test_beep_duty);
+    RUN_TEST(test_quiet_hours);
+    RUN_TEST(test_error_countdown);
     return UNITY_END();
 }

@@ -31,6 +31,7 @@ Values are plain text (no JSON), retained, under `<prefix>/state/<name>` (prefix
 | `hours_service`, `total_hours`, `starts`, `wifi_rssi` | Counters and WiFi signal (dBm) |
 | `power_source` | OpenPelletBridge board only: `stove` (the stove's supply) or `usb`; also without data from the stove. Home Assistant: enum sensor *Voeding* (diagnostic) |
 | `chip_temp` | OpenPelletBridge board only: internal temperature of the ESP32-S3 (°C, whole degrees). Home Assistant: temperature sensor *Temperatuur controller* (diagnostic). The warning `CHIP_TEMP_HIGH` is only in `/api/state`, not in `warning` |
+| `buzzer`, `buzzer_preset` | S3 board only: buzzer `ON` / `OFF`, the sound chosen for `buzzer_play` |
 
 Commands go to `<prefix>/set/<name>`. The result is published (not retained) on `<prefix>/result`, e.g. `setpoint 21: ok`.
 
@@ -43,13 +44,17 @@ Commands go to `<prefix>/set/<name>`. The result is published (not retained) on 
 | `fan_speed` | `off` or 0 – 3 |
 | `energy_saving` | `ON` / `OFF`. Off sets both offsets to 0 (the stove has no separate switch); on restores the last offsets (default +1 / −1) |
 | `es_stop`, `es_start` | 0 – 3 °C |
+| `buzzer` | S3 board only: `ON` / `OFF`, all event sounds of the board's buzzer (stored, as in [`/api/buzzer`](api.md#apibuzzer)) |
+| `buzzer_preset` | S3 board only: the sound for `buzzer_play`, one of the presets (`click`, `beep`, `double`, `rising`, `falling`, `two_tone`, `chime`, `tick`, `pip`, `long`, `alarm`, `siren`; default `beep`, not stored) |
+| `buzzer_play` | S3 board only: `PRESS` (or empty) plays `buzzer_preset`, a preset name plays that one. Only while the buzzer is on; `alarm` / `siren` play 3 times |
+| `buzzer_stop` | S3 board only: any payload stops the sound; a sounding error alarm stays silent until the error is gone |
 
 ```bash
 mosquitto_sub -h broker -t 'openpelletbridge/#' -v
 mosquitto_pub -h broker -t openpelletbridge/set/setpoint -m 21
 ```
 
-**Home Assistant.** With *discovery* on (default), the controller also publishes retained configuration messages under `homeassistant/<component>/<client id>/<entity>/config`. Home Assistant (MQTT integration) then creates a device *OpenPelletBridge* with a thermostat (on/off and set point, current room temperature), switches for power and energy saving, numbers for set point, flame power and the energy saving offsets, a select for the fan and sensors / binary sensors for the values above. Nothing else is Home Assistant specific.
+**Home Assistant.** With *discovery* on (default), the controller also publishes retained configuration messages under `homeassistant/<component>/<client id>/<entity>/config`. Home Assistant (MQTT integration) then creates a device *OpenPelletBridge* with a thermostat (on/off and set point, current room temperature), switches for power and energy saving, numbers for set point, flame power and the energy saving offsets, a select for the fan and sensors / binary sensors for the values above. On the S3 board also a switch for the buzzer, a select for its sound and the buttons *Zoemer afspelen* (play) and *Zoemer stil* (stop), e.g. to play a sound from an automation. Nothing else is Home Assistant specific.
 
 **Loxone and others.** The state and command topics are plain MQTT and work with any client. Loxone needs an MQTT gateway for this (for example LoxBerry with the MQTT Gateway plugin) unless your Miniserver supports MQTT itself; check that for your Loxone version. Discovery can be switched off when Home Assistant is not used. Alternatively Loxone can call the REST API directly with virtual HTTP inputs and outputs.
 

@@ -3198,6 +3198,457 @@
         ]
       }
     },
+    "/api/buzzer": {
+      "get": {
+        "summary": "Buzzer of the S3 board: settings and state",
+        "description": "Only on the OpenPelletBridge board (S3); the DevKit firmware answers 404. Events: button (button press), success (new firmware confirmed), reserve (pellet reserve alarm starts), countdown (the stove counts down to act on an error, RAM 0x30), alarm (alarm state, confirmed error or pellets used up; repeats until cleared or stopped).",
+        "responses": {
+          "200": {
+            "description": "Settings and state",
+            "content": {
+              "application/json": {
+                "example": {
+                  "enabled": true,
+                  "volume": 100,
+                  "quietHours": {
+                    "enabled": false,
+                    "from": "22:00",
+                    "to": "07:00",
+                    "alarms": true,
+                    "now": false
+                  },
+                  "events": {
+                    "button": {
+                      "enabled": true,
+                      "preset": "click"
+                    },
+                    "success": {
+                      "enabled": true,
+                      "preset": "rising"
+                    },
+                    "reserve": {
+                      "enabled": true,
+                      "preset": "two_tone"
+                    },
+                    "countdown": {
+                      "enabled": true,
+                      "preset": "tick"
+                    },
+                    "alarm": {
+                      "enabled": true,
+                      "preset": "alarm"
+                    }
+                  },
+                  "presets": [
+                    "click",
+                    "beep",
+                    "double",
+                    "rising",
+                    "falling",
+                    "two_tone",
+                    "chime",
+                    "tick",
+                    "pip",
+                    "long",
+                    "alarm",
+                    "siren"
+                  ],
+                  "playing": null,
+                  "muted": false
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "No buzzer on this board"
+          }
+        },
+        "tags": [
+          "Device"
+        ]
+      },
+      "post": {
+        "summary": "Change the buzzer settings, play / test / stop a sound",
+        "description": "Only the given parameters change; stored in NVS, applied at once.",
+        "parameters": [
+          {
+            "name": "enabled",
+            "in": "query",
+            "required": false,
+            "description": "All event sounds on / off",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "volume",
+            "in": "query",
+            "required": false,
+            "description": "Volume in % (100 = 50 % PWM duty, the loudest)",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "quiet",
+            "in": "query",
+            "required": false,
+            "description": "Quiet hours on / off",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "quietFrom",
+            "in": "query",
+            "required": false,
+            "description": "Start of the quiet hours, local time",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{1,2}:\\d{2}$"
+            }
+          },
+          {
+            "name": "quietTo",
+            "in": "query",
+            "required": false,
+            "description": "End of the quiet hours, local time (across midnight when before quietFrom)",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{1,2}:\\d{2}$"
+            }
+          },
+          {
+            "name": "quietAlarms",
+            "in": "query",
+            "required": false,
+            "description": "true: alarm and countdown still sound in the quiet hours",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "button",
+            "in": "query",
+            "required": false,
+            "description": "Sound of the event 'button' on / off",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "buttonPreset",
+            "in": "query",
+            "required": false,
+            "description": "Sound of the event 'button'",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "click",
+                "beep",
+                "double",
+                "rising",
+                "falling",
+                "two_tone",
+                "chime",
+                "tick",
+                "pip",
+                "long",
+                "alarm",
+                "siren"
+              ]
+            }
+          },
+          {
+            "name": "success",
+            "in": "query",
+            "required": false,
+            "description": "Sound of the event 'success' on / off",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "successPreset",
+            "in": "query",
+            "required": false,
+            "description": "Sound of the event 'success'",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "click",
+                "beep",
+                "double",
+                "rising",
+                "falling",
+                "two_tone",
+                "chime",
+                "tick",
+                "pip",
+                "long",
+                "alarm",
+                "siren"
+              ]
+            }
+          },
+          {
+            "name": "reserve",
+            "in": "query",
+            "required": false,
+            "description": "Sound of the event 'reserve' on / off",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "reservePreset",
+            "in": "query",
+            "required": false,
+            "description": "Sound of the event 'reserve'",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "click",
+                "beep",
+                "double",
+                "rising",
+                "falling",
+                "two_tone",
+                "chime",
+                "tick",
+                "pip",
+                "long",
+                "alarm",
+                "siren"
+              ]
+            }
+          },
+          {
+            "name": "countdown",
+            "in": "query",
+            "required": false,
+            "description": "Sound of the event 'countdown' on / off",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "countdownPreset",
+            "in": "query",
+            "required": false,
+            "description": "Sound of the event 'countdown'",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "click",
+                "beep",
+                "double",
+                "rising",
+                "falling",
+                "two_tone",
+                "chime",
+                "tick",
+                "pip",
+                "long",
+                "alarm",
+                "siren"
+              ]
+            }
+          },
+          {
+            "name": "alarm",
+            "in": "query",
+            "required": false,
+            "description": "Sound of the event 'alarm' on / off",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "alarmPreset",
+            "in": "query",
+            "required": false,
+            "description": "Sound of the event 'alarm'",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "click",
+                "beep",
+                "double",
+                "rising",
+                "falling",
+                "two_tone",
+                "chime",
+                "tick",
+                "pip",
+                "long",
+                "alarm",
+                "siren"
+              ]
+            }
+          },
+          {
+            "name": "play",
+            "in": "query",
+            "required": false,
+            "description": "Play a preset now (a test: also when the buzzer is off or in quiet hours; a repeating preset 3 times)",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "click",
+                "beep",
+                "double",
+                "rising",
+                "falling",
+                "two_tone",
+                "chime",
+                "tick",
+                "pip",
+                "long",
+                "alarm",
+                "siren"
+              ]
+            }
+          },
+          {
+            "name": "test",
+            "in": "query",
+            "required": false,
+            "description": "Play the sound of an event (after the settings in the same request); countdown plays a 12 s countdown",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "button",
+                "success",
+                "reserve",
+                "countdown",
+                "alarm"
+              ]
+            }
+          },
+          {
+            "name": "stop",
+            "in": "query",
+            "required": false,
+            "description": "Stop the sound; a sounding error countdown / alarm stays silent until the error is gone",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Saved; the state as with GET",
+            "content": {
+              "application/json": {
+                "example": {
+                  "result": "success",
+                  "enabled": true,
+                  "volume": 100,
+                  "quietHours": {
+                    "enabled": false,
+                    "from": "22:00",
+                    "to": "07:00",
+                    "alarms": true,
+                    "now": false
+                  },
+                  "events": {
+                    "button": {
+                      "enabled": true,
+                      "preset": "click"
+                    },
+                    "success": {
+                      "enabled": true,
+                      "preset": "rising"
+                    },
+                    "reserve": {
+                      "enabled": true,
+                      "preset": "two_tone"
+                    },
+                    "countdown": {
+                      "enabled": true,
+                      "preset": "tick"
+                    },
+                    "alarm": {
+                      "enabled": true,
+                      "preset": "alarm"
+                    }
+                  },
+                  "presets": [
+                    "click",
+                    "beep",
+                    "double",
+                    "rising",
+                    "falling",
+                    "two_tone",
+                    "chime",
+                    "tick",
+                    "pip",
+                    "long",
+                    "alarm",
+                    "siren"
+                  ],
+                  "playing": null,
+                  "muted": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid value"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "No buzzer on this board"
+          }
+        },
+        "tags": [
+          "Device"
+        ]
+      }
+    },
     "/api/wifi": {
       "get": {
         "summary": "WiFi status and IP settings",

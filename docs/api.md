@@ -88,6 +88,7 @@ scrape_configs:
 | `GET` | [`/api/events`](#get-apievents) | Log of stove state changes and errors with exact times |
 | `GET` `POST` | [`/api/bluetooth`](#apibluetooth) | Enable / disable Bluetooth (BLE) |
 | `GET` `POST` | [`/api/mqtt`](#apimqtt) | MQTT settings and status |
+| `GET` `POST` | [`/api/buzzer`](#apibuzzer) | Buzzer of the S3 board: settings, test sounds (404 on the DevKit) |
 | `GET` `POST` | [`/api/wifi`](#apiwifi) | WiFi status, network, hostname and DHCP / static IP |
 | `GET` | [`/api/wifi/scan`](#apiwifi) | WiFi networks in range |
 | `GET` `POST` | [`/api/telnet`](#apitelnet) | Enable / disable the telnet menu |
@@ -639,6 +640,50 @@ curl http://openpelletbridge.local/api/mqtt
 | `discovery`, `discoveryPrefix` | Home Assistant discovery on / off (default on), prefix (default `homeassistant`) |
 
 Only the given parameters change.
+
+### `/api/buzzer`
+
+Only on the OpenPelletBridge board (S3, `BOARD_HAS_BUZZER`); the DevKit firmware answers 404. The buzzer on the board, not the stove's own beep ([`/api/beep`](#apibeep)). Settings are stored in NVS and apply at once.
+
+```bash
+curl http://openpelletbridge.local/api/buzzer
+# {"enabled":true,"volume":100,
+#  "quietHours":{"enabled":false,"from":"22:00","to":"07:00","alarms":true,"now":false},
+#  "events":{"button":{"enabled":true,"preset":"click"},"success":{"enabled":true,"preset":"rising"},
+#            "reserve":{"enabled":true,"preset":"two_tone"},"countdown":{"enabled":true,"preset":"tick"},
+#            "alarm":{"enabled":true,"preset":"alarm"}},
+#  "presets":["click","beep","double","rising","falling","two_tone","chime","tick","pip","long","alarm","siren"],
+#  "playing":null,"muted":false}
+
+curl -X POST "http://openpelletbridge.local/api/buzzer?volume=60&quiet=true&quietFrom=22:30&quietTo=07:00"
+curl -X POST "http://openpelletbridge.local/api/buzzer?play=chime"
+curl -X POST "http://openpelletbridge.local/api/buzzer?test=countdown"
+curl -X POST "http://openpelletbridge.local/api/buzzer?stop=1"
+```
+
+| Parameter (POST) | Values |
+|---|---|
+| `enabled` | `true` / `false`: all sounds of the events on / off |
+| `volume` | `0` – `100` (%; 100 = 50 % PWM duty, the loudest) |
+| `quiet`, `quietFrom`, `quietTo` | Quiet hours on / off, from / to `HH:MM` local time (across midnight when from > to) |
+| `quietAlarms` | `true`: alarm and countdown still sound in the quiet hours |
+| `<event>` | `true` / `false` per event: `button`, `success`, `reserve`, `countdown`, `alarm` |
+| `<event>Preset` | The sound of the event, one of `presets`, e.g. `alarmPreset=siren` |
+| `play` | Play a preset now (a test: also when the buzzer is off or in quiet hours; a repeating preset 3 times) |
+| `test` | Play the sound of an event (after the settings in the same request); `countdown` plays a 12 s countdown |
+| `stop` | Stop the sound; a sounding error countdown / alarm stays silent until the error is gone |
+
+Only the given parameters change; the answer is the state as with GET, plus `result`.
+
+| Event | When | Default |
+|---|---|---|
+| `button` | Short press of the button on the board (while an error sounds: silences it instead) | `click` |
+| `success` | A new firmware is confirmed after an update (2 min running with WiFi, [rollback](debugging.md)) | `rising` |
+| `reserve` | The stove's pellet reserve alarm starts (`lowPalletAlarm`) | `two_tone` |
+| `countdown` | The stove counts down to act on an error (RAM 0x30, ~55 s): a beep every second, every 0.5 s in the last 10 s, every 0.25 s in the last 5 s. Not for errors shorter than 5 s and not in the start-up check (state 1) | `tick` |
+| `alarm` | Alarm state (8 – 10), a confirmed error, or pellets used up: repeats until it clears or is silenced | `alarm` |
+
+A higher event interrupts a lower one (alarm > countdown > reserve > success > button); a test plays above all.
 
 ### `/api/wifi`
 

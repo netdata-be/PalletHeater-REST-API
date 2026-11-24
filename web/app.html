@@ -273,6 +273,8 @@ details.tbl th:first-child,details.tbl td:first-child{text-align:left}
 .mqform{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;padding:4px 0 12px;font-size:13px}
 .mqform label{display:flex;flex-direction:column;gap:3px;color:var(--muted)}
 .mqform label:has(input[type=checkbox]){flex-direction:row;align-items:center;justify-content:space-between;color:var(--text)}
+.bzev{display:grid;grid-template-columns:auto 1fr auto auto;gap:6px 8px;align-items:center;grid-column:1/-1;color:var(--text)}
+.bzev select{font-size:13px;padding:5px 8px}
 .mqform input:not([type=checkbox]){width:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:7px 10px;color:var(--text)}
 @media (max-width:420px){.mqform{grid-template-columns:1fr}}
 .fwprog{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin:0 0 10px}
@@ -696,6 +698,20 @@ button.mini{padding:1px 8px;font-size:11px;font-weight:550;border-radius:7px;mar
     </form>
   </section>
 
+  <!-- Buzzer of the S3 board: GET /api/buzzer, shown only when the firmware answers 200 -->
+  <section class="card" id="bzCard" hidden>
+    <h2><span><span data-i="bzTitle"></span><span data-help="buzzer"></span></span><span class="keybtns"><label class="switch"><input type="checkbox" id="bzToggle"><span></span></label><button id="bzStop" data-i="bzStop"></button></span></h2>
+    <p class="muted" id="bzHint" style="margin:0 0 8px;font-size:13px"></p>
+    <form id="bzForm" class="mqform" autocomplete="off" onsubmit="return false">
+      <label style="grid-column:1/-1"><span><span data-i="bzVolume"></span> <span id="bzVolTxt"></span></span><input id="bzVol" type="range" min="5" max="100" step="5"></label>
+      <div class="bzev" id="bzEvents"></div>
+      <label style="grid-column:1/-1"><span data-i="bzQuiet"></span><input type="checkbox" id="bzQuiet"></label>
+      <label><span data-i="bzFrom"></span><input id="bzFrom" type="time"></label>
+      <label><span data-i="bzTo"></span><input id="bzTo" type="time"></label>
+      <label style="grid-column:1/-1"><span data-i="bzQuietAlarms"></span><input type="checkbox" id="bzQuietAlarms"></label>
+    </form>
+  </section>
+
   <!-- Known EEPROM parameters (debug only) -->
   <section class="card wide d" id="parCard">
     <h2><span><span data-i="parTitle"></span><span data-help="par"></span></span><span class="keybtns"><span class="muted" id="parAge" style="text-transform:none;letter-spacing:0;font-weight:400;align-self:center"></span><button id="parReload" data-i="reload"></button></span></h2>
@@ -932,6 +948,10 @@ pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low 
     httpsRedir:"Redirect HTTP to HTTPS", httpsRedirHint:"Web app pages only; the API stays reachable over HTTP (Home Assistant, scripts)", httpsRedirOn:"Redirect on", httpsRedirOff:"Redirect off",
     httpsAlt:"Extra names in the certificate", httpsAltHint:"Next to the hostname, hostname.local and the IP address: other host names or IPv4 addresses you use (max. 8). The certificate is re-issued with the same key: the browser warns once more.",
     httpsAltSaved:"Names saved, certificate re-issued", httpsAltBad:"Not a host name or IPv4 address", httpsAltMax:"At most 8 extra names", httpsAltSaveBtn:"Save names", httpsAltRemove:"Remove",
+    bzTitle:"Buzzer (controller)", bzStop:"Silence", bzVolume:"Volume", bzQuiet:"Quiet hours", bzFrom:"From", bzTo:"To", bzQuietAlarms:"Alarm and countdown also in the quiet hours", bzTest:"Test",
+    bzEvButton:"Button press", bzEvSuccess:"Firmware update done", bzEvReserve:"Pellet reserve", bzEvCountdown:"Error countdown", bzEvAlarm:"Stove alarm / error",
+    bzSaved:"Buzzer settings saved", bzOn:"Buzzer on", bzOff:"Buzzer off", bzStopped:"Buzzer silenced", bzPlaying:"Playing: {0}", bzMuted:"Alarm muted until the error clears", bzQuietNow:"Quiet hours now", bzIdle:"Silent",
+    h_buzzer:"The buzzer on the controller board (not the stove's own beep). Each event has its sound; Test plays it (also when the buzzer is off). Button press: a short press of the button on the board; it also silences a sounding alarm. Firmware update done: a new firmware confirmed after an update. Pellet reserve: when the stove's pellet reserve alarm starts. Error countdown: the stove counts down ~55 s before it acts on an error; a beep every second, faster in the last 10 s. Stove alarm / error: repeats until the error is cleared or silenced. Quiet hours (local time): no sounds, optionally except alarm and countdown. MQTT: <prefix>/set/buzzer (ON / OFF), buzzer_play (a sound), buzzer_stop.",
     h_https:"Encrypted access over https:// on port 443, next to plain HTTP on port 80. The certificate is made on the controller itself (its own ECDSA P-256 key, which never leaves it) for the hostname, hostname.local and the IP address, and is renewed automatically with the same key when one of them changes. It is self-signed: the browser warns the first time. Check that the SHA-256 fingerprint the browser shows is the one here, then accept it; or download the certificate and install it as trusted on your own devices (then no warning). A TLS connection needs ~40 KB of memory: the controller serves one at a time, and refuses it when memory is low (HTTP keeps working).",
     keyOn:"Every API call needs the X-API-Key header", keyOff:"Optional: the API is open on your network", keyCopied:"API key copied", keyNew:"New API key generated",
     keyConfirmRotate:"Generate a new API key? Other clients (scripts, Home Assistant, Prometheus) then need the new key.",
@@ -1114,6 +1134,10 @@ pelLeft:"Pellets in de bak", pelLearning:"wordt gemeten: vul bij bij het pellet-
     httpsRedir:"HTTP doorsturen naar HTTPS", httpsRedirHint:"Enkel de pagina's van de webapp; de API blijft via HTTP bereikbaar (Home Assistant, scripts)", httpsRedirOn:"Doorsturen aan", httpsRedirOff:"Doorsturen uit",
     httpsAlt:"Extra namen in het certificaat", httpsAltHint:"Naast de hostnaam, hostnaam.local en het IP-adres: andere hostnamen of IPv4-adressen die je gebruikt (max. 8). Het certificaat wordt opnieuw uitgegeven met dezelfde sleutel: de browser waarschuwt nog één keer.",
     httpsAltSaved:"Namen bewaard, certificaat opnieuw uitgegeven", httpsAltBad:"Geen hostnaam of IPv4-adres", httpsAltMax:"Maximaal 8 extra namen", httpsAltSaveBtn:"Namen bewaren", httpsAltRemove:"Verwijder",
+    bzTitle:"Zoemer (controller)", bzStop:"Stil", bzVolume:"Volume", bzQuiet:"Stille uren", bzFrom:"Van", bzTo:"Tot", bzQuietAlarms:"Alarm en aftelling ook tijdens de stille uren", bzTest:"Test",
+    bzEvButton:"Druk op de knop", bzEvSuccess:"Firmware-update klaar", bzEvReserve:"Pelletreserve", bzEvCountdown:"Aftelling bij een fout", bzEvAlarm:"Alarm / fout kachel",
+    bzSaved:"Zoemerinstellingen bewaard", bzOn:"Zoemer aan", bzOff:"Zoemer uit", bzStopped:"Zoemer stilgezet", bzPlaying:"Speelt: {0}", bzMuted:"Alarm stilgezet tot de fout weg is", bzQuietNow:"Nu stille uren", bzIdle:"Stil",
+    h_buzzer:"De zoemer op de controllerprint (niet de zoemer van de kachel zelf). Elke gebeurtenis heeft haar geluid; Test speelt het af (ook als de zoemer uit staat). Druk op de knop: kort drukken op de knop van de print; dat zet ook een alarm stil. Firmware-update klaar: een nieuwe firmware bevestigd na een update. Pelletreserve: als het pelletreserve-alarm van de kachel begint. Aftelling bij een fout: de kachel telt ~55 s af voor ze op een fout reageert; elke seconde een piep, sneller in de laatste 10 s. Alarm / fout kachel: herhaalt tot de fout weg is of stilgezet wordt. Stille uren (lokale tijd): geen geluid, eventueel behalve alarm en aftelling. MQTT: <prefix>/set/buzzer (ON / OFF), buzzer_play (een geluid), buzzer_stop.",
     h_https:"Versleutelde toegang via https:// op poort 443, naast gewone HTTP op poort 80. Het certificaat wordt op de controller zelf gemaakt (een eigen ECDSA P-256-sleutel die het toestel nooit verlaat) voor de hostnaam, hostnaam.local en het IP-adres, en automatisch vernieuwd met dezelfde sleutel als een van die drie verandert. Het is zelfondertekend: de browser waarschuwt de eerste keer. Kijk of de SHA-256-vingerafdruk die de browser toont dezelfde is als hier en aanvaard hem dan; of download het certificaat en installeer het als vertrouwd op je eigen toestellen (dan geen waarschuwing). Een TLS-verbinding vraagt ~40 KB geheugen: de controller bedient er één tegelijk en weigert ze als het geheugen krap is (HTTP blijft werken).",
     keyOn:"Elke API-aanroep heeft de header X-API-Key nodig", keyOff:"Optioneel: de API is open op je netwerk", keyCopied:"API-key gekopieerd", keyNew:"Nieuwe API-key aangemaakt",
     keyConfirmRotate:"Een nieuwe API-key aanmaken? Andere clients (scripts, Home Assistant, Prometheus) hebben dan de nieuwe key nodig.",
@@ -1389,7 +1413,7 @@ function helpBtn(key) {
     ev.stopPropagation();
     if (popOwner === b) { hidePop(); return; }
     hidePop();
-    pop.textContent = t(key); if (!["h_par", "h_mqtt", "h_wifi", "h_ghUpdate", "h_https"].includes(key)) pop.appendChild(el("span", "src", t("manualRef")));   // these texts are not from the manual
+    pop.textContent = t(key); if (!["h_par", "h_mqtt", "h_wifi", "h_ghUpdate", "h_https", "h_buzzer"].includes(key)) pop.appendChild(el("span", "src", t("manualRef")));   // these texts are not from the manual
     pop.style.display = "block";
     const r = b.getBoundingClientRect(), w = Math.min(340, window.innerWidth - 24);
     pop.style.maxWidth = w + "px";
@@ -2208,6 +2232,41 @@ $("mqttForm").onsubmit = async e => {
   try { mqttCfg = await write(t("mqttSaved"), "POST", "/api/mqtt", p); $("mqttForm").hidden = true; } catch (_) {}
   renderMqtt(); setTimeout(loadMqtt, 4000);   // the connection is made from the loop, shortly after saving
 };
+
+// ---------- Buzzer (S3 board; the DevKit answers 404 and the card stays hidden) ----------
+let bz = null;
+// event, text key (data-i: a language switch translates them in place)
+const BZ_EVENTS = [["button", "bzEvButton"], ["success", "bzEvSuccess"], ["reserve", "bzEvReserve"], ["countdown", "bzEvCountdown"], ["alarm", "bzEvAlarm"]];
+function renderBuzzer() {
+  $("bzCard").hidden = !bz; if (!bz) return;
+  $("bzToggle").checked = !!bz.enabled; $("bzToggle").setAttribute("aria-label", t("bzTitle"));
+  $("bzVol").value = bz.volume; $("bzVolTxt").textContent = bz.volume + " %";
+  const q = bz.quietHours || {};
+  $("bzQuiet").checked = !!q.enabled; $("bzFrom").value = q.from || "22:00"; $("bzTo").value = q.to || "07:00"; $("bzQuietAlarms").checked = !!q.alarms;
+  $("bzHint").textContent = bz.muted ? t("bzMuted") : bz.playing ? t("bzPlaying", bz.playing) : q.now ? t("bzQuietNow") : t("bzIdle");
+  const box = $("bzEvents"); box.innerHTML = "";
+  for (const [ev, key] of BZ_EVENTS) {
+    const e = (bz.events || {})[ev] || {}, label = () => t(key);
+    const cb = el("input"); cb.type = "checkbox"; cb.checked = !!e.enabled; cb.setAttribute("aria-label", label());
+    cb.onchange = () => bzSet({ [ev]: cb.checked });
+    const sel = el("select"); for (const p of bz.presets || []) { const o = el("option", "", p); o.value = p; sel.appendChild(o); }
+    sel.value = e.preset; sel.onchange = () => bzSet({ [ev + "Preset"]: sel.value });
+    const b = el("button", "mini", t("bzTest")); b.type = "button"; b.dataset.i = "bzTest";
+    b.onclick = () => bzSet({ [ev + "Preset"]: sel.value, test: ev }, t("bzTest") + ": " + label());
+    const name = el("span", "", label()); name.dataset.i = key;
+    box.append(cb, name, sel, b);
+  }
+}
+async function loadBuzzer() { try { bz = (await api("GET", "/api/buzzer")).data; } catch (_) { bz = null; } renderBuzzer(); }
+async function bzSet(p, label) { try { bz = await write(label || t("bzSaved"), "POST", "/api/buzzer", p); } catch (_) {} renderBuzzer(); }
+$("bzToggle").onchange = e => bzSet({ enabled: e.target.checked }, t(e.target.checked ? "bzOn" : "bzOff"));
+$("bzStop").onclick = () => bzSet({ stop: 1 }, t("bzStopped"));
+$("bzVol").oninput = e => { $("bzVolTxt").textContent = e.target.value + " %"; };
+$("bzVol").onchange = e => bzSet({ volume: e.target.value, test: "button" });
+$("bzQuiet").onchange = e => bzSet({ quiet: e.target.checked });
+$("bzQuietAlarms").onchange = e => bzSet({ quietAlarms: e.target.checked });
+$("bzFrom").onchange = e => { if (e.target.value) bzSet({ quietFrom: e.target.value }); };
+$("bzTo").onchange = e => { if (e.target.value) bzSet({ quietTo: e.target.value }); };
 
 
 // ---------- WiFi / network ----------
@@ -4314,7 +4373,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) { po
 
 applyStatic(); applyExpert(); renderTimers();
 // Read the remote first so the page starts in the right language
-pollRemote().finally(() => poll().then(() => { loadTimers(); loadHistory(); loadBt(); loadSecurity(); loadLeds(); loadMqtt(); loadWifi(); loadFw(); loadParams(); loadPelDbg(); loadUse(); }));
+pollRemote().finally(() => poll().then(() => { loadTimers(); loadHistory(); loadBt(); loadSecurity(); loadLeds(); loadMqtt(); loadWifi(); loadFw(); loadParams(); loadPelDbg(); loadUse(); loadBuzzer(); }));
 setInterval(() => { if (!document.hidden && !offline) { loadMqtt(); loadWifi(); if (!fwInfo || !["checking", "downloading", "restarting"].includes(fwInfo.state)) loadFw(); } }, 30000);
 </script>
 </body>

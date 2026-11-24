@@ -9,6 +9,8 @@
 //                                 every 5 s) and all again every 5 min.
 //   <base>/set/<name>             commands: power, mode, setpoint, flame_power,
 //                                 fan_speed, energy_saving, es_stop, es_start
+//                                 S3 board: buzzer (ON / OFF), buzzer_preset, buzzer_play
+//                                 (PRESS or a preset), buzzer_stop (buzzer.h)
 //
 // Values are plain text (no JSON), so any MQTT client can use them, e.g. Loxone
 // (through an MQTT gateway such as LoxBerry) or Node-RED. Commands accept ON / OFF
@@ -130,6 +132,10 @@ static void mqttPublishStates(bool force)
     boardMqttStates(force);   // power source, chip temperature (boardInfo.h): also without the stove
     mqttState("state",          StoveStateStr, force);
     mqttState("state_code",     String(stoveState), force);
+#if BOARD_HAS_BUZZER
+    mqttState("buzzer",         onOff(bzCfg().enabled), force);   // buzzer of the board (buzzer.h)
+    mqttState("buzzer_preset",  bzMqttPreset, force);
+#endif
     if (stoveState != UNKNOWN) {   // on / off unknown while the stove does not answer: keep the last value
         mqttState("power",      onOff(StoveIsOn), force);
         mqttState("mode",       StoveIsOn ? "heat" : "off", force);   // Home Assistant climate
@@ -279,6 +285,15 @@ static void mqttPublishDiscovery()
     mqttDiscoveryEntity(sensor, "pellets_cost_month", "Pelletkost per maand", [](JsonObject& o) { o["unit_of_measurement"] = "EUR"; o["device_class"] = "monetary"; }, false);
     mqttDiscoveryEntity(sensor, "pellets_stock_bags", "Pelletvoorraad (zakken)", [](JsonObject& o) { o["unit_of_measurement"] = "zakken"; o["state_class"] = "measurement"; o["icon"] = "mdi:sack"; }, false);
     boardMqttDiscovery();
+#if BOARD_HAS_BUZZER
+    mqttDiscoveryEntity("switch", "buzzer", "Zoemer controller", [](JsonObject& o) { o["icon"] = "mdi:volume-high"; o["entity_category"] = "config"; }, true);
+    mqttDiscoveryEntity("select", "buzzer_preset", "Zoemer geluid", [](JsonObject& o) {
+        JsonArray a = o.createNestedArray("options"); int n; const pc::BeepPreset* p = pc::beepPresets(n);
+        for (int i = 0; i < n; i++) a.add(p[i].name);
+        o["icon"] = "mdi:music-note"; o["entity_category"] = "config"; }, true);
+    mqttDiscoveryEntity("button", "buzzer_play", "Zoemer afspelen", [](JsonObject& o) { o.remove("state_topic"); o["icon"] = "mdi:play"; }, true);
+    mqttDiscoveryEntity("button", "buzzer_stop", "Zoemer stil", [](JsonObject& o) { o.remove("state_topic"); o["icon"] = "mdi:volume-off"; }, true);
+#endif
 }
 
 // ── Commands ────────────────────────────────────────────────────────────────
@@ -333,6 +348,17 @@ static void mqttCallback(char* topic, byte* payload, unsigned int len)
     char buf[32];
     unsigned int n = len < sizeof(buf) - 1 ? len : sizeof(buf) - 1;
     memcpy(buf, payload, n); buf[n] = 0;
+#if BOARD_HAS_BUZZER
+    String name = t.substring(setBase.length());
+    if (name.startsWith("buzzer")) {   // the board's buzzer (buzzer.h): no stove bus
+        mqttCommands++;
+        String e = buzzerCommand(name, buf);
+        if (e.length()) LOGE("mqtt", "command %s = %s failed: %s", name.c_str(), buf, e.c_str()); else LOGI("mqtt", "command %s = %s: ok", name.c_str(), buf);
+        mqttPub(mqttCfg.prefix + "/result", name + " " + buf + ": " + (e.length() ? e : String("ok")), false);
+        mqttPublishStates(false);
+        return;
+    }
+#endif
     mqttCommand(t.substring(setBase.length()), buf);
 }
 
