@@ -15,6 +15,9 @@
 #include <pelletcore.h>
 #include <Preferences.h>
 #include <esp_system.h>
+#if CONFIG_IDF_TARGET_ESP32S3
+#include <esp_rom_sys.h>   // esp_rom_get_reset_reason(): the raw reset cause (resetReasonName)
+#endif
 
 // On the heap (static DRAM is full): allocated by liveLogSetup(), output before that is not kept
 typedef pc::TextRing<8192> LogRing;
@@ -238,6 +241,14 @@ static const char* resetReasonName(esp_reset_reason_t r)
     case ESP_RST_DEEPSLEEP: return "deep sleep wake-up";
     case ESP_RST_BROWNOUT:  return "brown-out (supply voltage dropped)";
     case ESP_RST_SDIO:      return "SDIO";
+#if CONFIG_IDF_TARGET_ESP32S3
+    case ESP_RST_UNKNOWN: {
+        // IDF 4.4 has no ESP_RST_USB: a reset through the S3's own USB (esptool, a host
+        // toggling DTR / RTS on the USB Serial/JTAG port) comes back as unknown
+        soc_reset_reason_t c = esp_rom_get_reset_reason(0);
+        return c == RESET_REASON_CORE_USB_UART || c == RESET_REASON_CORE_USB_JTAG ? "USB (serial / JTAG)" : "unknown";
+    }
+#endif
     default:                return "unknown";
     }
 }

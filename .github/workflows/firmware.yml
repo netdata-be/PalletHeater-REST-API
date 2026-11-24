@@ -94,6 +94,10 @@ jobs:
         # sure that environment still configures and builds
         run: pio run -e esp32doit-devkit-v1-ble-ota
 
+      - name: Build OpenPelletBridge board (ESP32-S3)
+        # build only for now: the release still carries the DevKit image alone
+        run: pio run -e opb-s3
+
       - name: Package
         run: |
           b=".pio/build/$PIO_ENV"

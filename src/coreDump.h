@@ -1,11 +1,13 @@
 #pragma once
 // Core dump after a crash (panic, task watchdog): the ESP-IDF writes it to the
-// coredump partition (min_spiffs.csv, 64 KB, ELF format). At the start after a crash
+// coredump partition (ELF format; DevKit: min_spiffs.csv, 64 KB, S3 board:
+// partitions/opb_s3_8mb.csv, 128 KB). At the start after a crash
 // the summary (task, PC, backtrace) goes to the log; GET /api/coredump returns it,
 // ?download=true the raw dump for
 //   esp-coredump info_corefile -t raw -c coredump.bin firmware.elf
 // (firmware.elf of the same build: CI artifact openpelletbridge-elf-<version>).
-// The backtrace alone: xtensa-esp32-elf-addr2line -pfiaC -e firmware.elf <addresses>.
+// The backtrace alone: xtensa-esp32-elf-addr2line -pfiaC -e firmware.elf <addresses>
+// (S3 board: xtensa-esp32s3-elf-addr2line, esp-coredump --chip esp32s3).
 // DELETE /api/coredump erases it.
 #include <esp_core_dump.h>
 #include <esp_ota_ops.h>

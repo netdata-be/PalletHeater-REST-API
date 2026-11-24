@@ -1,0 +1,16 @@
+# OpenPelletBridge board (ESP32-S3-MINI-1-N8, 8 MB flash), envs opb-s3*.
+# Same names, types and order as min_spiffs.csv of the DevKit, only larger:
+#   0x000000  bootloader (S3: at 0x0, not 0x1000), partition table at 0x8000
+#   nvs       0x009000   20 KB  settings (Preferences), as on the DevKit
+#   otadata   0x00e000    8 KB  which app slot boots (OTA, rollback: otaVerify.h)
+#   app0      0x010000    3 MB  firmware slot 1 (DevKit: 1.875 MB)
+#   app1      0x310000    3 MB  firmware slot 2: OTA / GitHub update writes the other slot
+#   spiffs    0x610000 1856 KB  SPIFFS.begin() with the default label "spiffs" (DevKit: 128 KB)
+#   coredump  0x7e0000  128 KB  core dump of the last crash, ELF (coreDump.h; DevKit: 64 KB)
+# Name,   Type, SubType,  Offset,   Size,     Flags
+nvs,      data, nvs,      0x9000,   0x5000,
+otadata,  data, ota,      0xe000,   0x2000,
+app0,     app,  ota_0,    0x10000,  0x300000,
+app1,     app,  ota_1,    0x310000, 0x300000,
+spiffs,   data, spiffs,   0x610000, 0x1D0000,
+coredump, data, coredump, 0x7E0000, 0x20000,
