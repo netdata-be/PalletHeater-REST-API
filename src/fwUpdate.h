@@ -60,14 +60,28 @@ static void fwProgress(const String& what)
     LOGD("update", "progress: %s", b);
 }
 static void fwProgressClear() { Preferences p; p.begin("fwupd", false); p.remove("prog"); p.end(); }
-// HTTPS (mbedTLS) needs a good 40 KB, with a block of about 17 KB for its buffers
-static String fwMemoryCheck()
+// HTTPS (mbedTLS) needs a good 40 KB, with a block of about 17 KB for its buffers: enough for
+// the short update check. The download needs more: the TLS session stays open for a minute or
+// more while the WiFi driver needs receive buffers (1.6 KB each) next to it. Started with 88 KB
+// free it fell to 21 KB (largest block 2 KB) and the WiFi driver had no receive buffers left:
+// "download stalled" (24/11/2026). So the install pauses the rest first and waits for this.
+static const uint32_t FW_CHECK_FREE   = 45000, FW_CHECK_BLOCK   = 20000;
+static const uint32_t FW_INSTALL_FREE = 70000, FW_INSTALL_BLOCK = 32000;
+static const uint32_t FW_INSTALL_WAIT_MS = 15000;   // waiting for the memory after the pause
+static String fwHeapText()
 {
+    char b[64];
+    snprintf(b, sizeof(b), "free heap %u KB, largest block %u KB", (unsigned)(ESP.getFreeHeap() / 1024), (unsigned)(ESP.getMaxAllocHeap() / 1024));
+    return b;
+}
+static String fwMemoryCheck(bool install = false)
+{
+    uint32_t needFree = install ? FW_INSTALL_FREE : FW_CHECK_FREE, needBlock = install ? FW_INSTALL_BLOCK : FW_CHECK_BLOCK;
     uint32_t freeHeap = ESP.getFreeHeap(), block = ESP.getMaxAllocHeap();
-    if (freeHeap >= 45000 && block >= 20000) return "";
-    char b[140];
-    snprintf(b, sizeof(b), "not enough free memory for HTTPS (free %u KB, largest block %u KB; needs 45 / 20 KB) - restart the controller and try again",
-             (unsigned)(freeHeap / 1024), (unsigned)(block / 1024));
+    if (freeHeap >= needFree && block >= needBlock) return "";
+    char b[180];
+    snprintf(b, sizeof(b), "not enough free memory for %s (free %u KB, largest block %u KB; needs %u / %u KB) - restart the controller and try again",
+             install ? "the download" : "HTTPS", (unsigned)(freeHeap / 1024), (unsigned)(block / 1024), (unsigned)(needFree / 1024), (unsigned)(needBlock / 1024));
     return b;
 }
 
@@ -162,8 +176,13 @@ static void fwPauseOthers(bool pause)
 static String fwDoInstall()
 {
     if (!fwAssetUrl.length()) return "no firmware asset known, check first";
-    String mem = fwMemoryCheck();
+    // the rest is paused (fwTask): give the web server, MQTT and telnet a moment to let go of
+    // their memory, then the download must have its margin (see FW_INSTALL_FREE)
+    unsigned long w0 = millis();
+    while (millis() - w0 < FW_INSTALL_WAIT_MS && fwMemoryCheck(true).length()) vTaskDelay(pdMS_TO_TICKS(500));
+    String mem = fwMemoryCheck(true);
     if (mem.length()) return mem;
+    LOGI("update", "memory for the download: %s (bus reads, MQTT and telnet paused, other web requests refused)", fwHeapText().c_str());
     fwProgress(String("install ") + BUILD_VERSION + " -> " + fwLatest + ": connecting to GitHub");
     LOGD("update", "download %s", fwAssetUrl.c_str());
     WiFiClientSecure client;
@@ -185,18 +204,37 @@ static String fwDoInstall()
     fwProgress(String("install ") + BUILD_VERSION + " -> " + fwLatest + ": downloading 0%");
     fwTotal = len; fwDone = 0;
     int lastPct = 0;
-    fwPauseOthers(true);
     otaConfirmBeforeUpdate();   // a firmware on trial is confirmed first (otaVerify.h)
     if (!Update.begin(len, U_FLASH)) {
         String e = String("begin failed: ") + Update.errorString();
-        http.end(); fwPauseOthers(false);
+        http.end();
         return e;
     }
     WiFiClient* s = http.getStreamPtr();
     uint8_t buf[2048];   // on the stack of the update task (12 KB), not 2 KB of RAM all the time
-    unsigned long lastData = millis();
+    unsigned long lastData = millis(), dl0 = millis(), lastLine = millis(), lastSample = 0;
+    // memory during the download: lowest per log line and over the whole download, sampled every
+    // 250 ms (getMaxAllocHeap walks the heap); a line every 5 s shows where it goes
+    uint32_t minFree = UINT32_MAX, minBlock = UINT32_MAX, allMinFree = UINT32_MAX, allMinBlock = UINT32_MAX;
+    size_t lineDone = 0;
     String err;
     while (fwDone < fwTotal) {
+        unsigned long now = millis();
+        if (now - lastSample >= 250) {
+            lastSample = now;
+            uint32_t f = ESP.getFreeHeap(), b = ESP.getMaxAllocHeap();
+            if (f < minFree) minFree = f;
+            if (b < minBlock) minBlock = b;
+            if (f < allMinFree) allMinFree = f;
+            if (b < allMinBlock) allMinBlock = b;
+        }
+        if (now - lastLine >= 5000) {
+            LOGI("update", "%u%% (%u / %u KB, %lu KB/s) | %s | lowest in the last %lu s: %u KB free, block %u KB",
+                 (unsigned)(fwDone * 100 / fwTotal), (unsigned)(fwDone / 1024), (unsigned)(fwTotal / 1024),
+                 (unsigned long)((fwDone - lineDone) / 1024 * 1000 / (now - lastLine)), fwHeapText().c_str(),
+                 (now - lastLine) / 1000, (unsigned)(minFree / 1024), (unsigned)(minBlock / 1024));
+            lastLine = now; lineDone = fwDone; minFree = minBlock = UINT32_MAX;
+        }
         size_t avail = s->available();
         if (avail) {
             int n = s->readBytes(buf, avail < sizeof(buf) ? avail : sizeof(buf));
@@ -206,21 +244,29 @@ static String fwDoInstall()
             lastData = millis();
             int pct = (int)(fwDone * 100 / fwTotal);
             if (pct / 10 > lastPct / 10) {
-                LOGI("update", "%d%% (%u KB, %lu KB/s, free heap %u KB)", pct, (unsigned)(fwDone / 1024), (unsigned long)(fwDone / 1024 * 1000 / (millis() - t0 + 1)), (unsigned)(ESP.getFreeHeap() / 1024));
                 lastPct = pct;
                 fwProgress(String("install ") + BUILD_VERSION + " -> " + fwLatest + ": downloading " + pct + "%");
             }
         } else if (!http.connected() && !s->available()) {
             err = "connection closed during download"; break;
         } else if (millis() - lastData > 20000) {
-            err = "download stalled"; break;
+            err = "download stalled (no data for 20 s)"; break;
         } else {
             delay(2);
         }
     }
     http.end();
-    if (err.length()) { Update.abort(); fwPauseOthers(false); return err; }
-    if (!Update.end(true)) { err = String("image check failed: ") + Update.errorString(); fwPauseOthers(false); return err; }
+    if (err.length()) {
+        char b[200];
+        snprintf(b, sizeof(b), " at %u%% (%u KB); now %s, lowest during the download %u KB free, block %u KB",
+                 (unsigned)(fwDone * 100 / fwTotal), (unsigned)(fwDone / 1024), fwHeapText().c_str(),
+                 (unsigned)(allMinFree / 1024), (unsigned)(allMinBlock / 1024));
+        Update.abort();
+        return err + b;
+    }
+    LOGI("update", "download took %lu s; lowest during the download %u KB free, largest block %u KB",
+         (millis() - dl0) / 1000, (unsigned)(allMinFree / 1024), (unsigned)(allMinBlock / 1024));
+    if (!Update.end(true)) { err = String("image check failed: ") + Update.errorString(); return err; }
     LOGI("update", "download complete: %u bytes in %lu s, image verified and marked bootable", (unsigned)fwDone, (millis() - t0) / 1000);
     return "";
 }
@@ -240,6 +286,9 @@ static void fwTask(void* arg)
     // started this check) finish first; HTTPS accepts no new one while fwBusy is set
     // (it also hands back its reserved TLS buffers while fwBusy is set)
     for (int i = 0; i < 100 && (httpsSessionActive || httpsHoldsTls); i++) vTaskDelay(pdMS_TO_TICKS(100));
+    // install: pause the rest right away (bus reads, MQTT, telnet; the web server answers only the
+    // update status, auth.h), so their memory is free by the time the download starts
+    if (install) fwPauseOthers(true);
     LOGI("update", "%s: checking GitHub (%s) for a newer release than %s", install ? "install" : "update check", FW_REPO, BUILD_VERSION);
     String err = fwDoCheck();
     if (!err.length()) {
@@ -271,6 +320,7 @@ static void fwTask(void* arg)
             restartWith("firmware update from GitHub");
         }
     }
+    if (install) fwPauseOthers(false);   // failed or nothing to install (a success restarts above)
     if (err.length()) {
         fwError = err; fwState = FW_ERROR;
         if (install) { LOGE("update", "install failed: %s", err.c_str()); fwProgress("failed: " + err); }

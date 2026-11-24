@@ -380,6 +380,14 @@ static void mqttRestart()
 void mqttLoop()
 {
     static bool wasConnected = false;
+    // firmware update: close the connection (its socket buffers count during a download from
+    // GitHub, fwUpdate.h); reconnects by itself when the update failed or the device restarted
+    if (otaActive && mqtt.connected()) {
+        LOGI("mqtt", "firmware update running - disconnecting from %s:%u", mqttCfg.host.c_str(), mqttCfg.port);
+        mqttRestart();
+        wasConnected = false;
+        return;
+    }
     if (!mqttCfg.enabled || !mqttCfg.host.length() || WiFi.status() != WL_CONNECTED || otaActive) { wasConnected = mqtt.connected(); return; }
     unsigned long now = millis();
     if (wasConnected && !mqtt.connected()) LOGW("mqtt", "connection to %s:%u lost: %s - reconnecting every 15 s", mqttCfg.host.c_str(), mqttCfg.port, mqttStateText(mqtt.state()));

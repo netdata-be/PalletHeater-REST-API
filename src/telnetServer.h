@@ -374,6 +374,18 @@ static const char* tnListenText()
 static void tnLoop()
 {
     if (!tnRunning) return;
+    // firmware update: sessions and listening sockets closed (memory for the download from
+    // GitHub, fwUpdate.h); opened again below once the update is over (it failed or was refused)
+    if (otaActive) {
+        if (tnW.fd >= 0) { tnSendStr(tnW.fd, "\r\nFirmware update running - bye.\r\n"); tnClose(tnW); }
+        if (tnS.fd >= 0) { tnWriteStr("\r\n\x1B[0mFirmware update running - the controller restarts when it is done. Bye.\r\n"); tnEndSession("firmware update"); }
+        if (tnListening()) {
+            for (int i = 0; i < 2; i++) if (tnListen[i] >= 0) { lwip_close(tnListen[i]); tnListen[i] = -1; }
+            LOGI("sys", "telnet closed during the firmware update");
+        }
+        tnRetryAt = millis() + 2000;
+        return;
+    }
     if (!tnListening()) {
         if (WiFi.status() != WL_CONNECTED || (int32_t)(millis() - tnRetryAt) < 0) return;
         tnOpen();
