@@ -827,6 +827,8 @@ const I18N = {
     mqttNeedHost:"Set the broker first", mqttOnToast:"MQTT on", mqttOffToast:"MQTT off",
     reset:"Reset", resetConfirm:"Reset the {0}?", resetDone:"{0} reset", crashCounter:"crash counter", serialCounters:"serial counters", serialSkipped:"{0} skipped (link down)",
     evLinkDown:"Serial lost", evLinkUp:"Serial back", evtLink:"Serial link",
+    board:"Controller board", boardOpb:"OpenPelletBridge board (ESP32-S3)", boardDevkit:"ESP32 DevKit", hwRev:"rev. {0}", pwrSrc:"Power source", pwrStove:"Stove supply", pwrUsb:"USB", pwrSince:"since {0}",
+    evtPower:"Power source", chipTemp:"Chip temperature", wChipTemp:"The controller is getting hot", wChipTempSub:"Chip at {0} (limit 85 °C): keep the case away from hot parts of the stove.",
     wRemoteSensor:"The stove regulates on its own sensor, not on the remote control", wRemoteSensorOff:"The wireless sensor is on, but the remote control is not heard (switched off, empty battery or out of range?). The stove sensor ({0}) sits in the stove and follows the room slowly; the remote control last measured {1}.", wRemoteSensorOn:"The wireless sensor is on and the remote control is heard, yet the stove uses its own sensor ({0}; remote control {1}).",
     busRead:"read", busWrite:"write", busFailed:"FAILED after {0} attempts", busWas:"was {0}", busFirst:"first reading", busUnknown:"(no description known)",
     busHTime:"Time", busHAction:"Action", busHReg:"Register", busHValue:"Value", busHMeaning:"Meaning",
@@ -1004,6 +1006,8 @@ pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low 
     mqttNeedHost:"Stel eerst de broker in", mqttOnToast:"MQTT aan", mqttOffToast:"MQTT uit",
     reset:"Reset", resetConfirm:"De {0} op nul zetten?", resetDone:"{0} op nul gezet", crashCounter:"crashteller", serialCounters:"seriële tellers", serialSkipped:"{0} overgeslagen (link weg)",
     evLinkDown:"Serieel weg", evLinkUp:"Serieel terug", evtLink:"Seriële link",
+    board:"Controllerbord", boardOpb:"OpenPelletBridge-bord (ESP32-S3)", boardDevkit:"ESP32 DevKit", hwRev:"rev. {0}", pwrSrc:"Voeding", pwrStove:"Voeding kachel", pwrUsb:"USB", pwrSince:"sinds {0}",
+    evtPower:"Voeding", chipTemp:"Temperatuur chip", wChipTemp:"De controller wordt warm", wChipTempSub:"Chip op {0} (limiet 85 °C): houd de behuizing weg van hete delen van de kachel.",
     wRemoteSensor:"De kachel regelt op haar eigen sensor, niet op de afstandsbediening", wRemoteSensorOff:"De draadloze sensor staat aan, maar de afstandsbediening wordt niet gehoord (uit, lege batterij of buiten bereik?). De sensor van de kachel ({0}) zit in de kachel en volgt de kamer traag; de afstandsbediening mat laatst {1}.", wRemoteSensorOn:"De draadloze sensor staat aan en de afstandsbediening wordt gehoord, maar de kachel gebruikt toch haar eigen sensor ({0}; afstandsbediening {1}).",
     busRead:"lezen", busWrite:"schrijven", busFailed:"MISLUKT na {0} pogingen", busWas:"was {0}", busFirst:"eerste lezing", busUnknown:"(geen beschrijving gekend)",
     busHTime:"Tijd", busHAction:"Actie", busHReg:"Register", busHValue:"Waarde", busHMeaning:"Betekenis",
@@ -1268,6 +1272,20 @@ function renderStoveConn(d) {
   else if (age === null || age === undefined) setStoveConn("", t("waiting"));
   else if (age > 30) setStoveConn("warn", t("stale", age));
   else setStoveConn("ok", t("stoveOk"));
+}
+// What this controller's board / build has (GET /api/state controller.features): cards for a missing
+// feature are hidden. Elements with data-feature="name" follow it by themselves (render()).
+function hasFeature(name) { const f = state && state.controller && state.controller.features; return Array.isArray(f) && f.includes(name); }
+function applyFeatures() { document.querySelectorAll("[data-feature]").forEach(e => { e.hidden = !hasFeature(e.dataset.feature); }); }
+function boardText(c) {
+  if (!c || !c.board) return "–";
+  const n = c.board === "opb-s3" ? t("boardOpb") : c.board === "esp32-devkit" ? t("boardDevkit") : c.board;
+  return c.hwRev ? n + " · " + t("hwRev", c.hwRev) : n;
+}
+function powerText(p) {
+  if (!p || !p.source) return "–";
+  const d = p.since ? new Date(p.since * 1000) : null;
+  return t(p.source === "usb" ? "pwrUsb" : "pwrStove") + (d ? " · " + t("pwrSince", fmtDate(d) + " " + fmtHM(d)) : "");
 }
 function fillDl(el, rows) {
   el.innerHTML = "";
@@ -2287,6 +2305,7 @@ function renderAlerts() {
     if (w.id === "REMOTE_SENSOR_NOT_USED")
       add("warning", t("wRemoteSensor"), t(state.RemoteControlLastSeen == null || state.RemoteControlLastSeen < 0 ? "wRemoteSensorOff" : "wRemoteSensorOn",
           fmtTemp(tp0w(state).stove), fmtTemp(tp0w(state).remoteControl)));
+    else if (w.id === "CHIP_TEMP_HIGH") add("warning", t("wChipTemp"), t("wChipTempSub", fmtTemp(state.controller && state.controller.chipTemp)));
     else add("warning", w.id, w.desc);
   }
   const age = state.dataAge ? state.dataAge.fastSeconds : null;
@@ -2435,6 +2454,9 @@ function render(s) {
     [t("serial"), s.serialNumber ?? "–"],
     [t("builtFor"), s.controller && s.controller.stoveModel ? s.controller.stoveModel : "–"],
     [t("ctrlFw"), s.controller ? s.controller.version : "–", true],
+    ...(s.controller && s.controller.board ? [[t("board"), boardText(s.controller), true]] : []),
+    ...(s.power ? [[t("pwrSrc"), powerText(s.power)]] : []),
+    ...(s.controller && s.controller.chipTemp !== undefined ? [[t("chipTemp"), s.controller.chipTemp == null ? "–" : fmtTemp(s.controller.chipTemp), true]] : []),
     [t("ctrlBuilt"), s.controller && s.controller.built ? (d => fmtDate(d) + " " + fmtHM(d))(new Date(s.controller.built)) : "–", true], [t("starts"), s.numberOfStarts ?? "–"], [t("hours"), s.totalRuntime ?? "–"],
     [withHelp(t("service"), "h_service"), s.hoursSinceLastService != null
       ? pill(t("serviceOf", s.hoursSinceLastService), s.hoursSinceLastService >= 2000 ? "warn" : "") : "–"],
@@ -2445,6 +2467,7 @@ function render(s) {
     [t("serialErr"), s.serial ? withReset(s.serial.readErrors + " / " + s.serial.writeErrors + (s.serial.skipped ? " · " + t("serialSkipped", s.serial.skipped) : ""),
                                           () => resetCounters({ serial: true }, t("serialCounters"))) : "–", "d"], [t("retries"), s.serial ? s.serial.retries : "–", "d"],
   ]);
+  applyFeatures();
   renderAlerts(); renderNext(); renderRemote(); renderParams();   // marks the current flame level
 }
 
@@ -3414,13 +3437,16 @@ function renderEvents() {
     const pelVal = (ev, to) => { const v = to ? ev.to : ev.from; return v == null ? "–" : ev.register !== "0xA4" ? String(v)
                                  : v === 0 ? t("pelV0") : v === 5 ? t("pelV5") : v >= 1 && v <= 4 ? t("pelVr", v) : t("pelVx", v); };
     const srcName = v => v === "remote" ? t("srcRemoteLong") : t("srcStoveLong");
+    const pwrName = v => t(v === "usb" ? "pwrUsb" : "pwrStove");
     const cells = kind === "link" ? [t("evtLink"), t(e.up ? "evLinkUp" : "evLinkDown"), e.up ? "" : dur]
                 : kind === "source" ? [t("srcLabel") + ": " + srcName(e.from), srcName(e.to) + " (" + fmtTemp(e.room) + ")", dur]
+                : kind === "power" ? [t("evtPower") + ": " + pwrName(e.from), pwrName(e.to), dur]
                 : isErr ? [t("evtError"), e.id ? t("evtErrOn", e.error) : t("evtErrOff"), e.id ? dur : ""]
                 : kind === "pellet" ? [pelName + ": " + pelVal(e), pelName + ": " + pelVal(e, true), dur]
                 : [name(e.from), name(e.to), dur];
     [fmtDate(d) + " " + fmtHM(d) + ":" + pad(d.getSeconds()), ...cells].forEach(x => tr.appendChild(el("td", "", x)));
     if (kind === "source") { if (e.to === "stove") tr.style.color = "var(--warn)"; }
+    else if (kind === "power") { if (e.to === "usb") tr.style.color = "var(--warn)"; }
     else if ((isErr && e.id) || (kind === "link" && !e.up) || (kind !== "link" && [8, 9, 10].includes(e.to))) tr.style.color = "var(--err)";
     else if (kind === "link") tr.style.color = "var(--ok)";
     tbl.appendChild(tr);
