@@ -3,13 +3,19 @@
 # the controller finds that release itself (src/fwUpdate.h, /api/firmware).
 #
 # Release:  git tag v1.0.0 && git push origin v1.0.0
-#   openpelletbridge-firmware.bin  OTA image: the web app, POST /api/update or the
-#                              GitHub update of the controller (/api/firmware)
-#   openpelletbridge-factory.bin   complete flash image for a new ESP32, at offset 0:
-#                              esptool.py --chip esp32 write_flash 0x0 openpelletbridge-factory.bin
-#   SHA256SUMS
-# firmware.elf (debug symbols, to decode a core dump) is a separate artifact, not
-# part of the release.
+# Assets per board; each controller installs only the OTA image of its own board
+# (pc::firmwareAssetRank, /api/firmware) and refuses an image for the other chip (src/fwImage.h).
+#   ESP32 DevKit (env esp32doit-devkit-v1-http):
+#     openpelletbridge-firmware.bin         OTA image: the web app, POST /api/update or the
+#                                           GitHub update of the controller. Name fixed: the
+#                                           firmware in the field looks for exactly this name
+#     openpelletbridge-factory.bin          complete flash image for a new ESP32, at offset 0:
+#                                           esptool.py --chip esp32 write_flash 0x0 openpelletbridge-factory.bin
+#     openpelletbridge-firmware.elf         debug symbols: decode a core dump (/api/coredump) or backtrace
+#   OpenPelletBridge board, ESP32-S3 (env opb-s3): the same three, named openpelletbridge-opb-s3-*
+#     (released firmware up to v1.4.x matches its asset name exactly, so it never picks these)
+#     openpelletbridge-opb-s3-factory.bin   esptool.py --chip esp32s3 write_flash 0x0 openpelletbridge-opb-s3-factory.bin
+#   SHA256SUMS                              all of the above
 name: Firmware
 
 on:
@@ -95,38 +101,42 @@ jobs:
         run: pio run -e esp32doit-devkit-v1-ble-ota
 
       - name: Build OpenPelletBridge board (ESP32-S3)
-        # build only for now: the release still carries the DevKit image alone
         run: pio run -e opb-s3
 
       - name: Package
         run: |
-          b=".pio/build/$PIO_ENV"
           mkdir -p dist
-          cp "$b/firmware.bin" dist/openpelletbridge-firmware.bin
-          mkdir -p elf && cp "$b/firmware.elf" elf/firmware.elf
           esptool=$(find ~/.platformio/packages -path '*tool-esptoolpy*/esptool.py' | head -1)
           boot_app0=$(find ~/.platformio/packages -path '*framework-arduinoespressif32*/tools/partitions/boot_app0.bin' | head -1)
-          python "$esptool" --chip esp32 merge_bin -o dist/openpelletbridge-factory.bin \
-            --flash_mode dio --flash_freq 40m --flash_size 4MB \
-            0x1000 "$b/bootloader.bin" 0x8000 "$b/partitions.bin" 0xe000 "$boot_app0" 0x10000 "$b/firmware.bin"
-          (cd dist && sha256sum *.bin > SHA256SUMS)
+          # package <env> <asset prefix> <chip> <bootloader offset> <flash mode> <flash freq> <flash size>
+          # Offsets, mode and frequency as PlatformIO flashes them (pio project metadata -e <env>):
+          # the bootloader is at 0x1000 on the ESP32, at 0x0 on the ESP32-S3
+          package() {
+            b=".pio/build/$1"
+            cp "$b/firmware.bin" "dist/$2-firmware.bin"
+            cp "$b/firmware.elf" "dist/$2-firmware.elf"
+            python "$esptool" --chip "$3" merge_bin -o "dist/$2-factory.bin" \
+              --flash_mode "$5" --flash_freq "$6" --flash_size "$7" \
+              "$4" "$b/bootloader.bin" 0x8000 "$b/partitions.bin" 0xe000 "$boot_app0" 0x10000 "$b/firmware.bin"
+          }
+          package "$PIO_ENV" openpelletbridge        esp32   0x1000 dio 40m 4MB
+          package opb-s3     openpelletbridge-opb-s3 esp32s3 0x0    dio 80m 8MB
+          (cd dist && sha256sum -- *.bin *.elf > SHA256SUMS)
           echo "### OpenPelletBridge ${{ steps.version.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          pio run -e "$PIO_ENV" -t size 2>/dev/null | grep -E "^(RAM|Flash):" >> "$GITHUB_STEP_SUMMARY" || true
+          for e in "$PIO_ENV" opb-s3; do
+            echo "$e:" >> "$GITHUB_STEP_SUMMARY"
+            pio run -e "$e" -t size 2>/dev/null | grep -E "^(RAM|Flash):" >> "$GITHUB_STEP_SUMMARY" || true
+          done
+          (cd dist && ls -l -- *.bin *.elf | awk '{print $5, $9}') >> "$GITHUB_STEP_SUMMARY"
           cat dist/SHA256SUMS >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         with:
+          # images, ELFs (debug symbols: decode a core dump) and SHA256SUMS of both boards
           name: openpelletbridge-${{ steps.version.outputs.version }}
           path: dist/
-          if-no-files-found: error
-
-      - uses: actions/upload-artifact@v4
-        with:
-          # debug symbols of this build: decode a core dump (/api/coredump) or backtrace
-          name: openpelletbridge-elf-${{ steps.version.outputs.version }}
-          path: elf/
           if-no-files-found: error
 
   release:
