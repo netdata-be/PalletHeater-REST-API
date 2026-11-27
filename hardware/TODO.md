@@ -61,8 +61,8 @@ Test pads on the bottom: 3V3, 5V, GND, TX, RX (under the module), 20V, 5V_S, DAT
 
 - [ ] Test print base and lid; fit of the board, the lid's lip, the USB-C cable and the stove cable plug (KF2EDGKD height not known: the notch is open through the lid).
 - [ ] Buttons: travel and force of the flexure tongues (plunger 0.3 mm above the switch; adjust `button_top` / tongue size if needed).
-- [ ] LEDs visible through the lid (translucent filament or clear fill), no colour bleed between SYS and STOVE.
-- [ ] Snap fit: the hooks click in and hold, the board sits without play on the pegs (adjust `snap_hook`, `snap_t`, `peg_d` or the tube length if needed; print in PETG if PLA hooks break).
+- [ ] LEDs visible through the lid (8001 Resin Translucent, solid light pipes), little colour bleed between SYS and STOVE (else: a sticker or paint on the top with only the spots free, or `solid_pipes = false`).
+- [ ] Snap fit: the hooks click in and hold, the board sits without play on the pegs (adjust `snap_hook`, `snap_t`, `peg_d` or the tube length if needed; resin is brittle: if a hook cracks, make `snap_hook` smaller first).
 
 ## Firmware port (ESP32 → ESP32-S3)
 

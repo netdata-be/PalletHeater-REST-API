@@ -55,10 +55,11 @@ Not yet done: a final manual review of the routing (the autorouter's tracks are 
 
 - **No screws:** the board (1.6 mm) drops onto four standoffs whose 1.9 mm pegs go into its M2 holes, and the lid's four clamping tubes press it onto the standoffs. The lid clicks in with four snap hooks (two per long side) that catch in windows in the walls; to open, push the hooks in through the windows with a small screwdriver. (The board's holes are M2, 2.2 mm, not plated, no copper within 2.4 mm, if you ever want screws instead.)
 - **Buttons:** BOOT and RESET are flexure tongues in the lid with a plunger 0.3 mm above the tactile switch.
-- **LEDs:** light tubes from the lid down to just above SYS, STOVE, TX and RX (they also keep the colours apart). Print the lid in a translucent filament, or fill the holes with clear resin or a 2 mm light pipe.
+- **LEDs:** solid light pipes (2.2 mm) from the translucent lid down to just above SYS, STOVE, TX and RX; a slot in the lid's underside between SYS and STOVE keeps their colours apart. `solid_pipes = false` gives hollow tubes with a hole through the lid instead (for an opaque lid).
 - **Connectors:** opening for the USB-C cable's overmould (13 × 7.5 mm); the stove connector's notch is open through the lid, so a cable plug of any height fits.
-- **Other:** sound holes above the buzzer, engraved labels. Plastic only near the antenna (top edge).
-- **Print:** base upright, lid upside down (top face on the bed), 0.2 mm layers, no supports.
+- **Other:** sound holes above the buzzer, engraved button labels (BOOT, RST; no other text: small engraved text gives thin-wall errors in resin). Plastic only near the antenna (top edge).
+- **Material:** ordered in resin at JLCPCB (JLC3DP): base in **9600 Resin White** (sanding), lid in **8001 Resin Translucent** (fine sanding). Resin is brittle: the hook arms are 0.9 mm with a fillet at the root (~1.3 % strain when they click in), and no wall is under JLC3DP's 0.8 mm minimum. Ask for the supports on the inside of the lid, so the top stays smooth. Open the lid gently, and use a washer on the mounting ears.
+- **FDM instead:** base upright, lid upside down (top face on the bed), 0.2 mm layers, no supports; PETG rather than PLA for the hooks.
 - **Checked** against the board's 3D model (KiCad STL export): no part of the case inside a component, and the lid's hooks sit in the windows, not in the walls. Regenerate after a board change: `kicad-cli pcb export stl --subst-models --user-origin 100x157mm -o case/board.stl openpelletbridge/openpelletbridge.kicad_pcb`, then `openscad -D 'part="base"' -o … case/openpelletbridge-case.scad` (`"lid"`, or `"assembly"` with the board).
 
 ## Design
