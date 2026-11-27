@@ -51,7 +51,7 @@ template <typename Doc> static void sendJson(int code, const Doc& doc)
     String out;
     out.reserve(measureJson(doc) + 1);
     serializeJson(doc, out);
-    wm.server->send(code, "application/json", out);
+    wm.server->send(code, "application/json; charset=utf-8", out);
 }
 static String clientIp()
 {
@@ -156,12 +156,12 @@ static bool httpRefusedForUpdate()
                  "<body style=\"font-family:sans-serif;padding:16px\"><h3>Firmware update in progress (%d %%)</h3>"
                  "<p>The controller restarts when it is done. This page reloads by itself. The stove keeps running.</p>",
                  fwInstallPercent());
-        wm.server->send(503, "text/html", h);
+        wm.server->send(503, "text/html; charset=utf-8", h);
         return true;
     }
     char b[160];
     snprintf(b, sizeof(b), "{\"error\":\"Firmware update in progress - try again later\",\"firmwareUpdate\":true,\"progress\":%d,\"retryAfter\":30}", fwInstallPercent());
-    wm.server->send(503, "application/json", b);
+    wm.server->send(503, "application/json; charset=utf-8", b);
     LOGD("http", "503 %s: firmware update in progress", u.c_str());
     return true;
 }
@@ -187,7 +187,7 @@ std::function<void()> authed(std::function<void()> fn)
         if (!authOk()) {
             wm.server->sendHeader("WWW-Authenticate", "Bearer");
             LOGW("http", "401 %s from %s: missing or invalid API key", wm.server->uri().c_str(), clientIp().c_str());
-            wm.server->send(401, "application/json", "{\"error\":\"Missing or invalid API key (X-API-Key header)\"}");
+            wm.server->send(401, "application/json; charset=utf-8", "{\"error\":\"Missing or invalid API key (X-API-Key header)\"}");
             return;
         }
         uint32_t t0 = millis();
@@ -226,13 +226,13 @@ void handleRouteAuth()
     {
         if (!authorised) {
             LOGW("http", "401 %s from %s: missing or invalid API key", wm.server->uri().c_str(), clientIp().c_str());
-            wm.server->send(401, "application/json", "{\"error\":\"Missing or invalid API key (X-API-Key header)\"}");
+            wm.server->send(401, "application/json; charset=utf-8", "{\"error\":\"Missing or invalid API key (X-API-Key header)\"}");
             return;
         }
         if (wm.server->hasArg("required")) {
             String v = wm.server->arg("required");
             if (v != "true" && v != "false") {
-                wm.server->send(400, "application/json", "{\"result\":\"failed - expected required=true/false\"}");
+                wm.server->send(400, "application/json; charset=utf-8", "{\"result\":\"failed - expected required=true/false\"}");
                 return;
             }
             apiKeySetRequired(v == "true", clientIp().c_str());
@@ -246,5 +246,5 @@ void handleRouteAuth()
     json["required"] = apiKeyRequired;
     if (authorised) json["key"] = apiKey;   // never leak the key to unauthorised callers
     String out; serializeJson(json, out);
-    wm.server->send(200, "application/json", out);
+    wm.server->send(200, "application/json; charset=utf-8", out);
 }

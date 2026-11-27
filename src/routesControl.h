@@ -414,7 +414,7 @@ void getParams()
     t.toLowerCase();
     if (t == "eeprom") type = eeprom;
     else if (t.length() && t != "ram") {
-        wm.server->send(400, "application/json", "{\"error\":\"type must be ram or eeprom\"}");
+        wm.server->send(400, "application/json; charset=utf-8", "{\"error\":\"type must be ram or eeprom\"}");
         return;
     }
 
@@ -423,7 +423,7 @@ void getParams()
     char* endp = nullptr;
     long addr = (a.startsWith("0x") || a.startsWith("0X")) ? strtol(a.c_str() + 2, &endp, 16) : strtol(a.c_str(), &endp, 10);
     if (a.length() == 0 || (endp && *endp != '\0') || addr < 0 || addr > 255) {
-        wm.server->send(400, "application/json", "{\"error\":\"int (or address) must be 0-255, decimal or 0x hex\"}");
+        wm.server->send(400, "application/json; charset=utf-8", "{\"error\":\"int (or address) must be 0-255, decimal or 0x hex\"}");
         return;
     }
 
@@ -438,7 +438,7 @@ void getParams()
     if (value < 0) {
         address["error"] = "Failed to get value RS232 error";
         String out; serializeJson(json, out);
-        wm.server->send(500, "application/json", out);
+        wm.server->send(500, "application/json; charset=utf-8", out);
         return;
     }
     address["Value_int"] = value;
@@ -449,5 +449,5 @@ void getParams()
     address["Value_hex"] = key;
 
     String out; serializeJson(json, out);
-    wm.server->send(200, "application/json", out);
+    wm.server->send(200, "application/json; charset=utf-8", out);
 }

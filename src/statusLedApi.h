@@ -93,7 +93,7 @@ void handleRouteLeds()
     json["stove"] = LED_LOOK[ledStove].name;
     json["stoveWarning"] = (bool)ledStoveWarn;
     String out; serializeJson(json, out);
-    wm.server->send(code, "application/json", out);
+    wm.server->send(code, "application/json; charset=utf-8", out);
 }
 
 #endif

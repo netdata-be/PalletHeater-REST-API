@@ -710,10 +710,10 @@ void handleRoutePlan()
     if (wm.server->method() == HTTP_POST) {
         int cap = -1, early = -1;
         if (wm.server->hasArg("busCap") && !pc::parseIntRange(wm.server->arg("busCap").c_str(), 10, 95, cap)) {
-            wm.server->send(400, "application/json", "{\"result\":\"failed - busCap must be 10 - 95 (%)\"}"); return;
+            wm.server->send(400, "application/json; charset=utf-8", "{\"result\":\"failed - busCap must be 10 - 95 (%)\"}"); return;
         }
         if (wm.server->hasArg("early") && !pc::parseIntRange(wm.server->arg("early").c_str(), 5, 100, early)) {
-            wm.server->send(400, "application/json", "{\"result\":\"failed - early must be 5 - 100 (% of the interval)\"}"); return;
+            wm.server->send(400, "application/json; charset=utf-8", "{\"result\":\"failed - early must be 5 - 100 (% of the interval)\"}"); return;
         }
         Preferences p; p.begin("plan", false);
         if (cap >= 0)   { planBusCap = cap;  p.putUChar("cap", cap); }
@@ -737,7 +737,7 @@ void handleRoutePlan()
         out += b;
     }
     out += "]}";
-    wm.server->send(200, "application/json", out);
+    wm.server->send(200, "application/json; charset=utf-8", out);
 }
 
 static void sensorTask(void* pvParameters)

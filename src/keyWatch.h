@@ -111,7 +111,7 @@ static void kwSendStatus(int code)
              + String(kwLog[i].from) + ",\"to\":" + String(kwLog[i].to) + "}";
     }
     out += "]}";
-    wm.server->send(code, "application/json", out);
+    wm.server->send(code, "application/json; charset=utf-8", out);
 }
 
 void handleRouteKeyWatch()
@@ -121,12 +121,12 @@ void handleRouteKeyWatch()
     {
         kwActive = false;
         kwParseAddrs(wm.server->hasArg("address") ? wm.server->arg("address") : String(KW_DEFAULT_ADDRS));
-        if (kwN == 0) { wm.server->send(400, "application/json", "{\"result\":\"failed - no valid address (max 8, RAM 0x00 - 0xFF)\"}"); return; }
+        if (kwN == 0) { wm.server->send(400, "application/json; charset=utf-8", "{\"result\":\"failed - no valid address (max 8, RAM 0x00 - 0xFF)\"}"); return; }
         long secs = wm.server->hasArg("seconds") ? wm.server->arg("seconds").toInt() : 60;
         if (secs < 1) secs = 1;
         if (secs > KW_MAX_SECONDS) secs = KW_MAX_SECONDS;
         if (!kwLog) kwLog = (KwEvent*)malloc(KW_LOG_SIZE * sizeof(KwEvent));
-        if (!kwLog) { wm.server->send(503, "application/json", "{\"result\":\"failed - not enough memory\"}"); return; }
+        if (!kwLog) { wm.server->send(503, "application/json; charset=utf-8", "{\"result\":\"failed - not enough memory\"}"); return; }
         for (uint8_t i = 0; i < KW_MAX_ADDRS; i++) { kwBase[i] = -1; kwLast[i] = -1; }
         kwCount = 0; kwOverflow = false; kwReads = 0; kwErrors = 0;
         kwStartEpoch = time(nullptr);
@@ -141,5 +141,5 @@ void handleRouteKeyWatch()
         kwSendStatus(200);
     }
     else if (m == HTTP_GET) kwSendStatus(200);
-    else wm.server->send(405, "application/json", "{\"result\":\"failed - use GET, POST or DELETE\"}");
+    else wm.server->send(405, "application/json; charset=utf-8", "{\"result\":\"failed - use GET, POST or DELETE\"}");
 }

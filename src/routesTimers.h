@@ -159,7 +159,7 @@ static void sendJsonError(int code, const String& msg)
     json["error"] = msg;
     String out;
     serializeJson(json, out);
-    wm.server->send(code, "application/json", out);
+    wm.server->send(code, "application/json; charset=utf-8", out);
 }
 
 // Partial write — only touches keys present in the JSON object.
@@ -240,10 +240,10 @@ void handleRouteTimers()
     if (wm.server->method() == HTTP_POST)
     {
         String body = wm.server->arg("plain");
-        if (body.length() == 0) { wm.server->send(400, "application/json", "{\"error\":\"Empty body\"}"); return; }
+        if (body.length() == 0) { wm.server->send(400, "application/json; charset=utf-8", "{\"error\":\"Empty body\"}"); return; }
         DynamicJsonDocument input(2048);
-        if (deserializeJson(input, body)) { wm.server->send(400, "application/json", "{\"error\":\"Invalid JSON\"}"); return; }
-        if (!input.containsKey("timers")) { wm.server->send(400, "application/json", "{\"error\":\"Missing 'timers' key\"}"); return; }
+        if (deserializeJson(input, body)) { wm.server->send(400, "application/json; charset=utf-8", "{\"error\":\"Invalid JSON\"}"); return; }
+        if (!input.containsKey("timers")) { wm.server->send(400, "application/json; charset=utf-8", "{\"error\":\"Missing 'timers' key\"}"); return; }
 
         JsonObject timers = input["timers"].as<JsonObject>();
         if (timers.isNull()) { sendJsonError(400, "'timers' must be an object"); return; }
@@ -266,11 +266,11 @@ void handleRouteTimers()
                 refreshTimerCache(i);
             }
 
-        wm.server->send(200, "application/json", "{\"result\":\"success\"}");
+        wm.server->send(200, "application/json; charset=utf-8", "{\"result\":\"success\"}");
         return;
     }
 
-    wm.server->send(405, "application/json", "{\"error\":\"Method not allowed\"}");
+    wm.server->send(405, "application/json; charset=utf-8", "{\"error\":\"Method not allowed\"}");
 }
 
 // ─────────────────────────────────────────────
@@ -286,13 +286,13 @@ static void sendTimerResponse(int idx)
         json["result"] = "success - but reading the timer back failed";
     String out;
     serializeJson(json, out);
-    wm.server->send(200, "application/json", out);
+    wm.server->send(200, "application/json; charset=utf-8", out);
 }
 
 void handleRouteTimer()
 {
     int idx = timerIndexFromUri(wm.server->uri());
-    if (idx < 0) { wm.server->send(404, "application/json", "{\"error\":\"Timer not found\"}"); return; }
+    if (idx < 0) { wm.server->send(404, "application/json; charset=utf-8", "{\"error\":\"Timer not found\"}"); return; }
 
     const char* prNames[6] = {"PR1", "PR2", "PR3", "PR4", "PR5", "PR6"};
 
@@ -303,7 +303,7 @@ void handleRouteTimer()
         bool ok = serializeTimerToJson(idx, json.createNestedObject(prNames[idx]), pc::parseOnOff(wm.server->arg("live").c_str()) == 1);
         String out;
         serializeJson(json, out);
-        wm.server->send(ok ? 200 : 500, "application/json", out);
+        wm.server->send(ok ? 200 : 500, "application/json; charset=utf-8", out);
         return;
     }
 
@@ -332,13 +332,13 @@ void handleRouteTimer()
             }
             else
             {
-                wm.server->send(400, "application/json", "{\"error\":\"Empty body\"}");
+                wm.server->send(400, "application/json; charset=utf-8", "{\"error\":\"Empty body\"}");
             }
             return;
         }
 
         DynamicJsonDocument input(512);
-        if (deserializeJson(input, body)) { wm.server->send(400, "application/json", "{\"error\":\"Invalid JSON\"}"); return; }
+        if (deserializeJson(input, body)) { wm.server->send(400, "application/json; charset=utf-8", "{\"error\":\"Invalid JSON\"}"); return; }
 
         JsonObject timer = input.as<JsonObject>();
         String err = validateTimerJson(prNames[idx], timer);
@@ -348,5 +348,5 @@ void handleRouteTimer()
         return;
     }
 
-    wm.server->send(405, "application/json", "{\"error\":\"Method not allowed\"}");
+    wm.server->send(405, "application/json; charset=utf-8", "{\"error\":\"Method not allowed\"}");
 }

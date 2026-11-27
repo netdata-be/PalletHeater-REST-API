@@ -34,17 +34,17 @@ void handleRouteIndex() {
         "<p style='color:#888;font-size:13px'>To reconfigure WiFi, hold the reset button for 5 seconds.</p>"
         "</body></html>",
         ip.c_str(), ssid.c_str(), rssi, uptimeStr().c_str());
-    wm.server->send(200, "text/html", page);
+    wm.server->send(200, "text/html; charset=utf-8", page);
 }
 
 void handleRouteRestart() {
-    wm.server->send(200, "text/plain", "Restarting...");
+    wm.server->send(200, "text/plain; charset=utf-8", "Restarting...");
     delay(200);
     restartWith("restart requested (web app / API)");
 }
 
 void handleRouteSwaggerUI() {
-    wm.server->send(200, "text/html", swaggerUI);
+    wm.server->send(200, "text/html; charset=utf-8", swaggerUI);
 }
 
 // ETag of an embedded file: FNV-1a over its bytes, computed once (a few ms for the web app).
@@ -70,7 +70,7 @@ static bool httpNotModified(const uint8_t* start, const uint8_t* end, uint32_t& 
 static void sendGzipped(const char* type, const char* start, const char* end, uint32_t& etag)
 {
     if (wm.server->header("Accept-Encoding").indexOf("gzip") < 0) {
-        wm.server->send(406, "text/plain", "Only available gzip-compressed: send Accept-Encoding: gzip (curl --compressed)");
+        wm.server->send(406, "text/plain; charset=utf-8", "Only available gzip-compressed: send Accept-Encoding: gzip (curl --compressed)");
         return;
     }
     wm.server->sendHeader("Cache-Control", "no-cache");
@@ -105,11 +105,11 @@ void handleRouteManifest()
 }
 
 void handleRouteWebApp() {
-    sendGzipped("text/html", webAppHTML, webAppHTMLEnd, etagWebApp);
+    sendGzipped("text/html; charset=utf-8", webAppHTML, webAppHTMLEnd, etagWebApp);
 }
 
 void handleRouteSwaggerJSON() { 
-    sendGzipped("application/json", swaggerJSON, swaggerJSONEnd, etagSpec);
+    sendGzipped("application/json; charset=utf-8", swaggerJSON, swaggerJSONEnd, etagSpec);
 }
 
 void handleRouteTime()
@@ -133,7 +133,7 @@ void handleRouteTime()
             int n = sscanf(dt.c_str(), "%d-%d-%d%*c%d:%d:%d", &Y, &M, &D, &h, &m, &sec);
             if (n < 5 || Y < 2020 || Y > 2099 || M < 1 || M > 12 || D < 1 || D > 31 || h < 0 || h > 23 || m < 0 || m > 59)
             {
-                wm.server->send(400, "application/json", "{\"result\":\"failed - datetime must be YYYY-MM-DDTHH:MM[:SS]\"}");
+                wm.server->send(400, "application/json; charset=utf-8", "{\"result\":\"failed - datetime must be YYYY-MM-DDTHH:MM[:SS]\"}");
                 return;
             }
             t.tm_year = Y - 1900; t.tm_mon = M - 1; t.tm_mday = D; t.tm_hour = h; t.tm_min = m; t.tm_sec = sec; t.tm_isdst = -1;

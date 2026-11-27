@@ -312,7 +312,7 @@ static void dumpWriteJson(bool doRam, bool doEeprom, bool filterUnknown, const b
     // building it as one String can fail on heap fragmentation, which silently
     // drops parts of the output and produces truncated / invalid JSON.
     wm.server->setContentLength(CONTENT_LENGTH_UNKNOWN);
-    wm.server->send(200, "application/json", "");
+    wm.server->send(200, "application/json; charset=utf-8", "");
     String out;
     out.reserve(2048);
     // A client that stops reading (tab closed, page reloaded, weak WiFi) would block
@@ -433,13 +433,13 @@ void handleRouteDump()
         return;
     }
     if (async && dumpJob && dumpJob->state == 1) {
-        if (dumpJob->key != key) { wm.server->send(409, "application/json", "{\"error\":\"Another dump is running - try again in a few seconds\"}"); return; }
+        if (dumpJob->key != key) { wm.server->send(409, "application/json; charset=utf-8", "{\"error\":\"Another dump is running - try again in a few seconds\"}"); return; }
         char b[80]; snprintf(b, sizeof(b), "{\"state\":\"running\",\"done\":%d,\"total\":%d}", dumpJob->done, dumpJob->total);
-        wm.server->send(202, "application/json", b);
+        wm.server->send(202, "application/json; charset=utf-8", b);
         return;
     }
     if (stove.linkDown) {
-        wm.server->send(503, "application/json", "{\"error\":\"The stove does not answer (serial connection) - try again later\"}");
+        wm.server->send(503, "application/json; charset=utf-8", "{\"error\":\"The stove does not answer (serial connection) - try again later\"}");
         return;
     }
     // --- address param ---
@@ -450,7 +450,7 @@ void handleRouteDump()
 
     if (async) {   // start a background dump
         if (!dumpJob) dumpJob = new (std::nothrow) DumpJob();
-        if (!dumpJob) { wm.server->send(503, "application/json", "{\"error\":\"Not enough memory\"}"); return; }
+        if (!dumpJob) { wm.server->send(503, "application/json; charset=utf-8", "{\"error\":\"Not enough memory\"}"); return; }
         DumpJob& j = *dumpJob;
         j.doRam = doRam; j.doEeprom = doEeprom; j.filterUnknown = filterUnknown;
         memcpy(j.addrs, addrs, sizeof(addrs));
@@ -465,11 +465,11 @@ void handleRouteDump()
         j.state = 1;
         if (xTaskCreatePinnedToCore(dumpTask, "dump", 4096, nullptr, 1, nullptr, 1) != pdPASS) {
             j.state = 0;
-            wm.server->send(503, "application/json", "{\"error\":\"Could not start the dump task (memory)\"}");
+            wm.server->send(503, "application/json; charset=utf-8", "{\"error\":\"Could not start the dump task (memory)\"}");
             return;
         }
         char b[80]; snprintf(b, sizeof(b), "{\"state\":\"running\",\"done\":0,\"total\":%d}", j.total);
-        wm.server->send(202, "application/json", b);
+        wm.server->send(202, "application/json; charset=utf-8", b);
         return;
     }
     // Synchronous: read while answering. The bus lock is taken per register (not for the whole

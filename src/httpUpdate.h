@@ -84,11 +84,11 @@ void handleUpdateDone()
 {
     if (!updIsMultipart()) {
         updAuthorised = false;
-        wm.server->send(400, "application/json", "{\"result\":\"failed - send the firmware as multipart/form-data, field \\\"firmware\\\"\"}");
+        wm.server->send(400, "application/json; charset=utf-8", "{\"result\":\"failed - send the firmware as multipart/form-data, field \\\"firmware\\\"\"}");
         return;
     }
     if (!updAuthorised) {
-        wm.server->send(401, "application/json", "{\"error\":\"Missing or invalid API key or OTA password\"}");
+        wm.server->send(401, "application/json; charset=utf-8", "{\"error\":\"Missing or invalid API key or OTA password\"}");
         return;
     }
     if (updError.length() || !Update.isFinished()) {
@@ -97,7 +97,7 @@ void handleUpdateDone()
         StaticJsonDocument<256> json;
         json["result"] = "failed - " + updError;
         String out; serializeJson(json, out);
-        wm.server->send(500, "application/json", out);
+        wm.server->send(500, "application/json; charset=utf-8", out);
         return;
     }
     StaticJsonDocument<128> json;
@@ -106,7 +106,7 @@ void handleUpdateDone()
     json["restarting"] = true;
     String out; serializeJson(json, out);
     wm.server->sendHeader("Connection", "close");
-    wm.server->send(200, "application/json", out);
+    wm.server->send(200, "application/json; charset=utf-8", out);
     delay(500);           // let the response go out
     restartWith("firmware upload (/api/update)");
 }

@@ -414,7 +414,7 @@ static void fwServe()
                          FWB_STR[ph], st, BUILD_VERSION, fwLatest.c_str(), (unsigned)fwDone, (unsigned)fwTotal,
                          err.length() ? "\"" : "", err.length() ? err.c_str() : "null", err.length() ? "\"" : "",
                          (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
-        snprintf(hdr, sizeof(hdr), "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nCache-Control: no-store\r\nContent-Length: %d\r\nConnection: close\r\n\r\n", n);
+        snprintf(hdr, sizeof(hdr), "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nCache-Control: no-store\r\nContent-Length: %d\r\nConnection: close\r\n\r\n", n);
         fwSendAll(c, hdr, strlen(hdr)); fwSendAll(c, j, n);
     } else if (is("/") || is("/app") || is("/update")) {
         snprintf(hdr, sizeof(hdr), "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nContent-Length: %u\r\nConnection: close\r\n\r\n", (unsigned)strlen(FW_BOOT_PAGE));
@@ -423,7 +423,7 @@ static void fwServe()
         char j[160];
         int n = snprintf(j, sizeof(j), "{\"error\":\"Firmware update in progress - try again later\",\"firmwareUpdate\":true,\"progress\":%d,\"retryAfter\":30}",
                          fwTotal ? (int)(fwDone * 100 / fwTotal) : 0);
-        snprintf(hdr, sizeof(hdr), "HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json\r\nRetry-After: 30\r\nContent-Length: %d\r\nConnection: close\r\n\r\n", n);
+        snprintf(hdr, sizeof(hdr), "HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json; charset=utf-8\r\nRetry-After: 30\r\nContent-Length: %d\r\nConnection: close\r\n\r\n", n);
         fwSendAll(c, hdr, strlen(hdr)); fwSendAll(c, j, n);
     }
     lwip_shutdown(c, SHUT_WR);
@@ -652,5 +652,5 @@ void handleRouteFirmware()
     json["freeHeap"] = ESP.getFreeHeap();
     json["largestBlock"] = ESP.getMaxAllocHeap();
     String out; serializeJson(json, out);
-    wm.server->send(code, "application/json", out);
+    wm.server->send(code, "application/json; charset=utf-8", out);
 }

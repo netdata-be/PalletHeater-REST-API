@@ -86,14 +86,14 @@ static std::function<void()> withStoveLock(void (*fn)())
         // while the (single threaded) web server waits - other requests stay responsive.
         if (stove.linkDown) {   // the serial link to the stove is down: every bus command fails at once
             LOGD("http", "503 %s: the stove does not answer", wm.server->uri().c_str());
-            if (wm.server->uri() == "/api/health") wm.server->send(500, "application/json", "{\"health\":\"Failed to talk to Stove\"}");
-            else wm.server->send(503, "application/json", "{\"error\":\"The stove does not answer (serial connection) - try again later\"}");
+            if (wm.server->uri() == "/api/health") wm.server->send(500, "application/json; charset=utf-8", "{\"health\":\"Failed to talk to Stove\"}");
+            else wm.server->send(503, "application/json; charset=utf-8", "{\"error\":\"The stove does not answer (serial connection) - try again later\"}");
             return;
         }
         if (!stoveLockTake(3000))   // feeds the 5 s task watchdog while waiting
         {
             LOGW("http", "503 %s %s: stove bus busy for 3 s", wm.server->method() == HTTP_GET ? "GET" : "POST", wm.server->uri().c_str());
-            wm.server->send(503, "application/json", "{\"error\":\"Stove bus busy, try again\"}");
+            wm.server->send(503, "application/json; charset=utf-8", "{\"error\":\"Stove bus busy, try again\"}");
             return;
         }
         {

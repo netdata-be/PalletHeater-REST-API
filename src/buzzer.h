@@ -290,7 +290,7 @@ static void handleRouteBuzzer()
     if (now) json["playing"] = now; else json["playing"] = nullptr;
     json["muted"] = (bool)bzMuted;
     String out; serializeJson(json, out);
-    wm.server->send(code, "application/json", out);
+    wm.server->send(code, "application/json; charset=utf-8", out);
 }
 static void buzzerRoutes() { wm.server->on("/api/buzzer", authed(handleRouteBuzzer)); }
 

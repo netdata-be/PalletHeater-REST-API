@@ -497,5 +497,5 @@ void handleRouteMqtt()
     json["publishes"] = mqttPublishes;
     json["commands"] = mqttCommands;
     String out; serializeJson(json, out);
-    wm.server->send(code, "application/json", out);
+    wm.server->send(code, "application/json; charset=utf-8", out);
 }

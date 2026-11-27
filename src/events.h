@@ -273,11 +273,11 @@ void handleRouteEvents()
     uint32_t since = 0;
     if (wm.server->hasArg("hours")) {
         int hours = wm.server->arg("hours").toInt();
-        if (hours < 1 || hours > 720) { wm.server->send(400, "application/json", "{\"result\":\"failed - hours must be 1..720\"}"); return; }
+        if (hours < 1 || hours > 720) { wm.server->send(400, "application/json; charset=utf-8", "{\"result\":\"failed - hours must be 1..720\"}"); return; }
         since = (uint32_t)time(nullptr) - (uint32_t)hours * 3600UL;
     }
     wm.server->setContentLength(CONTENT_LENGTH_UNKNOWN);
-    wm.server->send(200, "application/json", "");
+    wm.server->send(200, "application/json; charset=utf-8", "");
     String out = "{\"events\":[";
     bool first = true;
     int start = (evtHead - evtCount + EVT_SIZE) % EVT_SIZE;

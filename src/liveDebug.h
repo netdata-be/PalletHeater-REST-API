@@ -77,13 +77,13 @@ static size_t utf8Whole(const char* s, size_t n)
 void handleRouteLog()
 {
     if (wm.server->method() != HTTP_GET) { wm.server->send(405); return; }
-    if (!logRing) { wm.server->send(503, "application/json", "{\"error\":\"live log not available (memory)\"}"); return; }
+    if (!logRing) { wm.server->send(503, "application/json; charset=utf-8", "{\"error\":\"live log not available (memory)\"}"); return; }
     // Streamed in pieces of 512 bytes (at most 4 KB per answer): it used to take a 4 KB buffer and
     // a 5 KB String at once, every second while the console is open; with a fragmented heap that
     // left the WiFi driver without receive buffers (20/11/2026). "next" comes last.
     wm.server->sendHeader("Cache-Control", "no-store");
     wm.server->setContentLength(CONTENT_LENGTH_UNKNOWN);
-    wm.server->send(200, "application/json", "");
+    wm.server->send(200, "application/json; charset=utf-8", "");
     char piece[512];
     String out; out.reserve(700);
     uint32_t cur = argCursor(), from = cur; bool lost = false; size_t total = 0;
@@ -116,10 +116,10 @@ void handleRouteBusmon()
 {
     if (wm.server->method() == HTTP_POST) {
         int on = pc::parseOnOff(wm.server->arg("enabled").c_str());
-        if (on < 0) { wm.server->send(400, "application/json", "{\"result\":\"failed - enabled must be true / false\"}"); return; }
+        if (on < 0) { wm.server->send(400, "application/json; charset=utf-8", "{\"result\":\"failed - enabled must be true / false\"}"); return; }
         if (on) {
             if (!busRing) busRing = new (std::nothrow) BusRing();
-            if (!busRing) { wm.server->send(503, "application/json", "{\"result\":\"failed - not enough memory\"}"); return; }
+            if (!busRing) { wm.server->send(503, "application/json; charset=utf-8", "{\"result\":\"failed - not enough memory\"}"); return; }
             busmonUntil = millis() + BUSMON_HOLD_MS; Stove::monitor = busMonitorHook;
         }
         else    { Stove::monitor = nullptr; busmonUntil = millis(); }
@@ -167,7 +167,7 @@ void handleRouteBusmon()
     out += "]}";
     free(ev);
     wm.server->sendHeader("Cache-Control", "no-store");
-    httpSendText(200, "application/json", out);
+    httpSendText(200, "application/json; charset=utf-8", out);
 }
 
 // GET  /api/loglevel                     levels per module
@@ -195,7 +195,7 @@ void handleRouteLogLevel()
         m["tag"] = logModules[i].tag; m["level"] = LOG_LEVEL_NAMES[logModules[i].level]; m["what"] = logModules[i].what;
     }
     String out; serializeJson(json, out);
-    wm.server->send(err.length() ? 400 : 200, "application/json", out);
+    wm.server->send(err.length() ? 400 : 200, "application/json; charset=utf-8", out);
 }
 
 // ── Who changed what: every write to the stove, with its source ───────
@@ -279,7 +279,7 @@ void handleRouteDiagReset()
     if (wm.server->method() != HTTP_POST) { wm.server->send(405); return; }
     bool serial = pc::parseOnOff(wm.server->arg("serial").c_str()) == 1;
     bool crashes = pc::parseOnOff(wm.server->arg("crashes").c_str()) == 1;
-    if (!serial && !crashes) { wm.server->send(400, "application/json", "{\"result\":\"failed - give serial=true and / or crashes=true\"}"); return; }
+    if (!serial && !crashes) { wm.server->send(400, "application/json; charset=utf-8", "{\"result\":\"failed - give serial=true and / or crashes=true\"}"); return; }
     String who = clientIp();
     if (serial) {
         stove.readErrors = 0; stove.writeErrors = 0; stove.retries = 0; stove.skipped = 0; stove.transactions = 0;
@@ -296,5 +296,5 @@ void handleRouteDiagReset()
     JsonObject se = json.createNestedObject("serial");
     se["readErrors"] = stove.readErrors; se["writeErrors"] = stove.writeErrors; se["retries"] = stove.retries;
     String out; serializeJson(json, out);
-    httpSendText(200, "application/json", out);
+    httpSendText(200, "application/json; charset=utf-8", out);
 }

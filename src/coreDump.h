@@ -61,14 +61,14 @@ void handleRouteCoreDump()
         esp_err_t e = esp_core_dump_image_erase();
         coreDumpText = "";
         LOGI("sys", "core dump erased by %s", clientIp().c_str());
-        wm.server->send(e == ESP_OK ? 200 : 500, "application/json", e == ESP_OK ? "{\"result\":\"success\"}" : "{\"result\":\"failed - could not erase\"}");
+        wm.server->send(e == ESP_OK ? 200 : 500, "application/json; charset=utf-8", e == ESP_OK ? "{\"result\":\"success\"}" : "{\"result\":\"failed - could not erase\"}");
         return;
     }
     if (wm.server->method() != HTTP_GET) { wm.server->send(405); return; }
     size_t addr = 0, size = 0;
     bool present = esp_core_dump_image_check() == ESP_OK && esp_core_dump_image_get(&addr, &size) == ESP_OK && size;
     if (pc::parseOnOff(wm.server->arg("download").c_str()) == 1) {
-        if (!present) { wm.server->send(404, "application/json", "{\"result\":\"failed - no core dump stored\"}"); return; }
+        if (!present) { wm.server->send(404, "application/json; charset=utf-8", "{\"result\":\"failed - no core dump stored\"}"); return; }
         wm.server->sendHeader("Content-Disposition", "attachment; filename=\"coredump.bin\"");
         wm.server->setContentLength(size);
         wm.server->send(200, "application/octet-stream", "");
@@ -98,5 +98,5 @@ void handleRouteCoreDump()
         doc["present"] = false;
     }
     String out; serializeJson(doc, out);
-    wm.server->send(200, "application/json", out);
+    wm.server->send(200, "application/json; charset=utf-8", out);
 }

@@ -407,7 +407,7 @@ void handleRoutePelletDays()
 {
     int want = 31;
     if (wm.server->hasArg("days") && !pc::parseIntRange(wm.server->arg("days").c_str(), 1, pc::PelletUsage::MAX_DAYS, want)) {
-        wm.server->send(400, "application/json", "{\"result\":\"failed - days must be 1 - 400\"}"); return;
+        wm.server->send(400, "application/json; charset=utf-8", "{\"result\":\"failed - days must be 1 - 400\"}"); return;
     }
     double k = pellets.kgPerUnit(), ppk = pelCost.pricePerKg();
     String out; out.reserve(80 + want * 64);
@@ -427,7 +427,7 @@ void handleRoutePelletDays()
     for (int i = n - 1; i >= 0; i--) { const pc::PelletDay& d = pelUse.closed(i); add(d.day, d.units, first); first = false; }
     if (pelUse.curDay) add(pelUse.curDay, pelUse.unitsToday(pellets.units), first);   // today, so far
     out += "]}";
-    wm.server->send(200, "application/json", out);
+    wm.server->send(200, "application/json; charset=utf-8", out);
 }
 
 // GET  /api/pellets                     -> estimate, calibration and its cycles
@@ -493,5 +493,5 @@ void handleRoutePellets()
     else if (wm.server->method() == HTTP_POST) o["result"] = "success";
     pelletsJson(o, true);
     String out; serializeJson(doc, out);
-    wm.server->send(code, "application/json", out);
+    wm.server->send(code, "application/json; charset=utf-8", out);
 }

@@ -47,7 +47,7 @@ void handleRouteBluetooth()
     json["active"] = bleEnabled;
     json["restartRequired"] = saved != bleEnabled;
     String out; serializeJson(json, out);
-    wm.server->send(200, "application/json", out);
+    wm.server->send(200, "application/json; charset=utf-8", out);
     if (restart) { delay(300); restartWith("Bluetooth setting changed"); }
 }
 
@@ -59,7 +59,7 @@ void handleRouteTelnet()
     {
         String v = wm.server->arg("enabled");
         if (v != "true" && v != "false" && v != "1" && v != "0") {
-            wm.server->send(400, "application/json", "{\"result\":\"failed - expected enabled=true/false\"}");
+            wm.server->send(400, "application/json; charset=utf-8", "{\"result\":\"failed - expected enabled=true/false\"}");
             return;
         }
         telnetSetEnabled(v == "true" || v == "1");
@@ -69,5 +69,5 @@ void handleRouteTelnet()
     if (wm.server->method() == HTTP_POST) json["result"] = "success";
     json["enabled"] = telnetEnabled;
     String out; serializeJson(json, out);
-    wm.server->send(200, "application/json", out);
+    wm.server->send(200, "application/json; charset=utf-8", out);
 }

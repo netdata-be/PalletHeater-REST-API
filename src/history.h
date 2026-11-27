@@ -381,7 +381,7 @@ static void handleRouteHistoryWeek(int hours)
 {
     uint32_t since = (uint32_t)time(nullptr) - (uint32_t)hours * 3600UL;
     wm.server->setContentLength(CONTENT_LENGTH_UNKNOWN);
-    wm.server->send(200, "application/json", "");
+    wm.server->send(200, "application/json; charset=utf-8", "");
     String out;
     out.reserve(1800);
     out += "{\"interval\":3600,\"fields\":[\"t\",\"room\",\"stove\",\"remote\",\"setpoint\",\"fume\",\"fumeMax\",\"flame\",\"flameActual\",\"fan\",\"fanActual\",\"auger\",\"fumeFan\",\"state\",\"burning\",\"n\"],\"samples\":[";
@@ -417,7 +417,7 @@ void handleRouteHistory()
     uint32_t since = (uint32_t)time(nullptr) - (uint32_t)hours * 3600UL;
 
     wm.server->setContentLength(CONTENT_LENGTH_UNKNOWN);
-    wm.server->send(200, "application/json", "");
+    wm.server->send(200, "application/json; charset=utf-8", "");
     String out;
     out.reserve(1800);
     out += "{\"interval\":"; out += HIST_INTERVAL_S;

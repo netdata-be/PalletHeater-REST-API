@@ -696,7 +696,7 @@ static std::function<void()> httpsOr(std::function<void()> handler)
         if (!host.length()) host = WiFi.localIP().toString();
         wm.server->sendHeader("Location", "https://" + host + wm.server->uri());
         wm.server->sendHeader("Cache-Control", "no-store");
-        wm.server->send(307, "text/plain", "HTTPS: https://" + host + wm.server->uri());
+        wm.server->send(307, "text/plain; charset=utf-8", "HTTPS: https://" + host + wm.server->uri());
     };
 }
 
@@ -759,7 +759,7 @@ static String httpsSetAltNames(const String& in, const char* who)
 void handleRouteHttps()
 {
     if (wm.server->method() == HTTP_GET && wm.server->arg("cert") == "pem") {
-        if (!httpsCrtLen) { wm.server->send(404, "application/json", "{\"result\":\"no certificate yet\"}"); return; }
+        if (!httpsCrtLen) { wm.server->send(404, "application/json; charset=utf-8", "{\"result\":\"no certificate yet\"}"); return; }
         wm.server->sendHeader("Content-Disposition", "attachment; filename=\"" + httpsHostname() + ".crt\"");
         wm.server->send(200, "application/x-x509-ca-cert", httpsPem());
         return;
@@ -770,11 +770,11 @@ void handleRouteHttps()
         int redir = wm.server->hasArg("redirect") ? pc::parseOnOff(wm.server->arg("redirect").c_str()) : -1;
         bool regen = pc::parseOnOff(wm.server->arg("regenerate").c_str()) == 1;
         bool alt = wm.server->hasArg("altNames");
-        if (on < 0 && redir < 0 && !regen && !alt) { wm.server->send(400, "application/json", "{\"result\":\"failed - enabled, redirect (on / off), altNames or regenerate=true\"}"); return; }
+        if (on < 0 && redir < 0 && !regen && !alt) { wm.server->send(400, "application/json; charset=utf-8", "{\"result\":\"failed - enabled, redirect (on / off), altNames or regenerate=true\"}"); return; }
         String who = clientIp();
         if (alt) {
             String err = httpsSetAltNames(wm.server->arg("altNames"), who.c_str());
-            if (err.length()) { wm.server->send(400, "application/json", "{\"result\":\"failed - " + err + "\"}"); return; }
+            if (err.length()) { wm.server->send(400, "application/json; charset=utf-8", "{\"result\":\"failed - " + err + "\"}"); return; }
         }
         if (redir >= 0) httpsSetRedirect(redir == 1, who.c_str());
         if (on >= 0) httpsSetEnabled(on == 1, who.c_str());
@@ -821,5 +821,5 @@ void handleRouteHttps()
     if (httpsTaskHandle) st["stackFreeMin"] = uxTaskGetStackHighWaterMark(httpsTaskHandle);   // bytes never used of the 9 KB
     if (httpsMsg.length()) json["problem"] = httpsMsg; else json["problem"] = nullptr;
     String out; serializeJson(json, out);
-    wm.server->send(200, "application/json", out);
+    wm.server->send(200, "application/json; charset=utf-8", out);
 }

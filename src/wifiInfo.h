@@ -328,7 +328,7 @@ void handleRouteWifi()
                 json["switching"] = true;
                 String out; serializeJson(json, out);
                 wm.server->sendHeader("Connection", "close");
-                wm.server->send(200, "application/json", out);
+                wm.server->send(200, "application/json; charset=utf-8", out);
                 return;
             }
         }
@@ -408,7 +408,7 @@ void handleRouteWifi()
     } else json["lastDisconnect"] = nullptr;
     String out; serializeJson(json, out);
     if (restart) wm.server->sendHeader("Connection", "close");
-    wm.server->send(code, "application/json", out);
+    wm.server->send(code, "application/json; charset=utf-8", out);
     if (restart) { delay(500); restartWith("network settings changed"); }
 }
 
@@ -425,7 +425,7 @@ void handleRouteWifiScan()
         WiFi.scanNetworks(true, false);   // async, no hidden networks
         n = WIFI_SCAN_RUNNING;
     }
-    if (n == WIFI_SCAN_RUNNING) { wm.server->send(200, "application/json", "{\"scanning\":true}"); return; }
+    if (n == WIFI_SCAN_RUNNING) { wm.server->send(200, "application/json; charset=utf-8", "{\"scanning\":true}"); return; }
     DynamicJsonDocument json(4096);
     json["scanning"] = false;
     JsonArray arr = json.createNestedArray("networks");
@@ -441,5 +441,5 @@ void handleRouteWifiScan()
         if (arr.size() >= 25) break;
     }
     String out; serializeJson(json, out);
-    wm.server->send(200, "application/json", out);
+    wm.server->send(200, "application/json; charset=utf-8", out);
 }
