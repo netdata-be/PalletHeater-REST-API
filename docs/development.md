@@ -36,6 +36,7 @@ Build flags (in `build_flags` of an environment):
 | Flag | Default | Effect |
 |---|---|---|
 | `-DOPB_BLUETOOTH=0` | `1` | Leaves Bluetooth out (BLE app, BLE OTA): about 250 KB less flash. Set for every DevKit environment (`[devkit]` in `platformio.ini`, with `lib_ignore = NimBLE-Arduino`): with Bluetooth the DevKit image (1.97 MB) no longer fits an app slot (1.875 MB). The S3 board keeps Bluetooth. `/api/bluetooth` then answers `"available":false`. |
+| `-DOPB_WIFI_COUNTRY='"NL"'` | `"BE"` | WiFi country code (allowed channels and transmit power; 802.11d on). |
 
 Use one PlatformIO Core: two versions (e.g. the one of the IDE and one in the shell) clean each other's build folders, and a build that runs at that moment fails with missing files.
 

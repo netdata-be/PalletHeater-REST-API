@@ -402,6 +402,7 @@ void loop()
                     LOGW("wifi", "not connected - reconnecting");
                 }
                 WiFi.disconnect(false);  // reset state machine, keep credentials
+                wifiStaConfigFix();      // all channels, strongest access point (setupWifi.h)
                 WiFi.begin();            // reconnect with stored credentials
             }
         }

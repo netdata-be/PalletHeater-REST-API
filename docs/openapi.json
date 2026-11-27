@@ -5991,6 +5991,19 @@
       "WifiInfo": {
         "type": "object",
         "properties": {
+          "roams": {
+            "type": "integer",
+            "description": "Moves to a stronger access point with the same name since the start (the firmware scans while the signal is below -70 dBm and reconnects when another one is 8 dB stronger)"
+          },
+          "lastRoam": {
+            "type": "string",
+            "nullable": true,
+            "description": "Last roam: old -> new access point with signal and channel"
+          },
+          "country": {
+            "type": "string",
+            "description": "WiFi country code (OPB_WIFI_COUNTRY, default BE, with 802.11d)"
+          },
           "connected": {
             "type": "boolean"
           },
@@ -6085,6 +6098,27 @@
       "WifiScan": {
         "type": "object",
         "properties": {
+          "accessPoints": {
+            "type": "array",
+            "description": "Every access point of the network the controller is on",
+            "items": {
+              "type": "object",
+              "properties": {
+                "bssid": {
+                  "type": "string"
+                },
+                "rssi": {
+                  "type": "integer"
+                },
+                "channel": {
+                  "type": "integer"
+                },
+                "current": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
           "scanning": {
             "type": "boolean"
           },

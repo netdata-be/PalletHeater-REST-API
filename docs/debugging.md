@@ -82,6 +82,12 @@ Every step is logged in the module `wifi` with the heap at that moment; the roun
 answer before that only at debug level. `/api/wifi` (`watchdogRepairs`) and the metric
 `esp32_wifi_watchdog_repairs_total` count the repairs.
 
+## Access point choice and roaming
+
+Several access points with the same network name (UniFi, mesh): the Arduino default is a *fast scan*, which joins the first access point it finds with that name, channel by channel, not the strongest, and then stays there. The firmware joins with a scan of all channels and picks the strongest signal, also in the network settings the WiFi driver stores itself and uses when it reconnects ([src/setupWifi.h](../src/setupWifi.h)). The country code is `BE` with 802.11d (`OPB_WIFI_COUNTRY`).
+
+The ESP32 does not move to a better access point by itself, and the 802.11k/v support for steering by the access point (UniFi *BSS Transition*) is not built into the ESP-IDF of Arduino-ESP32 2.0. So the firmware roams itself: while the signal is below −70 dBm it scans every 5 min, and when an access point with the same name is at least 8 dB stronger it reconnects (a few seconds without network). `/api/wifi` shows `roams` and `lastRoam`; `/api/wifi/scan` lists every access point of the current network (`accessPoints`: BSSID, signal, channel, current). A roam is logged in the module `wifi`, and does not count as a drop.
+
 ## Finding a bug with the core dump
 
 The summary in the log already names the crashing task and the program counters of its call stack; the ELF file of the same build turns those into function names and source lines.

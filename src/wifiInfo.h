@@ -61,6 +61,56 @@ static void netRevertWifi(const char* why)
 // answers AAAA queries. Without it macOS waited 5 s for an AAAA answer on every new lookup
 // of openpelletbridge.local. Global addresses are kept as they arrive (max 3).
 static String ipv6Global[3];
+
+// Roaming. The ESP32 does not move to a better access point by itself, and the 802.11k/v
+// support (an access point that steers its clients, UniFi "BSS Transition") is not built into
+// the ESP-IDF of Arduino-ESP32 2.0 (CONFIG_WPA_11KV_SUPPORT off). So the firmware does it: while
+// the signal is weak (below ROAM_WEAK_DBM) it scans every ROAM_SCAN_MS, and when an access point
+// with the same name is ROAM_GAIN_DB stronger it reconnects - with an all-channel scan and the
+// strongest first (wifiStaConfigFix, setupWifi.h). That costs a few seconds without network.
+static const int      ROAM_WEAK_DBM = -70, ROAM_GAIN_DB = 8;
+static const uint32_t ROAM_SCAN_MS = 300000UL;
+static uint32_t roamLastScan = 0, wifiRoams = 0;
+static bool     roamScanning = false;
+static volatile bool roamReconnect = false;   // the next "connection lost" is the roam itself
+static char     roamLast[96] = "";            // the last roam, for /api/wifi
+static void netRoamLoop()
+{
+    if (!wifiConnected || netWifiBusy() || otaActive || WiFi.status() != WL_CONNECTED) { roamScanning = false; return; }
+    if (roamScanning) {
+        int n = WiFi.scanComplete();
+        if (n == WIFI_SCAN_RUNNING) return;
+        roamScanning = false;
+        if (n < 0) return;
+        String ssid = WiFi.SSID();
+        const uint8_t* cur = WiFi.BSSID();
+        int curRssi = WiFi.RSSI(), best = -1;
+        for (int i = 0; i < n; i++) {
+            if (WiFi.SSID(i) != ssid) continue;
+            if (cur && memcmp(WiFi.BSSID(i), cur, 6) == 0) { curRssi = WiFi.RSSI(i); continue; }   // measured in the same scan
+            if (best < 0 || WiFi.RSSI(i) > WiFi.RSSI(best)) best = i;
+        }
+        if (best < 0) { LOGD("wifi", "roaming: no other access point for '%s'", ssid.c_str()); return; }
+        if (WiFi.RSSI(best) < curRssi + ROAM_GAIN_DB) {
+            LOGD("wifi", "roaming: staying on %s (%d dBm), best other %s %d dBm", WiFi.BSSIDstr().c_str(), curRssi, WiFi.BSSIDstr(best).c_str(), WiFi.RSSI(best));
+            return;
+        }
+        snprintf(roamLast, sizeof(roamLast), "%s (%d dBm, ch %d) -> %s (%d dBm, ch %d)", WiFi.BSSIDstr().c_str(), curRssi, WiFi.channel(),
+                 WiFi.BSSIDstr(best).c_str(), WiFi.RSSI(best), WiFi.channel(best));
+        LOGI("wifi", "roaming: %s - reconnecting to the strongest access point", roamLast);
+        wifiRoams++;
+        roamReconnect = true;
+        wifiStaConfigFix();
+        WiFi.reconnect();   // all channels, strongest first
+        return;
+    }
+    if (millis() - roamLastScan < ROAM_SCAN_MS && roamLastScan) return;
+    if (WiFi.RSSI() > ROAM_WEAK_DBM || bleOwnsRadio() || WiFi.scanComplete() == WIFI_SCAN_RUNNING) return;
+    roamLastScan = millis() | 1;
+    WiFi.scanDelete();
+    if (WiFi.scanNetworks(true, false) == WIFI_SCAN_RUNNING) roamScanning = true;
+}
+
 static void netEventsSetup()
 {
 
@@ -79,7 +129,10 @@ static void netEventsSetup()
     WiFi.onEvent([](WiFiEvent_t, WiFiEventInfo_t info) {
         uint8_t r = info.wifi_sta_disconnected.reason;
         const char* name = WiFi.disconnectReasonName((wifi_err_reason_t)r);
-        if (wifiWasUp) {
+        if (wifiWasUp && roamReconnect) {   // the roam itself, not a drop
+            wifiWasUp = false; roamReconnect = false;
+            LOGD("wifi", "disconnected to roam: %s (%u)", name, r);
+        } else if (wifiWasUp) {
             wifiWasUp = false;
             wifiDisconnects++; wifiLastReason = r; wifiLastDisconnectMs = millis();
             LOGW("wifi", "connection lost: %s (%u)", name, r);
@@ -281,6 +334,7 @@ static void netWatchdogLoop()
 void netLoop()
 {
     netWatchdogLoop();
+    netRoamLoop();
     netSwitchLoop();
     if (!netPendingConfirm) return;
     if (netHttpSeen) {
@@ -299,7 +353,7 @@ void netLoop()
 
 void handleRouteWifi()
 {
-    StaticJsonDocument<1024> json;
+    StaticJsonDocument<1280> json;   // + roams, lastRoam, country
     int code = 200;
     bool restart = false;
     if (wm.server->method() == HTTP_POST) {
@@ -400,6 +454,9 @@ void handleRouteWifi()
     if (netSwitchMsg.length()) json["lastChange"] = netSwitchMsg;
     json["watchdogRepairs"] = netwdRepairs;   // network watchdog: reconnects + driver restarts
     json["disconnects"] = (uint32_t)wifiDisconnects;   // drops of a working connection since the start
+    json["roams"] = wifiRoams;                         // moves to a stronger access point (netRoamLoop)
+    if (roamLast[0]) json["lastRoam"] = roamLast; else json["lastRoam"] = nullptr;
+    { char cc[4] = ""; if (esp_wifi_get_country_code(cc) == ESP_OK) json["country"] = cc; }
     if (wifiLastDisconnectMs) {
         JsonObject ld = json.createNestedObject("lastDisconnect");
         ld["reason"] = WiFi.disconnectReasonName((wifi_err_reason_t)wifiLastReason);
@@ -433,12 +490,21 @@ void handleRouteWifiScan()
         String ss = WiFi.SSID(i);
         if (!ss.length()) continue;
         bool dup = false;   // the same network on several access points: keep the strongest
-        for (JsonObject o : arr) if (o["ssid"] == ss) { dup = true; if (WiFi.RSSI(i) > (int)o["rssi"]) { o["rssi"] = WiFi.RSSI(i); o["quality"] = pc::rssiQuality(WiFi.RSSI(i)); } }
+        for (JsonObject o : arr) if (o["ssid"] == ss) { dup = true; if (WiFi.RSSI(i) > (int)o["rssi"]) { o["rssi"] = WiFi.RSSI(i); o["quality"] = pc::rssiQuality(WiFi.RSSI(i)); o["channel"] = WiFi.channel(i); } }
         if (dup) continue;
         JsonObject o = arr.createNestedObject();
         o["ssid"] = ss; o["rssi"] = WiFi.RSSI(i); o["quality"] = pc::rssiQuality(WiFi.RSSI(i));
         o["channel"] = WiFi.channel(i); o["secure"] = WiFi.encryptionType(i) != WIFI_AUTH_OPEN;
         if (arr.size() >= 25) break;
+    }
+    // every access point of the network the controller is on (several with one name: UniFi, mesh)
+    JsonArray aps = json.createNestedArray("accessPoints");
+    String cur = WiFi.status() == WL_CONNECTED ? WiFi.SSID() : String("");
+    for (int i = 0; i < n && cur.length() && aps.size() < 12; i++) {
+        if (WiFi.SSID(i) != cur) continue;
+        JsonObject o = aps.createNestedObject();
+        o["bssid"] = WiFi.BSSIDstr(i); o["rssi"] = WiFi.RSSI(i); o["channel"] = WiFi.channel(i);
+        o["current"] = WiFi.BSSIDstr(i) == WiFi.BSSIDstr();
     }
     String out; serializeJson(json, out);
     wm.server->send(200, "application/json; charset=utf-8", out);

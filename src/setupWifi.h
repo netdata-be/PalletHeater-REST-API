@@ -1,6 +1,39 @@
 #include <constants.h>
 #include <Preferences.h>
 #include <ESPmDNS.h>
+#include <esp_wifi.h>
+
+// Several access points with the same name (UniFi, mesh): the Arduino default is a fast scan
+// (WIFI_FAST_SCAN): the first access point found with the name, channel by channel, not the
+// strongest - and the ESP32 stays there. All channels, then the strongest signal. The driver
+// keeps these in its own stored configuration (NVS), which WiFi.begin() without arguments
+// (WiFiManager, the reconnect in loop()) uses: changed there too, and the BSSID lock of a
+// WiFi.begin(ssid, pass, channel, bssid) cleared.
+void wifiStaConfigFix()
+{
+    WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);      // WiFi.begin(ssid, pass) after this
+    WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
+    wifi_config_t c;
+    if (esp_wifi_get_config(WIFI_IF_STA, &c) != ESP_OK) return;
+    if (c.sta.scan_method == WIFI_ALL_CHANNEL_SCAN && c.sta.sort_method == WIFI_CONNECT_AP_BY_SIGNAL && !c.sta.bssid_set) return;
+    c.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
+    c.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
+    c.sta.bssid_set = 0;
+    esp_err_t e = esp_wifi_set_config(WIFI_IF_STA, &c);
+    if (e == ESP_OK) LOGI("wifi", "connect: scan all channels, strongest access point (was a fast scan)");
+    else LOGW("wifi", "scan method not stored: %s", esp_err_to_name(e));
+}
+
+// Country: the channels and transmit power allowed here (Belgium / EU: 1 - 13). With 802.11d
+// the ESP32 follows the country the access points announce.
+#ifndef OPB_WIFI_COUNTRY
+#define OPB_WIFI_COUNTRY "BE"
+#endif
+static void wifiCountrySet()
+{
+    esp_err_t e = esp_wifi_set_country_code(OPB_WIFI_COUNTRY, true);
+    if (e != ESP_OK) LOGW("wifi", "country %s not set: %s", OPB_WIFI_COUNTRY, esp_err_to_name(e));
+}
 
 // mDNS: <hostname>.local with the web app (_http, _https) and the OTA service (_arduino,
 // for the Arduino IDE / PlatformIO network port). The one place that starts it: at boot,
@@ -44,6 +77,8 @@ void setup_wifi() // Setup WiFiManager and connect to WiFi
 {
     wm.setConfigPortalBlocking(false);
     WiFi.mode(WIFI_STA);
+    wifiCountrySet();
+    wifiStaConfigFix();   // before WiFiManager connects with the stored network
     wm.setDarkMode(true);
     wm.addParameter(&custom_hydro_mode);
     wm.addParameter(&custom_TimeZone);
