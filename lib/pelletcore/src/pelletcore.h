@@ -387,8 +387,8 @@ inline const char* stoveStateName(int state)
 }
 inline bool stoveStateIsOn(int state)
 {
-    // 8 (alarm): doStoveOff() still sends a shutdown (6) in this state, so treat it as on
-    return (state >= 1 && state <= 5) || state == 7 || state == 8;
+    // alarms (8, 9, 10) count as off: an off command writes nothing then (doStoveOff)
+    return (state >= 1 && state <= 5) || state == 7;
 }
 
 // Error memory / current error (RAM 0x6E): value -> display code and description.

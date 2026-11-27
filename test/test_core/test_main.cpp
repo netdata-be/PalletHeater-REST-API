@@ -352,8 +352,8 @@ static void test_stove_state()
     TEST_ASSERT_EQUAL_STRING("Brazier cleaning", pc::stoveStateName(5));
     TEST_ASSERT_EQUAL_STRING("No answer (serial link down)", pc::stoveStateName(-1));
     TEST_ASSERT_EQUAL_STRING("Unknown", pc::stoveStateName(42));
-    // on: starting .. brazier cleaning, standby, alarm (shutdown still needed)
-    const bool on[] = { false, true, true, true, true, true, false, true, true, false, false };
+    // on: starting .. brazier cleaning, standby; alarms count as off (nothing is written then)
+    const bool on[] = { false, true, true, true, true, true, false, true, false, false, false };
     for (int st = 0; st <= 10; st++) TEST_ASSERT_EQUAL_MESSAGE(on[st], pc::stoveStateIsOn(st), pc::stoveStateName(st));
     TEST_ASSERT_FALSE(pc::stoveStateIsOn(-1));
 }

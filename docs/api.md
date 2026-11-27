@@ -213,7 +213,7 @@ curl -X POST "http://openpelletbridge.local/api/power?state=on"
 
 - `on` only acts when the stove is `Off` (state 0); otherwise `202 Stove already on`.
 - `on` is refused with `409` while `currentError` is `PELLETS` (the stove switched itself off because the pellet reserve ran out): refill the hopper first. MQTT, Bluetooth and telnet refuse it the same way; the remote control and the stove's own timers are not affected.
-- `off` writes state `0` while starting / pellet loading and state `6` (final cleaning) while igniting / working. When the stove is already off, in standby, or cleaning, it returns `202`.
+- `off` writes state `0` while starting / pellet loading and state `6` (final cleaning, the stove's own shut-down) while igniting, working, in brazier cleaning and in standby. When the stove is already off, in final cleaning or in an alarm (8, 9, 10), it writes nothing and returns `202`: an alarm is never reset this way (clear it on the stove).
 
 ### `/api/flame`
 
@@ -834,7 +834,7 @@ Kept for backwards compatibility. Use the `/api/...` routes for new integrations
 | 5 | Brazier cleaning | true |
 | 6 | Final cleaning | false |
 | 7 | Standby | true |
-| 8 | Alarm State | true |
+| 8 | Alarm State | false |
 | 9 | Ignition failure | false |
 | 10 | Alarm | false |
 

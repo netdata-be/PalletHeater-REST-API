@@ -277,7 +277,6 @@ String doStoveOff(int &http_code)
     case OFF:
     case ALARM_STATE:
     case IGNITION_FAILURE:
-    case STANDBY:
         http_code = 202;
         return "Stove already off";
     case STARTING:
@@ -285,15 +284,22 @@ String doStoveOff(int &http_code)
         if (stove.write(ram, stoveStateAddr, 0)) return "Powered off sent - 0";
         http_code = 500;
         return "FAILED to send Power off - 0";
+    case ALARM:
+        // nothing written in an alarm: a shutdown could reset the alarm (how the stove reacts
+        // is not known); clear it on the stove. Also an off from Loxone (its switch goes to Off
+        // at an alarm) writes nothing here.
+        http_code = 202;
+        return "Stove in alarm - nothing sent (clear the alarm on the stove)";
+    // standby (energy saving: no flame, the fume fan may still cool down) and brazier cleaning
+    // (burning): the stove's own shut-down (6, final cleaning), as from working - not 0, which
+    // could stop the fume fan while the stove is still hot
     case IGNITION:
     case WORKING:
-    case ALARM:
+    case BRAZIER_CLEANING:
+    case STANDBY:
         if (stove.write(ram, stoveStateAddr, 6)) return "Powered off sent - 6";
         http_code = 500;
         return "FAILED to send Power off - 6";
-    case BRAZIER_CLEANING:
-        http_code = 202;
-        return "Stove already shutting down - Brazier cleaning";
     case FINAL_CLEANING:
         http_code = 202;
         return "Stove already shutting down - Final cleaning";

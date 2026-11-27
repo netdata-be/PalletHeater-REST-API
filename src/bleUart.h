@@ -18,6 +18,8 @@ void bleLoop() {}
 #include "fwImage.h"   // refuses an image for the other chip
 
 // Forward declarations
+String doStoveOn(int& http_code);    // routesControl.h
+String doStoveOff(int& http_code);
 bool setFlamePower(int power);
 bool setRoomFanSpeed(int speed);
 void setCombustionQuality(int val);
@@ -896,14 +898,10 @@ void bleLoop() {
             uint8_t v = job.value;
             bool ok = true;
             if (job.kind == BW_POWER) {
-                const int cachedState = stoveState;
-                if      (v == 1 && pelletsEmptyOff()) { ok = false; LOGW("stove", "switch on refused (Bluetooth app): pellets used up, refill the hopper first"); }
-                else if (v == 1 && cachedState == OFF)
-                    ok = stove.write(ram, stoveStateAddr, 1);
-                else if (v == 0 && (cachedState == IGNITION || cachedState == WORKING || cachedState == ALARM))
-                    ok = stove.write(ram, stoveStateAddr, 6);
-                else if (v == 0 && (cachedState == STARTING || cachedState == PALLET_LOADING))
-                    ok = stove.write(ram, stoveStateAddr, 0);
+                // the same as the web, MQTT and telnet (routesControl.h): nothing written in an alarm
+                int code = 0;
+                if (v == 1) doStoveOn(code); else doStoveOff(code);
+                ok = code < 300;   // 202 = nothing to do; 409 refused (pellets used up), 500 failed
             } else if (job.kind == BW_SETPOINT) {
                 ok = (v >= 7 && v <= 30 && stove.write(eeprom, TempSetpointAddr, v));
                 if (ok) setPointTemp = (float)v;
