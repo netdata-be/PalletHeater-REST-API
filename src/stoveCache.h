@@ -84,18 +84,14 @@ int getFumeFanRPM()
     return pc::fumeFanRpm(stove.read(ram, fumeFanRPMAddr));
 }
 
+// Seconds since the last contact with the remote control (RAM 0x2E counts down from 240), -1 = not
+// heard for 240 s or more. A failed read keeps the last value (it is not "not heard").
+extern int cachedRemoteControlLastSeen;
 int getRemoteControlLastSeen()
 {
     int ttl = stove.read(ram, remoteControlTTLAddr);
-    if (ttl > 0)
-    {
-        ttl = 240 - ttl;
-    }
-    else
-    {
-        ttl = -1;
-    }
-    return ttl;
+    if (ttl < 0) return cachedRemoteControlLastSeen;
+    return ttl > 0 ? 240 - ttl : -1;
 }
 
 void getAmbTempStove() // Get room temperature from stove sensor
@@ -396,8 +392,10 @@ static void roomSourceUpdate()
     cachedRoomSource = s;
     roomSourceSince = millis();
 }
-static bool gRoom()     { getAmbTemp(); roomSourceUpdate(); return true; }
-static bool gRoomSensors() { getAmbTempStove(); getAmbTempRemoteControl(); roomSourceUpdate(); return true; }
+static bool gRoom()     { getAmbTemp(); return true; }
+// the room temperature and both sensors in one go: which sensor the stove uses is decided on
+// readings of the same moment (separate groups gave a mismatch now and then)
+static bool gRoomSensors() { getAmbTemp(); getAmbTempStove(); getAmbTempRemoteControl(); roomSourceUpdate(); return true; }
 static bool gFan()
 {
     bool a = readKeep(cachedRoomFanControl, ram, roomFanControlAddr);
@@ -486,9 +484,9 @@ static PlanGroup planGroups[] = {
     // the stove acts on an error only after ~55 s (RAM 0x30): every 5 s is in time
     { "error",               P_REGULAR,   5,    5,   gError,         { R_(currentErrorAddr), R_(0x30), END_ } },
     { "flame actual",        P_REGULAR,  30,   30,   gFlameAct,      { R_(flamePowerActualAddr), END_ } },
-    // room temperatures change slowly (0.5 C steps); a change of the sensor used shows within a minute
+    // room temperatures change slowly (0.5 C steps); the sensor used (REMOTE_SENSOR_NOT_USED) shows within 15 s
     { "room temperature",    P_REGULAR,  60,   60,   gRoom,          { R_(ambTempAddr), END_ } },
-    { "room sensors",        P_REGULAR,  60,   60,   gRoomSensors,   { R_(ambTempStoveAddr), R_(ambTempRemoteAddr), END_ } },
+    { "room sensors",        P_REGULAR,  15,   15,   gRoomSensors,   { R_(ambTempAddr), R_(ambTempStoveAddr), R_(ambTempRemoteAddr), END_ } },
     { "room fan",            P_REGULAR,   5,   30,   gFan,           { R_(roomFanControlAddr), R_(roomFanRunningAddr), R_(hotForFanAddr), END_ } },
     { "remote seen",         P_REGULAR,  30,   30,   gRemoteSeen,    { R_(remoteControlTTLAddr), END_ } },
     { "pellet sensor",       P_REGULAR,   5,    5,   gPellet,        { R_(palletSensorAddr), R_(palletLevelAddr), R_(0x91), END_ } },
@@ -670,13 +668,14 @@ long planTimerAgeS(int idx)
 }
 
 // ── Warnings (not errors: the stove works, but probably not as intended) ──
-// REMOTE_SENSOR_NOT_USED: the wireless sensor (INSTELL WIRELESS) is on, but for 2 min or more the
-// stove regulates on its own sensor (RAM 0x01 = RAM 0x44): the remote control is off, out of range
-// or its battery is empty. The stove sensor sits in the stove and follows the room slowly: on
+// REMOTE_SENSOR_NOT_USED: the wireless sensor (INSTELL WIRELESS) is on, but the stove regulates on
+// its own sensor (RAM 0x01 follows RAM 0x44), or the remote control is not heard (RAM 0x2E at 0:
+// no contact for 240 s): the remote control is off, out of range or its battery is empty. At once
+// (the temperatures are read together every 15 s, gRoomSensors; the contact every 30 s). The stove sensor sits in the stove and follows the room slowly: on
 // 24/11/2026 it read 20.5 C while the room (remote control) was 16 C. Text: "" = no warning.
 bool remoteSensorNotUsed()
 {
-    return planFullDone && cachedWirelessSensor == 1 && cachedRoomSource == pc::RS_STOVE && millis() - roomSourceSince >= 120000;
+    return planFullDone && cachedWirelessSensor == 1 && (cachedRoomSource == pc::RS_STOVE || cachedRemoteControlLastSeen < 0);
 }
 String remoteSensorWarningText()
 {

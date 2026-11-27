@@ -672,6 +672,8 @@ static void test_room_source()
     TEST_ASSERT_EQUAL(pc::RS_REMOTE, pc::roomSourceOf(20.0f, 20.0f, 20.0f, pc::RS_REMOTE));    // both equal: keep
     TEST_ASSERT_EQUAL(pc::RS_STOVE,  pc::roomSourceOf(20.0f, 20.0f, 20.0f, pc::RS_STOVE));
     TEST_ASSERT_EQUAL(pc::RS_UNKNOWN, pc::roomSourceOf(19.0f, 20.0f, 21.0f, pc::RS_UNKNOWN));  // neither: keep
+    TEST_ASSERT_EQUAL(pc::RS_STOVE,  pc::roomSourceOf(20.5f, 21.0f, 16.0f, pc::RS_UNKNOWN));   // 27/11/2026: a step behind the stove sensor
+    TEST_ASSERT_EQUAL(pc::RS_REMOTE, pc::roomSourceOf(20.5f, 20.0f, 21.0f, pc::RS_REMOTE));    // close to both: keep
 }
 
 static void test_hour_acc()

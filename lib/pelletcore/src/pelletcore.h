@@ -742,12 +742,15 @@ private:
 // ── Room temperature source ──────────────────────────────────────────────────────────
 // The stove regulates on RAM 0x01: its own sensor (RAM 0x44) or, with the wireless sensor
 // on, the remote control's (RAM 0x8F) while the remote is heard. Which one is not readable;
-// it is the one RAM 0x01 equals (all in steps of 0.5 C, so exact). When it equals both or
-// neither, the previous answer stays. 0 = not known, 1 = stove sensor, 2 = remote control.
+// it is the one RAM 0x01 follows: within 0.5 C (all in steps of 0.5 C). Not exactly equal:
+// RAM 0x01 can lag a step behind the stove sensor (27/11/2026: room 20.5, stove 21, remote 16).
+// When it is close to both or to neither, the previous answer stays.
+// 0 = not known, 1 = stove sensor, 2 = remote control.
 enum RoomSource { RS_UNKNOWN = 0, RS_STOVE = 1, RS_REMOTE = 2 };
 inline int roomSourceOf(float room, float stoveSensor, float remoteSensor, int prev)
 {
-    bool s = room == stoveSensor, r = room == remoteSensor;
+    auto near = [](float a, float b) { float d = a - b; return d <= 0.51f && d >= -0.51f; };
+    bool s = near(room, stoveSensor), r = near(room, remoteSensor);
     if (s && !r) return RS_STOVE;
     if (r && !s) return RS_REMOTE;
     return prev;
