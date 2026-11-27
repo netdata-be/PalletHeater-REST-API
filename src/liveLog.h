@@ -143,6 +143,7 @@ static LogModule logModules[] = {
     { "sys",     LOG_INFO, "start-up, restarts, settings" },
     { "wifi",    LOG_INFO, "WiFi connection, IP, network changes" },
     { "mqtt",    LOG_INFO, "MQTT connection and commands" },
+    { "loxone",  LOG_INFO, "Loxone: pushes to the Miniserver (debug: every push)" },
     { "stove",   LOG_INFO, "stove values (debug: every reading)" },
     { "bus",     LOG_WARN, "stove bus: failed reads / writes" },
     { "update",  LOG_INFO, "firmware updates" },

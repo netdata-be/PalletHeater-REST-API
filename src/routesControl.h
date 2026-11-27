@@ -328,6 +328,7 @@ String doStoveOn(int &http_code)
     return "Stove already on";
 }
 
+void loxonePowerCmd(bool on, int httpCode);   // loxone.h
 void handleRoutePower()
 {
     StaticJsonDocument<350> json;
@@ -352,10 +353,12 @@ void handleRoutePower()
                 if (wm.server->arg(i) == "off")
                 {
                     message = doStoveOff(http_code);
+                    loxonePowerCmd(false, http_code);   // from Loxone: not pushed back (loxone.h)
                 }
                 else if (wm.server->arg(i) == "on")
                 {
                     message = doStoveOn(http_code);
+                    loxonePowerCmd(true, http_code);    // refused (409) / failed: the real state is pushed
                 }
                 else
                 {

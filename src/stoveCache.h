@@ -677,13 +677,18 @@ bool remoteSensorNotUsed()
 {
     return planFullDone && cachedWirelessSensor == 1 && (cachedRoomSource == pc::RS_STOVE || cachedRemoteControlLastSeen < 0);
 }
-String remoteSensorWarningText()
+String remoteSensorWarningText(bool nl = false)   // nl: in Dutch (Loxone texts, loxone.h)
 {
     if (!remoteSensorNotUsed()) return "";
-    char b[200];
-    snprintf(b, sizeof(b), "The wireless sensor is on, but the stove regulates on its own sensor (%.1f C) instead of the remote control (last %.1f C): %s",
-             ambTempStove, ambTempRemoteControl,
-             cachedRemoteControlLastSeen < 0 ? "the remote control is not heard (switched off, empty battery or out of range?)" : "the remote control is heard, yet the stove does not use it");
+    char b[220];
+    if (nl)
+        snprintf(b, sizeof(b), "De draadloze sensor staat aan, maar de kachel regelt op haar eigen sensor (%.1f °C) in plaats van de afstandsbediening (laatst %.1f °C): %s",
+                 ambTempStove, ambTempRemoteControl,
+                 cachedRemoteControlLastSeen < 0 ? "de afstandsbediening wordt niet gehoord (uit, lege batterij of buiten bereik?)" : "de afstandsbediening wordt gehoord, maar de kachel gebruikt ze niet");
+    else
+        snprintf(b, sizeof(b), "The wireless sensor is on, but the stove regulates on its own sensor (%.1f C) instead of the remote control (last %.1f C): %s",
+                 ambTempStove, ambTempRemoteControl,
+                 cachedRemoteControlLastSeen < 0 ? "the remote control is not heard (switched off, empty battery or out of range?)" : "the remote control is heard, yet the stove does not use it");
     return b;
 }
 

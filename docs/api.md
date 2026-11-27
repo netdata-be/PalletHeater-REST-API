@@ -88,6 +88,10 @@ scrape_configs:
 | `GET` | [`/api/events`](#get-apievents) | Log of stove state changes and errors with exact times |
 | `GET` `POST` | [`/api/bluetooth`](#apibluetooth) | Enable / disable Bluetooth (BLE) |
 | `GET` `POST` | [`/api/mqtt`](#apimqtt) | MQTT settings and status |
+| `GET` | [`/api/loxone`](#apiloxone) | Stove values as one line of numbers (Loxone Virtual HTTP Input) |
+| `GET` `POST` | [`/api/loxone/config`](#apiloxone) | Loxone push settings and status |
+| `GET` `POST` | [`/api/loxone/test`](#apiloxone) | Test the Miniserver connection (background) |
+| `GET` `POST` | [`/api/loxone/controls`](#apiloxone) | Read the controls of the Miniserver, search them |
 | `GET` `POST` | [`/api/buzzer`](#apibuzzer) | Buzzer of the S3 board: settings, test sounds (404 on the DevKit) |
 | `GET` `POST` | [`/api/wifi`](#apiwifi) | WiFi status, network, hostname and DHCP / static IP |
 | `GET` | [`/api/wifi/scan`](#apiwifi) | WiFi networks in range |
@@ -684,6 +688,52 @@ Only the given parameters change; the answer is the state as with GET, plus `res
 | `alarm` | Alarm state (8 – 10), a confirmed error, or pellets used up: repeats until it clears or is silenced | `alarm` |
 
 A higher event interrupts a lower one (alarm > countdown > reserve > success > button); a test plays above all.
+
+### `/api/loxone`
+
+See [Loxone](loxone.md) for what it does. The line for a Virtual HTTP Input:
+
+```bash
+curl http://openpelletbridge.local/api/loxone
+# opb seq=12 state=4 power=1 burn=1 link=1 age=0 errId=0 ... rssi=-70
+```
+
+Settings (only the given parameters change; `password` empty keeps it, `-` clears it; `map` is a JSON object and replaces the whole map):
+
+```bash
+curl -X POST http://openpelletbridge.local/api/loxone/config \
+  --data-urlencode host=192.168.1.20 --data-urlencode user=opb --data-urlencode password=secret \
+  --data-urlencode push=true --data-urlencode switch=Pelletkachel \
+  --data-urlencode 'map={"state":"Kachel_State","errId":"Kachel_Error","errText":"Kachel_FoutTekst","kg":"Kachel_PelletsKg","seq":"Kachel_Seq"}'
+# {"result":"success","host":"192.168.1.20","port":80,"user":"opb","passwordSet":true,"interval":60,"push":true,
+#  "switch":"Pelletkachel","map":{...},"status":{"seq":12,"pushes":0,"pushFailed":0,...},"keys":[{"key":"seq","kind":"event","value":"12"},...]}
+```
+
+| Parameter | Values |
+|---|---|
+| `host`, `port` | Miniserver address, HTTP port (80). A new host clears the stored list of controls |
+| `user`, `password` | Loxone user for Basic auth |
+| `push` | `true` / `false`: web service pushes |
+| `interval` | heartbeat in s (10 – 3600, 60): `seq` goes up at least this often |
+| `switch` | name or UUID of the switch that follows on / off, empty = none |
+| `lang` | language of `stateText`, `errText`, `warnText`: `auto` (as the remote control: NLD → Dutch, otherwise English), `nl`, `en` |
+| `map` | `{"<key>":"<virtual input>"}`, keys of `/api/loxone` plus `stateText`, `errText`, `warnText`, `warnShort` |
+
+Test and the controls of the Miniserver run in the background: `POST` starts (202), `GET` returns `{"running":true}` until the result is there.
+
+```bash
+curl -X POST http://openpelletbridge.local/api/loxone/test
+curl http://openpelletbridge.local/api/loxone/test
+# {"at":1795772344,"webService":{"http":200,"ok":true,"structureVersion":"2026-11-27 10:00:00",
+#  "pushes":[{"key":"state","target":"Kachel_State","value":"4","ok":true},...]},"ok":true}
+
+curl -X POST http://openpelletbridge.local/api/loxone/controls
+curl "http://openpelletbridge.local/api/loxone/controls?q=kachel"
+# {"ok":true,"count":603,"truncated":false,"lastModified":"2026-11-27 10:00:00",
+#  "matches":[["Kachel_State","InfoOnlyAnalog","0b73…","Technisch"],...],"more":false}
+```
+
+`ids=<uuid or name>,…` looks up exact entries (the web app shows the names of the inputs already set).
 
 ### `/api/wifi`
 

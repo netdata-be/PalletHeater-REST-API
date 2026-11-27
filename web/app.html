@@ -275,8 +275,20 @@ details.tbl th:first-child,details.tbl td:first-child{text-align:left}
 .mqform label:has(input[type=checkbox]){flex-direction:row;align-items:center;justify-content:space-between;color:var(--text)}
 .bzev{display:grid;grid-template-columns:auto 1fr auto auto;gap:6px 8px;align-items:center;grid-column:1/-1;color:var(--text)}
 .bzev select{font-size:13px;padding:5px 8px}
-.mqform input:not([type=checkbox]){width:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:7px 10px;color:var(--text)}
+.mqform input:not([type=checkbox]),.mqform select{width:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:7px 10px;color:var(--text)}
 @media (max-width:420px){.mqform{grid-template-columns:1fr}}
+.loxdisc{grid-column:1/-1;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.loxdisc button{padding:5px 10px;font-size:13px}
+.loxmap{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.5fr) minmax(0,1.5fr);gap:4px 10px;align-items:start}
+.loxmap .lxg{grid-column:1/-1;font-weight:650;color:var(--text);margin-top:8px;padding-bottom:2px;border-bottom:1px solid var(--line)}
+.loxmap .lxk{display:flex;flex-direction:column;color:var(--text);padding-top:6px;min-width:0}
+.loxmap .lxk code{font-size:11px;color:var(--muted)}
+.loxmap .lxv{padding-top:6px;color:var(--muted);font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.loxmap .lxi{display:flex;flex-direction:column;gap:2px;min-width:0}
+.loxmap small,.mqform label small{font-size:11px;overflow-wrap:anywhere}
+@media (max-width:420px){.loxmap{grid-template-columns:minmax(0,1fr) auto}.loxmap .lxi{grid-column:1/-1}}
+.loxtest{font-size:13px;display:flex;flex-direction:column;gap:4px;margin:0 0 10px}
+.loxtest div{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .fwprog{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin:0 0 10px}
 .fwprog div{height:100%;width:0;background:var(--accent);transition:width .2s}
 .keybtns button{padding:5px 10px;font-size:13px}
@@ -698,6 +710,28 @@ button.mini{padding:1px 8px;font-size:11px;font-weight:550;border-radius:7px;mar
     </form>
   </section>
 
+  <!-- Loxone: GET / POST /api/loxone/config, line on GET /api/loxone (firmware loxone.h) -->
+  <section class="card" id="loxCard">
+    <h2><span><span>Loxone</span><span data-help="loxone"></span></span><span class="keybtns"><button id="loxTest" data-i="loxTest"></button><button id="loxEdit" data-i="mqttEdit"></button></span></h2>
+    <dl id="loxList"></dl>
+    <div id="loxTestOut" class="loxtest" hidden></div>
+    <form id="loxForm" class="mqform" hidden autocomplete="off">
+      <label><span>Miniserver</span><input id="lxHost" placeholder="192.168.1.20" spellcheck="false"></label>
+      <label><span data-i="loxPort"></span><input id="lxPort" type="number" min="1" max="65535" placeholder="80"></label>
+      <label><span data-i="mqttUser"></span><input id="lxUser" spellcheck="false" autocomplete="off"></label>
+      <label><span data-i="mqttPass"></span><input id="lxPass" type="password" autocomplete="new-password"></label>
+      <label><span data-i="loxPush"></span><input type="checkbox" id="lxPush"></label>
+      <label><span data-i="loxInterval"></span><input id="lxInterval" type="number" min="10" max="3600" placeholder="60"></label>
+      <label><span data-i="loxLang"></span><select id="lxLang"><option value="auto" data-i="loxLangAuto"></option><option value="nl">Nederlands</option><option value="en">English</option></select></label>
+      <div class="loxdisc"><button type="button" id="lxDiscover" data-i="loxDiscover"></button><span class="muted" id="lxDiscInfo"></span></div>
+      <label style="grid-column:1/-1"><span data-i="loxSwitch"></span><input id="lxSwitch" list="lxCtls" spellcheck="false" placeholder="–"><small class="muted" id="lxSwitchName"></small></label>
+      <p class="muted" style="grid-column:1/-1;margin:0" data-i="loxMapNote"></p>
+      <div id="lxMap" class="loxmap"></div>
+      <datalist id="lxCtls"></datalist>
+      <div class="actions" style="justify-content:flex-end;grid-column:1/-1;margin-top:4px"><button type="button" id="lxCancel" data-i="cancel"></button><button type="submit" class="primary" id="lxSave" data-i="save2"></button></div>
+    </form>
+  </section>
+
   <!-- Buzzer of the S3 board: GET /api/buzzer, shown only when the firmware answers 200 -->
   <section class="card" id="bzCard" hidden>
     <h2><span><span data-i="bzTitle"></span><span data-help="buzzer"></span></span><span class="keybtns"><label class="switch"><input type="checkbox" id="bzToggle"><span></span></label><button id="bzStop" data-i="bzStop"></button></span></h2>
@@ -863,7 +897,15 @@ const I18N = {
     rsNothing:"nothing received, no echo: bus not connected (cable / interface?)", rsNoEcho:"no echo of TX (received {0}): bus not connected or line stuck (cable / interface?)",
     rsEchoShort:"echo incomplete ({0} of {1} bytes): bus not connected?", rsNoAnswer:"echo OK, the stove did not answer ({0} of {1} bytes)", rsWrongConfirm:"the stove confirmed another address / value",
     mqttNeedHost:"Set the broker first", mqttOnToast:"MQTT on", mqttOffToast:"MQTT off",
-    btNone:"Not in this firmware (built without Bluetooth)",
+    btNone:"Not in this firmware (built without Bluetooth)", loxLang:"Language of the texts", loxLangAuto:"As the remote control", loxLangNow:"Texts",
+    loxTest:"Test", loxPort:"Port (web service)", loxInterval:"Heartbeat (s)", loxPush:"Web service push",
+    loxDiscover:"Read inputs from the Miniserver", loxDiscBusy:"Reading the structure file of the Miniserver…", loxDiscDone:"{0} controls read – type part of a name, room or type in a field to search", loxDiscTrunc:" (not all: no more space on the controller – type the names of the others)",
+    loxSwitch:"Switch that follows on / off (name or UUID; empty = none)", loxMapNote:"Per value the virtual input that receives it: name or UUID (after reading the inputs: type to search and pick), empty = not sent. Use a Virtual Text Input for the text values. Events go at once, slow values (temperatures, kg, hours) at most every 60 s after a real difference, and everything again every 5 min.",
+    loxOk:"working", loxErr:"error", loxPushRow:"Web service", loxPushCount:"{0} pushes, {1} refused", loxTargets:"Inputs", loxSwitchShort:"switch", loxHttp:"HTTP input (URL)",
+    loxAgo:"{0} s ago", loxSaved:"Loxone settings saved", loxNeedHost:"Set the Miniserver address first", loxTesting:"Testing…", loxTestOk:"Test ok", loxTestFail:"Test failed", loxTimeout:"no result after 40 s",
+    loxWs:"Web service (user / password)", loxStruct:"structure file {0}",
+    loxSwNote:"The switch is not pushed by the test: Loxone would send a power command", loxNotFound:"not in the list of the Miniserver", loxNoMap:"no inputs set: only the connection was tested",
+    h_loxone:"Two ways to get the stove into Loxone. 1. Virtual HTTP Input on GET /api/loxone: one line with numbers only (opb seq=… state=4 power=1 … kg=9.2), command recognition e.g. errId=\\v. true / false are 1 / 0, unknown is -1, and no key name ends with another one. seq goes up at every change and at least every heartbeat: alarm in Loxone when it stops. 2. Web service push: the controller sets virtual inputs itself (/jdev/sps/io/<input>/<value>, Basic auth), at once at a change, and a switch that follows on / off (stable for 5 s). Error texts go to a Virtual Text Input. Add the HTTP header X-Source: loxone to the virtual outputs that send commands (power, fan, flame, set point): those changes are not pushed back. If switching on is refused (pellets used up) or fails, the switch is pushed back to Off at once. 'Read inputs' reads the structure file of the Miniserver (kept on the controller); then type in a field to search by name, room or type (e.g. InfoOnly). An input that is not in the list can be typed by name. Use a separate Loxone user with as few rights as possible: Basic auth over plain HTTP can be read on the network. The password is stored on the controller and never shown.",
     reset:"Reset", resetConfirm:"Reset the {0}?", resetDone:"{0} reset", crashCounter:"crash counter", serialCounters:"serial counters", serialSkipped:"{0} skipped (link down)",
     evLinkDown:"Serial lost", evLinkUp:"Serial back", evtLink:"Serial link",
     board:"Controller board", boardOpb:"OpenPelletBridge board (ESP32-S3)", boardDevkit:"ESP32 DevKit", hwRev:"rev. {0}", pwrSrc:"Power source", pwrStove:"Stove supply", pwrUsb:"USB", pwrSince:"since {0}",
@@ -1051,7 +1093,15 @@ pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low 
     rsNothing:"niets ontvangen, geen echo: bus niet verbonden (kabel / interface?)", rsNoEcho:"geen echo van TX (ontvangen {0}): bus niet verbonden of lijn hangt vast (kabel / interface?)",
     rsEchoShort:"echo onvolledig ({0} van {1} bytes): bus niet verbonden?", rsNoAnswer:"echo OK, de kachel antwoordde niet ({0} van {1} bytes)", rsWrongConfirm:"de kachel bevestigde een ander adres / andere waarde",
     mqttNeedHost:"Stel eerst de broker in", mqttOnToast:"MQTT aan", mqttOffToast:"MQTT uit",
-    btNone:"Niet in deze firmware (gebouwd zonder Bluetooth)",
+    btNone:"Niet in deze firmware (gebouwd zonder Bluetooth)", loxLang:"Taal van de teksten", loxLangAuto:"Zoals de afstandsbediening", loxLangNow:"Teksten",
+    loxTest:"Test", loxPort:"Poort (webservice)", loxInterval:"Heartbeat (s)", loxPush:"Webservice-push",
+    loxDiscover:"Ingangen ophalen uit de Miniserver", loxDiscBusy:"Structuurbestand van de Miniserver ophalen…", loxDiscDone:"{0} bedieningselementen gelezen – typ een deel van een naam, ruimte of type in een veld om te zoeken", loxDiscTrunc:" (niet alle: geen plaats meer op de controller – typ de namen van de andere)",
+    loxSwitch:"Schakelaar die aan / uit volgt (naam of UUID; leeg = geen)", loxMapNote:"Per waarde de virtuele ingang die ze krijgt: naam of UUID (na het ophalen van de ingangen: typ om te zoeken en kies), leeg = niet versturen. Gebruik een virtuele tekstingang voor de tekstwaarden. Gebeurtenissen gaan meteen, trage waarden (temperaturen, kg, uren) hoogstens elke 60 s na een echt verschil, en alles opnieuw elke 5 min.",
+    loxOk:"werkt", loxErr:"fout", loxPushRow:"Webservice", loxPushCount:"{0} pushes, {1} geweigerd", loxTargets:"Ingangen", loxSwitchShort:"schakelaar", loxHttp:"HTTP-ingang (URL)",
+    loxAgo:"{0} s geleden", loxSaved:"Loxone-instellingen bewaard", loxNeedHost:"Stel eerst het adres van de Miniserver in", loxTesting:"Bezig met testen…", loxTestOk:"Test geslaagd", loxTestFail:"Test mislukt", loxTimeout:"geen resultaat na 40 s",
+    loxWs:"Webservice (gebruiker / wachtwoord)", loxStruct:"structuurbestand {0}",
+    loxSwNote:"De schakelaar wordt niet getest: Loxone zou dan een aan/uit-commando sturen", loxNotFound:"niet in de lijst van de Miniserver", loxNoMap:"geen ingangen ingesteld: enkel de verbinding is getest",
+    h_loxone:"Twee manieren om de kachel in Loxone te krijgen. 1. Virtuele HTTP-ingang op GET /api/loxone: één regel met enkel getallen (opb seq=… state=4 power=1 … kg=9.2), commandoherkenning bv. errId=\\v. true / false zijn 1 / 0, onbekend is -1, en geen sleutel eindigt op een andere. seq stijgt bij elke wijziging en minstens elke heartbeat: zo kan Loxone melden dat de kachel niet meer rapporteert. 2. Webservice-push: de controller zet zelf virtuele ingangen (/jdev/sps/io/<ingang>/<waarde>, Basic auth), meteen bij een wijziging, en een schakelaar die aan / uit volgt (5 s stabiel). Fout-teksten gaan naar een virtuele tekstingang. Zet de HTTP-header X-Source: loxone bij de virtuele uitgangen die commando's sturen (aan/uit, ventilator, vlam, gewenste temperatuur): die wijzigingen worden niet teruggestuurd. Wordt inschakelen geweigerd (pellets op) of mislukt het, dan gaat de schakelaar meteen terug op Uit. 'Ingangen ophalen' leest het structuurbestand van de Miniserver (bewaard op de controller); typ daarna in een veld om te zoeken op naam, ruimte of type (bv. InfoOnly). Een ingang die niet in de lijst staat, kan je met de naam intypen. Gebruik een aparte Loxone-gebruiker met zo weinig rechten als mogelijk: Basic auth over gewone HTTP is leesbaar op het netwerk. Het wachtwoord blijft op de controller en wordt nooit getoond.",
     reset:"Reset", resetConfirm:"De {0} op nul zetten?", resetDone:"{0} op nul gezet", crashCounter:"crashteller", serialCounters:"seriële tellers", serialSkipped:"{0} overgeslagen (link weg)",
     evLinkDown:"Serieel weg", evLinkUp:"Serieel terug", evtLink:"Seriële link",
     board:"Controllerbord", boardOpb:"OpenPelletBridge-bord (ESP32-S3)", boardDevkit:"ESP32 DevKit", hwRev:"rev. {0}", pwrSrc:"Voeding", pwrStove:"Voeding kachel", pwrUsb:"USB", pwrSince:"sinds {0}",
@@ -1417,7 +1467,7 @@ function helpBtn(key) {
     ev.stopPropagation();
     if (popOwner === b) { hidePop(); return; }
     hidePop();
-    pop.textContent = t(key); if (!["h_par", "h_mqtt", "h_wifi", "h_ghUpdate", "h_https", "h_buzzer"].includes(key)) pop.appendChild(el("span", "src", t("manualRef")));   // these texts are not from the manual
+    pop.textContent = t(key); if (!["h_par", "h_mqtt", "h_loxone", "h_wifi", "h_ghUpdate", "h_https", "h_buzzer"].includes(key)) pop.appendChild(el("span", "src", t("manualRef")));   // these texts are not from the manual
     pop.style.display = "block";
     const r = b.getBoundingClientRect(), w = Math.min(340, window.innerWidth - 24);
     pop.style.maxWidth = w + "px";
@@ -2245,6 +2295,189 @@ $("mqttForm").onsubmit = async e => {
   if ($("mqPass").value) p.password = $("mqPass").value;
   try { mqttCfg = await write(t("mqttSaved"), "POST", "/api/mqtt", p); $("mqttForm").hidden = true; } catch (_) {}
   renderMqtt(); setTimeout(loadMqtt, 4000);   // the connection is made from the loop, shortly after saving
+};
+
+// ---------- Loxone (firmware loxone.h) ----------
+let lox = null;
+// controls of the Miniserver, searched on the controller (GET /api/loxone/controls?q=): [name, type, uuid, room]
+let loxCount = 0;                                   // controls read from the structure file (0 = not read)
+const loxKnown = new Map(), loxMissing = new Set();  // uuid / name -> row; looked up but not found
+const LOX_GROUPS = [
+  [["Status", "Status"], ["seq", "state", "stateText", "power", "burn", "link", "age"]],
+  [["Fouten en waarschuwingen", "Errors and warnings"], ["errId", "errText", "pendId", "pendSec", "memErr", "warn", "warnText", "warnShort", "wRemote"]],
+  [["Temperaturen", "Temperatures"], ["room", "setp", "tStove", "tRemote", "fume"]],
+  [["Werking", "Operation"], ["flame", "flameAct", "fan", "fanRun", "esOn", "esStop", "esStart", "auger", "brzMin"]],
+  [["Pellets", "Pellets"], ["kg", "hNow", "hAvg", "alarmMin", "lowPel", "resMin", "resOff", "kgToday", "kgDay", "eurMonth", "bags"]],
+  [["Overige", "Other"], ["svcH", "runH", "starts", "rssi"]],
+];
+const LOX_LABEL = {
+  seq: ["Teller (heartbeat)", "Counter (heartbeat)"], state: ["Toestand (0 – 10, -1 geen verbinding)", "State (0 – 10, -1 no connection)"], stateText: ["Toestand (tekst)", "State (text)"],
+  power: ["Aan (1 / 0; alarm = 0)", "On (1 / 0; alarm = 0)"], burn: ["Vuur (ontsteking, branden, reinigen)", "Fire (ignition, working, cleaning)"], link: ["Verbinding met de kachel", "Link to the stove"], age: ["Ouderdom gegevens (s)", "Data age (s)"],
+  errId: ["Fout-id (0 geen, -1 LINK, -2 PELLETS)", "Error id (0 none, -1 LINK, -2 PELLETS)"], errText: ["Fout (tekst)", "Error (text)"], pendId: ["Fout in aftelling (id)", "Error counting down (id)"],
+  pendSec: ["Seconden tot de kachel reageert", "Seconds until the stove acts"], memErr: ["Fouten in het geheugen", "Errors in the memory"], warn: ["Waarschuwing", "Warning"], warnText: ["Waarschuwing (tekst)", "Warning (text)"], warnShort: ["Waarschuwing (kort, voor een tegel)", "Warning (short, for a tile)"],
+  wRemote: ["Sensor afstandsbediening niet gebruikt", "Remote control sensor not used"],
+  room: ["Kamertemperatuur", "Room temperature"], setp: ["Gewenste temperatuur", "Set point"], tStove: ["Sensor kachel", "Stove sensor"], tRemote: ["Sensor afstandsbediening", "Remote control sensor"], fume: ["Rookgastemperatuur", "Fume temperature"],
+  flame: ["Vlamvermogen (instelling)", "Flame power (setting)"], flameAct: ["Vlamvermogen (werkelijk)", "Flame power (actual)"], fan: ["Ventilator (instelling)", "Room fan (setting)"], fanRun: ["Ventilator draait", "Room fan turning"],
+  esOn: ["Energy saving aan", "Energy saving on"], esStop: ["ES: stop boven gewenste temp.", "ES: stop above set point"], esStart: ["ES: herstart onder gewenste temp.", "ES: restart below set point"],
+  auger: ["Schroef (%)", "Auger (%)"], brzMin: ["Min. tot branderreiniging", "Min. to brazier cleaning"],
+  kg: ["Pellets tot alarm (kg)", "Pellets until the alarm (kg)"], hNow: ["Uren tot alarm (huidig verbruik)", "Hours to the alarm (current use)"], hAvg: ["Uren tot alarm (gemiddeld)", "Hours to the alarm (average)"],
+  alarmMin: ["Minuten tot verwacht alarm", "Minutes to the expected alarm"], lowPel: ["Pelletalarm van de kachel", "Low pellet alarm of the stove"], resMin: ["Reserve: min. tot alarm", "Reserve: min. to the alarm"],
+  resOff: ["Uitgeschakeld: pellets op", "Switched off: pellets used up"], kgToday: ["Verbruik vandaag (kg)", "Used today (kg)"], kgDay: ["Verbruik per dag (kg)", "Use per day (kg)"],
+  eurMonth: ["Kost per maand (€)", "Cost per month (€)"], bags: ["Voorraad (zakken)", "Stock (bags)"],
+  svcH: ["Uren sinds onderhoud", "Hours since service"], runH: ["Werkuren", "Working hours"], starts: ["Aantal starts", "Number of starts"], rssi: ["WiFi-signaal (dBm)", "WiFi signal (dBm)"],
+};
+const loxWait = ms => new Promise(r => setTimeout(r, ms));
+function loxCtlName(v) {
+  if (!v) return "";
+  const c = loxKnown.get(v);
+  return c ? [c[0], c[3], c[1]].filter(Boolean).join(" · ") : loxMissing.has(v) ? t("loxNotFound") : "";
+}
+function loxRemember(rows) { for (const r of rows || []) { loxKnown.set(r[2], r); if (!loxKnown.has(r[0])) loxKnown.set(r[0], r); } }
+// the names of the inputs already set (UUIDs are not readable)
+async function loxResolve() {
+  const vals = [...$("lxMap").querySelectorAll("input")].map(i => i.value.trim()).concat($("lxSwitch").value.trim()).filter(v => v && !loxKnown.has(v));
+  if (!vals.length || !loxCount) return;
+  try {
+    const r = (await api("GET", "/api/loxone/controls", { ids: [...new Set(vals)].slice(0, 50).join(",") })).data;
+    loxRemember(r.matches);
+    for (const v of vals) if (!loxKnown.has(v)) loxMissing.add(v);
+  } catch (_) {}
+  refreshLoxNames();
+}
+function refreshLoxNames() {
+  $("lxMap").querySelectorAll("input").forEach(i => i.oninput && i.loxName());
+  $("lxSwitchName").textContent = loxCtlName($("lxSwitch").value.trim());
+}
+// search while typing: the matches go into the one datalist the fields share
+let loxSearchTimer = 0, loxSearchSeq = 0;
+function loxSearch(inp) {
+  clearTimeout(loxSearchTimer);
+  const q = inp.value.trim();
+  if (!loxCount || q.length < 2 || loxKnown.has(q)) return;
+  loxSearchTimer = setTimeout(async () => {
+    const my = ++loxSearchSeq;
+    try {
+      const r = (await api("GET", "/api/loxone/controls", { q })).data;
+      if (my !== loxSearchSeq) return;
+      loxRemember(r.matches);
+      const dl = $("lxCtls"); dl.innerHTML = "";
+      for (const [name, type, uuid, room] of r.matches || []) { const o = el("option"); o.value = uuid; o.label = [name, room, type].filter(Boolean).join(" · "); dl.appendChild(o); }
+      if (!(r.matches || []).length) loxMissing.add(q);
+      refreshLoxNames();
+    } catch (_) {}
+  }, 250);
+}
+function renderLox() {
+  const c = lox;
+  if (!c) { fillDl($("loxList"), [[t("status"), t("mqttNone")]]); $("loxEdit").disabled = true; $("loxTest").disabled = true; return; }
+  $("loxEdit").disabled = false; $("loxTest").disabled = false;
+  const s = c.status || {}, on = c.push;
+  const failing = s.lastError && (s.lastOkSecondsAgo == null || s.lastErrorSecondsAgo < s.lastOkSecondsAgo);
+  const rows = [[t("status"), !on ? pill(t("mqttOff"), "") : failing ? pill(t("loxErr"), "err") : pill(t("loxOk"), "ok")]];
+  rows.push(["Miniserver", c.host ? c.host + ":" + c.port : "–"]);
+  rows.push([t("loxPushRow"), c.push ? t("loxPushCount", s.pushes ?? 0, s.pushFailed ?? 0) : t("off")]);
+  const n = Object.keys(c.map || {}).length;
+  rows.push([t("loxTargets"), n + (c.switch ? " + " + t("loxSwitchShort") : "")]);
+  if (c.langActive) rows.push([t("loxLangNow"), (c.langActive === "nl" ? "Nederlands" : "English") + (c.lang === "auto" ? " (" + t("loxLangAuto").toLowerCase() + ")" : ""), true]);
+  if (s.lastError) rows.push([t("mqttLastError"), s.lastError + " (" + t("loxAgo", s.lastErrorSecondsAgo) + ")"]);
+  rows.push([t("loxHttp"), "http://" + location.hostname + "/api/loxone", true], ["seq", String(s.seq ?? "–"), true]);
+  fillDl($("loxList"), rows);
+}
+function buildLoxMap() {
+  const box = $("lxMap"); box.innerHTML = "";
+  const vals = Object.fromEntries(((lox && lox.keys) || []).map(k => [k.key, k.value]));
+  const map = (lox && lox.map) || {}, li = lang === "nl" ? 0 : 1;
+  for (const [g, keys] of LOX_GROUPS) {
+    box.appendChild(el("div", "lxg", g[li]));
+    for (const k of keys) {
+      const lab = el("div", "lxk"); lab.append(el("span", "", (LOX_LABEL[k] || [k, k])[li]), el("code", "", k));
+      const v = el("div", "lxv", vals[k] ?? "–"); v.title = vals[k] ?? "";
+      const inp = el("input"); inp.dataset.key = k; inp.setAttribute("list", "lxCtls"); inp.spellcheck = false; inp.placeholder = "–"; inp.value = map[k] || "";
+      inp.setAttribute("aria-label", (LOX_LABEL[k] || [k, k])[li]);
+      const nm = el("small", "muted", loxCtlName(inp.value));
+      inp.loxName = () => { nm.textContent = loxCtlName(inp.value.trim()); };
+      inp.oninput = () => { inp.loxName(); loxSearch(inp); };
+      const cell = el("div", "lxi"); cell.append(inp, nm);
+      box.append(lab, v, cell);
+    }
+  }
+}
+function fillLoxForm() {
+  const c = lox || {};
+  $("lxHost").value = c.host || ""; $("lxPort").value = c.port || 80; $("lxUser").value = c.user || "";
+  $("lxPass").value = ""; $("lxPass").placeholder = c.passwordSet ? t("mqttPassKeep") : "";
+  $("lxInterval").value = c.interval || 60; $("lxLang").value = c.lang || "auto";
+  $("lxPush").checked = !!c.push; $("lxSwitch").value = c.switch || ""; $("lxSwitchName").textContent = loxCtlName(c.switch || "");
+  buildLoxMap();
+  // controls read before (kept on the controller): search and names right away
+  api("GET", "/api/loxone/controls").then(r => { const d = r.data || {}; loxCount = d.ok ? d.count || 0 : 0; loxCtlInfo(d); loxResolve(); }).catch(() => {});
+}
+function loxCtlInfo(d) { $("lxDiscInfo").textContent = d && d.ok && d.count ? t("loxDiscDone", d.count) + (d.truncated ? t("loxDiscTrunc") : "") + (d.lastModified ? " · " + d.lastModified : "") : d && d.error ? d.error : ""; }
+async function loadLox() {
+  try { lox = (await api("GET", "/api/loxone/config")).data; } catch (_) { lox = null; }
+  renderLox();
+}
+async function saveLox(label) {
+  const host = $("lxHost").value.trim(), push = $("lxPush").checked;
+  if (push && !host) { toast(t("loxNeedHost"), true); $("lxHost").focus(); throw new Error(t("loxNeedHost")); }
+  const map = {};
+  $("lxMap").querySelectorAll("input").forEach(i => { const v = i.value.trim(); if (v) map[i.dataset.key] = v; });
+  const p = { host, port: $("lxPort").value || 80, user: $("lxUser").value.trim(),
+              interval: $("lxInterval").value || 60, lang: $("lxLang").value, push, switch: $("lxSwitch").value.trim(), map: JSON.stringify(map) };
+  if ($("lxPass").value) p.password = $("lxPass").value;
+  lox = await write(label, "POST", "/api/loxone/config", p);
+  $("lxPass").value = ""; $("lxPass").placeholder = lox.passwordSet ? t("mqttPassKeep") : "";
+  renderLox();
+}
+// a job on the controller (test / read the controls): start it, then ask for the result every second
+async function loxJob(path) {
+  await api("POST", path);
+  for (let i = 0; i < 40; i++) {
+    await loxWait(1000);
+    const r = (await api("GET", path)).data;
+    if (r && !r.running) return r;
+  }
+  throw new Error(t("loxTimeout"));
+}
+$("loxEdit").onclick = () => { const f = $("loxForm"); f.hidden = !f.hidden; if (!f.hidden) fillLoxForm(); };
+$("lxCancel").onclick = () => { $("loxForm").hidden = true; };
+$("lxSwitch").oninput = () => { $("lxSwitchName").textContent = loxCtlName($("lxSwitch").value.trim()); loxSearch($("lxSwitch")); };
+$("loxForm").onsubmit = async e => {
+  e.preventDefault();
+  try { await saveLox(t("loxSaved")); $("loxForm").hidden = true; } catch (_) {}
+};
+$("lxDiscover").onclick = async () => {
+  const b = $("lxDiscover"), info = $("lxDiscInfo");
+  if (!$("lxHost").value.trim()) { toast(t("loxNeedHost"), true); $("lxHost").focus(); return; }
+  b.disabled = true; info.textContent = t("loxDiscBusy");
+  try {
+    await saveLox(t("loxSaved"));   // the controller reads with the address and login in the form
+    const r = await loxJob("/api/loxone/controls");
+    if (!r.ok) throw new Error(r.error || "?");
+    loxCount = r.count || 0; loxKnown.clear(); loxMissing.clear();
+    loxCtlInfo(r); loxResolve();
+  } catch (e) { info.textContent = e.message; }
+  finally { b.disabled = false; }
+};
+$("loxTest").onclick = async () => {
+  const out = $("loxTestOut"), b = $("loxTest");
+  if (!$("loxForm").hidden) { try { await saveLox(t("loxSaved")); } catch (_) { return; } }
+  out.hidden = false; out.textContent = t("loxTesting"); b.disabled = true;
+  const line = (ok, text) => { const d = el("div"); d.append(pill(ok ? "OK" : t("loxErr"), ok ? "ok" : "err"), el("span", "", text)); out.appendChild(d); };
+  try {
+    const r = await loxJob("/api/loxone/test");
+    out.textContent = "";
+    out.appendChild(el("strong", "", r.ok ? t("loxTestOk") : t("loxTestFail")));
+    if (r.error) line(false, r.error);
+    const w = r.webService;
+    if (w) {
+      line(w.ok, t("loxWs") + (w.structureVersion ? " · " + t("loxStruct", w.structureVersion) : "") + (w.error ? ": " + w.error : ""));
+      for (const p of w.pushes || []) line(p.ok, p.key + " → " + p.target + " = " + p.value + (p.error ? ": " + p.error : ""));
+      if (w.ok && !(w.pushes || []).length) out.appendChild(el("span", "muted", t("loxNoMap")));
+      if (w.switch) out.appendChild(el("span", "muted", t("loxSwNote")));
+    }
+  } catch (e) { out.textContent = t("loxTestFail") + ": " + e.message; }
+  finally { b.disabled = false; loadLox(); }
 };
 
 // ---------- Buzzer (S3 board; the DevKit answers 404 and the card stays hidden) ----------
@@ -3612,7 +3845,7 @@ function applyExpert() {
 }
 $("expertBtn").onclick = () => {
   expert = !expert; try { localStorage.setItem("expert", expert ? "1" : "0"); } catch (_) {}
-  applyExpert(); renderHistory(); renderMqtt(); renderWifi(); if (expert) loadPlan();
+  applyExpert(); renderHistory(); renderMqtt(); renderLox(); renderWifi(); if (expert) loadPlan();
 };
 $("debugBtn").onclick = () => {
   debug = !debug; try { localStorage.setItem("debug", debug ? "1" : "0"); } catch (_) {}
@@ -4387,8 +4620,8 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) { po
 
 applyStatic(); applyExpert(); renderTimers();
 // Read the remote first so the page starts in the right language
-pollRemote().finally(() => poll().then(() => { loadTimers(); loadHistory(); loadBt(); loadSecurity(); loadLeds(); loadMqtt(); loadWifi(); loadFw(); loadParams(); loadPelDbg(); loadUse(); loadBuzzer(); }));
-setInterval(() => { if (!document.hidden && !offline) { loadMqtt(); loadWifi(); if (!fwInfo || !["checking", "downloading", "restarting"].includes(fwInfo.state)) loadFw(); } }, 30000);
+pollRemote().finally(() => poll().then(() => { loadTimers(); loadHistory(); loadBt(); loadSecurity(); loadLeds(); loadMqtt(); loadLox(); loadWifi(); loadFw(); loadParams(); loadPelDbg(); loadUse(); loadBuzzer(); }));
+setInterval(() => { if (!document.hidden && !offline) { loadMqtt(); if ($("loxForm").hidden) loadLox(); loadWifi(); if (!fwInfo || !["checking", "downloading", "restarting"].includes(fwInfo.state)) loadFw(); } }, 30000);
 </script>
 </body>
 </html>

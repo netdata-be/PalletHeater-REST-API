@@ -366,10 +366,14 @@ static void test_error_table()
     TEST_ASSERT_EQUAL_STRING("---", pc::errorCode(77));             // unknown value
     TEST_ASSERT_EQUAL_STRING("Unknown error", pc::errorDesc(77));
     TEST_ASSERT_EQUAL_STRING("No Error", pc::errorDesc(0));
+    TEST_ASSERT_EQUAL_STRING("Fout rookgasventilator", pc::errorDescNl(129));
+    TEST_ASSERT_EQUAL_STRING("Onbekende fout", pc::errorDescNl(77));
+    TEST_ASSERT_EQUAL_STRING("Kachel brandt", pc::stoveStateNameNl(4));
+    for (int st = -1; st <= 10; st++) TEST_ASSERT_TRUE(pc::stoveStateNameNl(st)[0]);
     int n; const pc::ErrorInfo* t = pc::errorTable(n);
     TEST_ASSERT_TRUE(n >= 10);
     for (int i = 0; i < n; i++) {
-        TEST_ASSERT_TRUE(t[i].code[0] && t[i].desc[0]);
+        TEST_ASSERT_TRUE(t[i].code[0] && t[i].desc[0] && t[i].descNl && t[i].descNl[0]);
         for (int j = i + 1; j < n; j++) {
             TEST_ASSERT_NOT_EQUAL(t[i].id, t[j].id);                  // ids unique
             if (strcmp(t[i].code, "---") != 0) TEST_ASSERT_TRUE(strcmp(t[i].code, t[j].code) != 0);   // codes unique

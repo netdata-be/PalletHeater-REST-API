@@ -58,6 +58,8 @@
 
 #include "boardInfo.h"   // features, power source, chip temperature of the board
 
+#include "loxone.h"      // Loxone: number line (/api/loxone), Miniserver web service pushes
+
 #include "wifiInfo.h"
 
 #include "fwUpdate.h"
@@ -127,10 +129,10 @@ static void registerRoutes()
     wm.server->on("/get", authed(handleRouteDump));        // takes the bus per register itself
     wm.server->on("/set", authed(withStoveLock(getParams)));
 
-    wm.server->on("/api/flame", authed(withStoveLock(handleRouteFlamePower)));
-    wm.server->on("/api/fan", authed(withStoveLock(handleRouteFanspeed)));
+    wm.server->on("/api/flame", authed(loxEcho(withStoveLock(handleRouteFlamePower))));
+    wm.server->on("/api/fan", authed(loxEcho(withStoveLock(handleRouteFanspeed))));
     wm.server->on("/api/power", authed(withStoveLock(handleRoutePower)));
-    wm.server->on("/api/energysaving", authed(withStoveLock(handleRouteEnergysaving)));
+    wm.server->on("/api/energysaving", authed(loxEcho(withStoveLock(handleRouteEnergysaving))));
     wm.server->on("/api/errors", authed(withStoveLock(handleRouteErrors)));
     wm.server->on("/api/state", authed(getStatus));
     wm.server->on("/api/health", crumbed(withStoveLock(handleRouteHealth)));   // public: for monitoring without a key
@@ -138,7 +140,7 @@ static void registerRoutes()
     wm.server->on("/api/remote", authed(withStoveLock(handleRouteRemote)));
     wm.server->on("/api/burn", authed(withStoveLock(handleRouteBurn)));
     wm.server->on("/api/beep", authed(withStoveLock(handleRouteBeep)));
-    wm.server->on("/api/setpoint", authed(withStoveLock(handleRouteSetpoint)));
+    wm.server->on("/api/setpoint", authed(loxEcho(withStoveLock(handleRouteSetpoint))));
     wm.server->on("/api/timers",     authed(withStoveLock(handleRouteTimers)));
     wm.server->on("/api/timers/pr1", authed(withStoveLock(handleRouteTimer)));
     wm.server->on("/api/timers/pr2", authed(withStoveLock(handleRouteTimer)));
@@ -161,6 +163,10 @@ static void registerRoutes()
     wm.server->on("/api/telnet", authed(handleRouteTelnet));
     wm.server->on("/api/bluetooth", authed(handleRouteBluetooth));
     wm.server->on("/api/mqtt", authed(handleRouteMqtt));
+    wm.server->on("/api/loxone", authed(handleRouteLoxone));
+    wm.server->on("/api/loxone/config", authed(handleRouteLoxoneConfig));
+    wm.server->on("/api/loxone/test", authed(handleRouteLoxoneTest));
+    wm.server->on("/api/loxone/controls", authed(handleRouteLoxoneControls));
     wm.server->on("/api/wifi/scan", authed(handleRouteWifiScan));
     wm.server->on("/api/wifi", authed(handleRouteWifi));
     wm.server->on("/api/firmware", authed(handleRouteFirmware));
@@ -298,6 +304,7 @@ void setup()
         setupTelnet();
     }
     mqttSetup();   // connects from loop() once enabled and WiFi is up
+    loxoneSetup(); // own task for the network; values from loop()
     buzzerSetup(); // S3 board: buzzer task, watches the stove for its events (buzzer.h)
     netSetup();    // waits for confirmation of a new static IP
     stoveMutex = xSemaphoreCreateRecursiveMutex();
@@ -361,6 +368,7 @@ void loop()
     crumb("events");  eventsTick();
     crumb("pellets"); pelletsTick();
     crumb("MQTT");    mqttLoop();
+    crumb("Loxone");  loxoneLoop();
     crumb("network"); netLoop();
     crumb("firmware update check"); fwLoop();
     crumb("firmware confirm"); otaVerifyLoop();   // confirm a new firmware after 2 min with WiFi (otaVerify.h)

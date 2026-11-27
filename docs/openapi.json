@@ -3649,6 +3649,339 @@
         ]
       }
     },
+    "/api/loxone": {
+      "get": {
+        "summary": "Stove values as one line of numbers (Loxone Virtual HTTP Input)",
+        "description": "One plain text line: `opb seq=1834 state=7 power=1 burn=0 link=1 ... kg=9.5 hAvg=28.5 resMin=-1`. Numbers only: true / false are 1 / 0, unknown is -1. No key ends with another key, so a Loxone command recognition such as `errId=\\v` or `kg=\\v` is unambiguous. No timestamps: time left instead (alarmMin). `seq` goes up at every change of an event value and at least every heartbeat (interval in /api/loxone/config): Loxone can raise an alarm when it stops changing. Keys: seq, state, power, burn, link, age, errId (0 none, -1 LINK, -2 PELLETS), pendId, pendSec, memErr, warn, wRemote, room, setp, fume, tStove, tRemote, flame, flameAct, fan, fanRun, esOn, esStop, esStart, auger, kg, hNow, hAvg, alarmMin, kgToday, kgDay, eurMonth, bags, lowPel, resMin, resOff, brzMin, svcH, runH, starts, rssi.",
+        "responses": {
+          "200": {
+            "description": "The line",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "opb seq=12 state=4 power=1 burn=1 link=1 age=0 errId=0 pendId=0 pendSec=-1 memErr=0 warn=0 wRemote=0 room=20.5 setp=20 fume=74 tStove=21.0 tRemote=16.0 flame=3 flameAct=3 fan=1 fanRun=1 esOn=1 esStop=2 esStart=1 auger=38 kg=9.2 hNow=8.2 hAvg=27.2 alarmMin=1633 kgToday=2.6 kgDay=7.6 eurMonth=84 bags=11.0 lowPel=0 resMin=-1 resOff=0 brzMin=37 svcH=312 runH=5712 starts=1338 rssi=-70"
+              }
+            }
+          }
+        },
+        "tags": [
+          "Device"
+        ]
+      }
+    },
+    "/api/loxone/config": {
+      "get": {
+        "summary": "Loxone push settings and status",
+        "description": "Settings (without the password), push counters, the last error and every key with its current value.",
+        "responses": {
+          "200": {
+            "description": "Settings and status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoxoneSettings"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Device"
+        ]
+      },
+      "post": {
+        "summary": "Change the Loxone push settings",
+        "description": "Only the given parameters change; stored in NVS, used at once. With push on, the controller sets virtual inputs of the Miniserver itself: `GET http://<host>:<port>/jdev/sps/io/<input>/<value>` with Basic auth. Event values go at once, slow values (temperatures, kg, hours) at most every 60 s after a real difference, all again every 5 min; every answer is checked (HTTP 200 and the code in the LL answer). The switch follows powered on (On / Off, stable for 5 s). Commands from Loxone with the header `X-Source: loxone` (POST /api/power, /api/fan, /api/flame, /api/setpoint, /api/energysaving) are not pushed back; a refused or failed switch-on (409, 500) pushes the real state at once. Basic auth over plain HTTP can be read on the network: use a Loxone user with few rights.",
+        "parameters": [
+          {
+            "name": "host",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Miniserver IP or host name (a change clears the stored list of controls)"
+          },
+          {
+            "name": "port",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "default": 80
+            },
+            "description": "Miniserver HTTP port"
+          },
+          {
+            "name": "user",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Loxone user"
+          },
+          {
+            "name": "password",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Password; empty keeps the stored one, '-' clears it"
+          },
+          {
+            "name": "push",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Web service pushes on / off"
+          },
+          {
+            "name": "interval",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 10,
+              "maximum": 3600,
+              "default": 60
+            },
+            "description": "Heartbeat (s): seq goes up at least this often"
+          },
+          {
+            "name": "switch",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Name or UUID of a switch that follows on / off; empty = none"
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "auto",
+                "nl",
+                "en"
+              ],
+              "default": "auto"
+            },
+            "description": "Language of stateText, errText and warnText: auto = as the remote control (NLD -> Dutch, otherwise English)"
+          },
+          {
+            "name": "map",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "JSON object key -> name or UUID of a virtual input, e.g. {\"state\":\"Kachel_State\",\"errText\":\"Kachel_FoutTekst\"}. Keys: those of GET /api/loxone plus stateText, errText, warnText, warnShort (for a Virtual Text Input). Replaces the whole map."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoxoneSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameter"
+          }
+        },
+        "tags": [
+          "Device"
+        ]
+      }
+    },
+    "/api/loxone/test": {
+      "post": {
+        "summary": "Test the Miniserver connection",
+        "description": "Starts a test in the background: login (GET /jdev/sps/LoxAPPversion3), then every mapped value pushed once. The switch is never pushed by the test (Loxone would send a power command). Read the result with GET.",
+        "responses": {
+          "202": {
+            "description": "Started"
+          },
+          "409": {
+            "description": "A test or a read of the Miniserver is running"
+          }
+        },
+        "tags": [
+          "Device"
+        ]
+      },
+      "get": {
+        "summary": "Result of the last test",
+        "responses": {
+          "200": {
+            "description": "`{\"running\":true}` while it runs, then the result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "running": {
+                      "type": "boolean"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "at": {
+                      "type": "integer",
+                      "description": "Unix time"
+                    },
+                    "webService": {
+                      "type": "object",
+                      "properties": {
+                        "http": {
+                          "type": "integer"
+                        },
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "structureVersion": {
+                          "type": "string"
+                        },
+                        "error": {
+                          "type": "string"
+                        },
+                        "pushes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "target": {
+                                "type": "string"
+                              },
+                              "value": {
+                                "type": "string"
+                              },
+                              "ok": {
+                                "type": "boolean"
+                              },
+                              "error": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        },
+                        "switch": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Device"
+        ]
+      }
+    },
+    "/api/loxone/controls": {
+      "post": {
+        "summary": "Read the controls of the Miniserver",
+        "description": "Starts reading the structure file of the Miniserver (/data/LoxAPP3.json) in the background: name, type, UUID and room of every control, kept on the controller (SPIFFS, at most the free space minus 32 KB). The UUID is the one /jdev/sps/io takes.",
+        "responses": {
+          "202": {
+            "description": "Started"
+          },
+          "409": {
+            "description": "A test or a read of the Miniserver is running"
+          }
+        },
+        "tags": [
+          "Device"
+        ]
+      },
+      "get": {
+        "summary": "Search the controls read from the Miniserver",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Part of the name, room, type or UUID (case-insensitive); at most 40 matches"
+          },
+          {
+            "name": "ids",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma separated exact UUIDs or names (at most 50)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{\"running\":true}` while it reads",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "running": {
+                      "type": "boolean"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "truncated": {
+                      "type": "boolean",
+                      "description": "Not all controls: no more space"
+                    },
+                    "lastModified": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "more": {
+                      "type": "boolean",
+                      "description": "More than 40 matches"
+                    },
+                    "matches": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "description": "[name, type, uuid, room]",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Device"
+        ]
+      }
+    },
     "/api/wifi": {
       "get": {
         "summary": "WiFi status and IP settings",
@@ -5985,6 +6318,115 @@
           },
           "commands": {
             "type": "integer"
+          }
+        }
+      },
+      "LoxoneSettings": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string",
+            "description": "Only on POST"
+          },
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "user": {
+            "type": "string"
+          },
+          "passwordSet": {
+            "type": "boolean"
+          },
+          "interval": {
+            "type": "integer"
+          },
+          "push": {
+            "type": "boolean"
+          },
+          "switch": {
+            "type": "string"
+          },
+          "lang": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "nl",
+              "en"
+            ]
+          },
+          "langActive": {
+            "type": "string",
+            "enum": [
+              "nl",
+              "en"
+            ],
+            "description": "The language of the texts now"
+          },
+          "map": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer"
+              },
+              "pushes": {
+                "type": "integer"
+              },
+              "pushFailed": {
+                "type": "integer"
+              },
+              "lastOkSecondsAgo": {
+                "type": "integer",
+                "nullable": true
+              },
+              "lastError": {
+                "type": "string",
+                "nullable": true
+              },
+              "lastErrorSecondsAgo": {
+                "type": "integer",
+                "nullable": true
+              },
+              "switchState": {
+                "type": "string",
+                "enum": [
+                  "On",
+                  "Off"
+                ],
+                "nullable": true
+              }
+            }
+          },
+          "keys": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "event",
+                    "slow",
+                    "text"
+                  ]
+                },
+                "value": {
+                  "type": "string",
+                  "nullable": true
+                }
+              }
+            }
           }
         }
       },

@@ -21,6 +21,7 @@ The full OpenAPI 3 specification is in [docs/openapi.json](docs/openapi.json). T
 | [docs/handleiding.md](docs/handleiding.md) | Handleiding voor gebruikers (Nederlands) |
 | [docs/api.md](docs/api.md) | REST API: conventions, authentication, every endpoint, stove states and error codes |
 | [docs/mqtt.md](docs/mqtt.md) | MQTT and Home Assistant, metrics, Bluetooth, telnet |
+| [docs/loxone.md](docs/loxone.md) | Loxone: HTTP input with a line of numbers, pushes to the Miniserver (`/jdev/sps/io`), states and error ids |
 | [docs/debugging.md](docs/debugging.md) | Serial link, live debugging, restart reason, core dump, firmware updates |
 | [docs/development.md](docs/development.md) | Building and uploading, partitions, CI and releases, unit tests, source layout |
 | [docs/discovered-values.md](docs/discovered-values.md) | What is known about the stove registers |
@@ -74,7 +75,7 @@ Hold the reset button for 5 seconds to wipe the WiFi settings and restart the ca
 
 ![Timer programs PR1 – PR6](img/app-timers.png)
 
-**Device, network and MQTT** (*Expert* on). Stove and controller firmware, what the firmware is built for, why the controller last (re)started and how often it crashed, Bluetooth and API key, the firmware update from GitHub (*Install vX*), settings backup and restore. *Network (WiFi)* shows the connection and how often it dropped and why; *Other network* and *IP settings* change it. *MQTT* shows the broker connection and opens its settings.
+**Device, network and MQTT** (*Expert* on). Stove and controller firmware, what the firmware is built for, why the controller last (re)started and how often it crashed, Bluetooth and API key, the firmware update from GitHub (*Install vX*), settings backup and restore. *Network (WiFi)* shows the connection and how often it dropped and why; *Other network* and *IP settings* change it. *MQTT* shows the broker connection and opens its settings. *Loxone* sets up the push to a Loxone Miniserver: per value the virtual input that receives it (searched in the Miniserver's own list), the switch that follows on / off, and a test.
 
 ![Device, network and MQTT cards](img/app-device.png)
 
@@ -105,7 +106,7 @@ Hold the reset button for 5 seconds to wipe the WiFi settings and restart the ca
 - **Help:** (i) buttons next to settings, clock, timers and error codes with explanations taken from the stove manual (FWAR01).
 - **Clock:** sync the stove clock to NTP or to the browser time.
 - **Expert / Debug:** two toggles in the header (remembered per browser). *Expert* shows technical details: wireless sensor setting, fume fan, auger, brazier cleaning countdown, controller firmware / build / uptime, firmware upload, API / metrics links and the history table. *Debug* shows research and diagnostics: raw registers (room fan power RAM 0x0A, pellet reserve sensor / counter, raw remote edit value), serial errors and retries, the telnet switch and the EEPROM presets per power level (auger, fume fan). What is not verified yet is in [docs/discovered-values.md](docs/discovered-values.md).
-- **Network and MQTT:** a *Network (WiFi)* card (network, signal, IP address, gateway, hostname; DHCP or static IP and hostname can be changed) and an *MQTT* card (connection status, broker, topic prefix, discovery; settings). A small page with links is on `/device`.
+- **Network and MQTT:** a *Network (WiFi)* card (network, signal, IP address, gateway, hostname; DHCP or static IP and hostname can be changed), an *MQTT* card (connection status, broker, topic prefix, discovery; settings) and a *Loxone* card (Miniserver push, see [Loxone](docs/loxone.md)). A small page with links is on `/device`.
 - **Unreachable:** when the controller does not answer every card is greyed out and disabled; when only the stove does not answer (state −1) every card except *Device* is.
 - **Language:** Dutch when the remote control language is NLD, otherwise English; `/app?lang=nl` / `/app?lang=en` overrides it.
 

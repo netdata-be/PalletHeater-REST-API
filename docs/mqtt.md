@@ -56,7 +56,7 @@ mosquitto_pub -h broker -t openpelletbridge/set/setpoint -m 21
 
 **Home Assistant.** With *discovery* on (default), the controller also publishes retained configuration messages under `homeassistant/<component>/<client id>/<entity>/config`. Home Assistant (MQTT integration) then creates a device *OpenPelletBridge* with a thermostat (on/off and set point, current room temperature), switches for power and energy saving, numbers for set point, flame power and the energy saving offsets, a select for the fan and sensors / binary sensors for the values above. On the S3 board also a switch for the buzzer, a select for its sound and the buttons *Zoemer afspelen* (play) and *Zoemer stil* (stop), e.g. to play a sound from an automation. Nothing else is Home Assistant specific.
 
-**Loxone and others.** The state and command topics are plain MQTT and work with any client. Loxone needs an MQTT gateway for this (for example LoxBerry with the MQTT Gateway plugin) unless your Miniserver supports MQTT itself; check that for your Loxone version. Discovery can be switched off when Home Assistant is not used. Alternatively Loxone can call the REST API directly with virtual HTTP inputs and outputs.
+**Other clients.** The state and command topics are plain MQTT and work with any client (Node-RED, openHAB, …). Discovery can be switched off when Home Assistant is not used. For Loxone there is a direct integration without MQTT, see [loxone.md](loxone.md).
 
 The Home Assistant device carries the stove firmware as `hw_version` and the stove serial number (MATR) as `serial_number`, once they have been read.
 

@@ -385,6 +385,25 @@ inline const char* stoveStateName(int state)
     default: return "Unknown";
     }
 }
+// The same in Dutch (as the web app shows them)
+inline const char* stoveStateNameNl(int state)
+{
+    switch (state) {
+    case -1: return "Geen antwoord (seriële verbinding weg)";
+    case 0:  return "Uit";
+    case 1:  return "Start";
+    case 2:  return "Pellets laden";
+    case 3:  return "Ontsteking";
+    case 4:  return "Kachel brandt";
+    case 5:  return "Brander reinigen";
+    case 6:  return "Eindreiniging";
+    case 7:  return "Stand-by";
+    case 8:  return "Alarm";
+    case 9:  return "Ontsteking mislukt";
+    case 10: return "Alarm";
+    default: return "Onbekend";
+    }
+}
 inline bool stoveStateIsOn(int state)
 {
     // alarms (8, 9, 10) count as off: an off command writes nothing then (doStoveOff)
@@ -392,24 +411,25 @@ inline bool stoveStateIsOn(int state)
 }
 
 // Error memory / current error (RAM 0x6E): value -> display code and description.
-struct ErrorInfo { int id; const char* code; const char* desc; };
+// descNl: the Dutch description (texts pushed to Loxone in the language of the remote control)
+struct ErrorInfo { int id; const char* code; const char* desc; const char* descNl; };
 inline const ErrorInfo* errorTable(int& count)
 {
     static const ErrorInfo t[] = {
-        {   0, "---",        "No Error" },
-        {   1, "E8",         "Fume sensor error" },
-        {   2, "E4",         "Fume temperature too high" },
-        {   4, "E9",         "Ignition temperature not reached within limit" },
-        {   8, "E7",         "Fume temperature too low" },
-        {  16, "E3",         "Temperature inside stove too high" },
-        {  32, "E1",         "Pellet loading door is open for too long or air pressure inside stove is wrong" },
-        {  64, "E2",         "Pressure sensor error during ignition" },
-        { 128, "E6",         "Auger error - Too many pellets dispatched" },
-        { 129, "E12",        "Fume fan error" },
-        { 130, "E11",        "Unknown error - Not described in manual" },
-        { 132, "E19",        "External contact N.PEL / Pellet is active" },
-        { 136, "E13",        "Unknown error - Not described in manual" },
-        { 255, "PowerError", "Display shows power error" },
+        {   0, "---",        "No Error", "Geen fout" },
+        {   1, "E8",         "Fume sensor error", "Fout rookgassensor" },
+        {   2, "E4",         "Fume temperature too high", "Rookgastemperatuur te hoog" },
+        {   4, "E9",         "Ignition temperature not reached within limit", "Ontstekingstemperatuur niet bereikt binnen de tijd" },
+        {   8, "E7",         "Fume temperature too low", "Rookgastemperatuur te laag" },
+        {  16, "E3",         "Temperature inside stove too high", "Temperatuur in de kachel te hoog" },
+        {  32, "E1",         "Pellet loading door is open for too long or air pressure inside stove is wrong", "Laadklep te lang open of verkeerde luchtdruk in de kachel" },
+        {  64, "E2",         "Pressure sensor error during ignition", "Fout druksensor tijdens ontsteking" },
+        { 128, "E6",         "Auger error - Too many pellets dispatched", "Fout schroef - te veel pellets gedoseerd" },
+        { 129, "E12",        "Fume fan error", "Fout rookgasventilator" },
+        { 130, "E11",        "Unknown error - Not described in manual", "Onbekende fout - niet beschreven in de handleiding" },
+        { 132, "E19",        "External contact N.PEL / Pellet is active", "Extern contact N.PEL / pellets actief" },
+        { 136, "E13",        "Unknown error - Not described in manual", "Onbekende fout - niet beschreven in de handleiding" },
+        { 255, "PowerError", "Display shows power error", "Display toont stroomfout" },
     };
     count = (int)(sizeof(t) / sizeof(t[0]));
     return t;
@@ -422,6 +442,7 @@ inline const ErrorInfo* errorInfo(int id)
 }
 inline const char* errorCode(int id) { const ErrorInfo* e = errorInfo(id); return e ? e->code : "---"; }
 inline const char* errorDesc(int id) { const ErrorInfo* e = errorInfo(id); return e ? e->desc : "Unknown error"; }
+inline const char* errorDescNl(int id) { const ErrorInfo* e = errorInfo(id); return e ? e->descNl : "Onbekende fout"; }
 
 // ---- Firmware release asset ----------------------------------------------------
 // Which release asset to download, per board (BOARD_NAME, src/board.h). DevKit: the
