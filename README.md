@@ -8,7 +8,7 @@ ESP32 firmware that connects to the serial bus of a Micronova based pellet stove
 
 - a **web app** on `/` to monitor and control the stove from any browser,
 - an **HTTP REST API** ([docs/api.md](docs/api.md)),
-- a **BLE GATT service** (see [BLE_API.md](BLE_API.md)), used by the iOS app in [app/](app/),
+- a **BLE GATT service** (see [BLE_API.md](BLE_API.md)), used by the iOS app in [app/](app/) (OpenPelletBridge board only: the DevKit firmware is built without Bluetooth, it no longer fits the DevKit's app slot),
 - **Prometheus metrics** on `/metrics`,
 - a **telnet** debug menu on port 23 (IPv4 and IPv6): status, control, timers, pellets, errors, network, firmware update, live log.
 

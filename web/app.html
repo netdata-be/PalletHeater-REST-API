@@ -863,6 +863,7 @@ const I18N = {
     rsNothing:"nothing received, no echo: bus not connected (cable / interface?)", rsNoEcho:"no echo of TX (received {0}): bus not connected or line stuck (cable / interface?)",
     rsEchoShort:"echo incomplete ({0} of {1} bytes): bus not connected?", rsNoAnswer:"echo OK, the stove did not answer ({0} of {1} bytes)", rsWrongConfirm:"the stove confirmed another address / value",
     mqttNeedHost:"Set the broker first", mqttOnToast:"MQTT on", mqttOffToast:"MQTT off",
+    btNone:"Not in this firmware (built without Bluetooth)",
     reset:"Reset", resetConfirm:"Reset the {0}?", resetDone:"{0} reset", crashCounter:"crash counter", serialCounters:"serial counters", serialSkipped:"{0} skipped (link down)",
     evLinkDown:"Serial lost", evLinkUp:"Serial back", evtLink:"Serial link",
     board:"Controller board", boardOpb:"OpenPelletBridge board (ESP32-S3)", boardDevkit:"ESP32 DevKit", hwRev:"rev. {0}", pwrSrc:"Power source", pwrStove:"Stove supply", pwrUsb:"USB", pwrSince:"since {0}",
@@ -1050,6 +1051,7 @@ pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low 
     rsNothing:"niets ontvangen, geen echo: bus niet verbonden (kabel / interface?)", rsNoEcho:"geen echo van TX (ontvangen {0}): bus niet verbonden of lijn hangt vast (kabel / interface?)",
     rsEchoShort:"echo onvolledig ({0} van {1} bytes): bus niet verbonden?", rsNoAnswer:"echo OK, de kachel antwoordde niet ({0} van {1} bytes)", rsWrongConfirm:"de kachel bevestigde een ander adres / andere waarde",
     mqttNeedHost:"Stel eerst de broker in", mqttOnToast:"MQTT aan", mqttOffToast:"MQTT uit",
+    btNone:"Niet in deze firmware (gebouwd zonder Bluetooth)",
     reset:"Reset", resetConfirm:"De {0} op nul zetten?", resetDone:"{0} op nul gezet", crashCounter:"crashteller", serialCounters:"seriële tellers", serialSkipped:"{0} overgeslagen (link weg)",
     evLinkDown:"Serieel weg", evLinkUp:"Serieel terug", evtLink:"Seriële link",
     board:"Controllerbord", boardOpb:"OpenPelletBridge-bord (ESP32-S3)", boardDevkit:"ESP32 DevKit", hwRev:"rev. {0}", pwrSrc:"Voeding", pwrStove:"Voeding kachel", pwrUsb:"USB", pwrSince:"sinds {0}",
@@ -1562,7 +1564,8 @@ let bt = null;
 function renderBt() {
   if (!bt) return;
   $("btToggle").checked = !!bt.enabled;
-  $("btHint").textContent = bt.restartRequired ? t("btRestart") : bt.active ? t("btOn") : t("btOff");
+  $("btToggle").disabled = bt.available === false;   // firmware built without Bluetooth (OPB_BLUETOOTH=0)
+  $("btHint").textContent = bt.available === false ? t("btNone") : bt.restartRequired ? t("btRestart") : bt.active ? t("btOn") : t("btOff");
 }
 async function loadBt() { try { bt = (await api("GET", "/api/bluetooth")).data; renderBt(); } catch (_) {} }
 // Telnet (immediate) and API key settings
@@ -2173,7 +2176,7 @@ $("bkApply").onclick = async () => {
       } else if (k === "device") {
         if (b.device.telnet != null) await step("/api/telnet", { enabled: b.device.telnet });
         if (b.device.fwAutoCheck != null) await step("/api/firmware", { autoCheck: b.device.fwAutoCheck });
-        if (b.device.bluetooth != null && (!bt || bt.enabled !== b.device.bluetooth)) restartBt = b.device.bluetooth;   // last: restarts the controller
+        if (b.device.bluetooth != null && !(bt && bt.available === false) && (!bt || bt.enabled !== b.device.bluetooth)) restartBt = b.device.bluetooth;   // last: restarts the controller
       } else if (k === "ui") {
         for (const key of ["expert", "debug", "histVis", "theme"]) lsSet(key, b.ui[key]);
         theme = ["light", "dark"].includes(lsGet("theme")) ? lsGet("theme") : "auto";

@@ -12,7 +12,9 @@
 #include <constants.h>
 #include <auth.h>
 #include <Update.h>
+#if OPB_BLUETOOTH
 #include <NimBLEDevice.h>
+#endif
 #include "fwImage.h"
 
 static bool        updAuthorised = false;
@@ -32,7 +34,7 @@ static void updFail(const String& msg)
     if (updError.length() == 0) updError = msg;
     if (updStarted) { Update.abort(); updStarted = false; }
     otaActive = false;
-    if (bleEnabled) NimBLEDevice::startAdvertising();
+    OPB_BLE_ADV(true);
 }
 
 // The web server also calls the upload callback for a POST that is NOT multipart
@@ -54,7 +56,7 @@ void handleUpdateUpload()
         updAuthorised = updRequestAuthorised();
         if (!updAuthorised) { updError = "unauthorised"; return; }
         otaActive = true;                                   // pause the sensor task
-        if (bleEnabled) NimBLEDevice::stopAdvertising();    // give WiFi the radio
+        OPB_BLE_ADV(false);    // give WiFi the radio
         LOGI("update", "upload started: %s", up.filename.c_str());
         otaConfirmBeforeUpdate();   // a firmware on trial is confirmed first (otaVerify.h)
         if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) { updFail(String("begin failed: ") + Update.errorString()); return; }

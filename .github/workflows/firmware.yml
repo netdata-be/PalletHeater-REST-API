@@ -29,7 +29,7 @@ permissions:
   contents: read
 
 env:
-  PIO_ENV: esp32doit-devkit-v1-http   # all ESP32 envs build the same image, they differ only in upload method
+  PIO_ENV: esp32doit-devkit-v1-http   # all DevKit envs build the same image (without Bluetooth), they differ only in upload method
 
 jobs:
   build:
@@ -95,13 +95,13 @@ jobs:
       - name: Build firmware
         run: pio run -e "$PIO_ENV"
 
-      - name: Build BLE OTA environment
-        # same sources, but its own upload script (scripts/ble_ota_upload.py): make
-        # sure that environment still configures and builds
-        run: pio run -e esp32doit-devkit-v1-ble-ota
-
       - name: Build OpenPelletBridge board (ESP32-S3)
         run: pio run -e opb-s3
+
+      - name: Build BLE OTA environment
+        # same sources as opb-s3, but its own upload script (scripts/ble_ota_upload.py): make
+        # sure that environment still configures and builds
+        run: pio run -e opb-s3-ble-ota
 
       - name: Package
         run: |

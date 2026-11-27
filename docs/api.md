@@ -604,7 +604,7 @@ Pellets and burning hours left until the low pellet alarm. The controller counts
 
 ### `/api/bluetooth`
 
-Bluetooth (BLE) can be switched off to give WiFi the radio to itself. The setting is stored in NVS and applied at the next boot: with BLE off, `setupBLE()` and `bleLoop()` are skipped, the BT controller memory is released and WiFi modem sleep is disabled. The iOS app then only works via WiFi.
+Bluetooth (BLE) can be switched off to give WiFi the radio to itself. A firmware built without Bluetooth ([`-DOPB_BLUETOOTH=0`](development.md#building-and-uploading)) answers `"available":false` and refuses `enabled=true` (409). The setting is stored in NVS and applied at the next boot: with BLE off, `setupBLE()` and `bleLoop()` are skipped, the BT controller memory is released and WiFi modem sleep is disabled. The iOS app then only works via WiFi.
 
 ```bash
 curl http://openpelletbridge.local/api/bluetooth

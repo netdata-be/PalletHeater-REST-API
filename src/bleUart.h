@@ -1,10 +1,20 @@
 #pragma once
 void otaConfirmBeforeUpdate();   // otaVerify.h
+#include <constants.h>
+#if !OPB_BLUETOOTH
+// Built without Bluetooth (-DOPB_BLUETOOTH=0): what the rest of the firmware uses, empty
+static bool          otaInProgress = false;
+static bool          bleOwnsRadio() { return false; }
+static bool          bleIsClientConnected() { return false; }
+static unsigned long bleConnectionAgeMs() { return 0; }
+static bool          bleStoveUartInQuietWindow(unsigned long, unsigned long) { return false; }
+void setupBLE() {}
+void bleLoop() {}
+#else
 #include <NimBLEDevice.h>
 #include <esp_ota_ops.h>
 #include <WiFi.h>
 #include <Preferences.h>
-#include <constants.h>
 #include "fwImage.h"   // refuses an image for the other chip
 
 // Forward declarations
@@ -974,3 +984,4 @@ void bleLoop() {
         bleNotifyChanges();
     }
 }
+#endif   // OPB_BLUETOOTH

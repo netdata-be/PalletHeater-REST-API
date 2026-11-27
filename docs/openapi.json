@@ -5849,6 +5849,10 @@
       "Bluetooth": {
         "type": "object",
         "properties": {
+          "available": {
+            "type": "boolean",
+            "description": "false: firmware built without Bluetooth (-DOPB_BLUETOOTH=0)"
+          },
           "result": {
             "type": "string"
           },

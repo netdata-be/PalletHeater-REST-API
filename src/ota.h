@@ -1,6 +1,9 @@
 void otaConfirmBeforeUpdate();   // otaVerify.h
 #include <ArduinoOTA.h>
+#include "constants.h"
+#if OPB_BLUETOOTH
 #include <NimBLEDevice.h>
+#endif
 #include <Preferences.h>
 #include "constants.h"
 #include "fwImage.h"
@@ -25,13 +28,13 @@ void enableOTA(const String& password){
         otaConfirmBeforeUpdate();   // a firmware on trial is confirmed first (otaVerify.h)
         otaActive = true;   // pauses the sensor task: no serial traffic, more time for WiFi
         // Stop BLE advertising so it stops competing with WiFi for the shared radio.
-        if (bleEnabled) NimBLEDevice::stopAdvertising();
+        OPB_BLE_ADV(false);
         String type;
         type = (ArduinoOTA.getCommand() == U_FLASH) ? "sketch" : "filesystem";
         LOGI("update", "ArduinoOTA update started");
     }).onEnd([](){
         otaActive = false;
-        if (bleEnabled) NimBLEDevice::startAdvertising();
+        OPB_BLE_ADV(true);
         LOGI("update", "ArduinoOTA update done");
         markRestart("firmware update (ArduinoOTA)");
     }).onProgress([](unsigned int progress, unsigned int total){
@@ -41,7 +44,7 @@ void enableOTA(const String& password){
         fwUpdateChipOk(progress);
     }).onError([](ota_error_t error){
         otaActive = false;
-        if (bleEnabled) NimBLEDevice::startAdvertising();
+        OPB_BLE_ADV(true);
         LOGE("update", "ArduinoOTA error %u", error);
         switch(error){
             case OTA_AUTH_ERROR:

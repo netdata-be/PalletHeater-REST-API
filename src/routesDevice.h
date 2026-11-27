@@ -31,7 +31,11 @@ void handleRouteBluetooth()
     {
         String v = wm.server->arg("enabled");
         if (v != "true" && v != "false" && v != "1" && v != "0") {
-            wm.server->send(400, "application/json", "{\"result\":\"failed - expected enabled=true/false\"}");
+            wm.server->send(400, "application/json; charset=utf-8", "{\"result\":\"failed - expected enabled=true/false\"}");
+            return;
+        }
+        if (!OPB_BLUETOOTH && (v == "true" || v == "1")) {
+            wm.server->send(409, "application/json; charset=utf-8", "{\"result\":\"failed - this firmware is built without Bluetooth\"}");
             return;
         }
         bleSaveEnabled(v == "true" || v == "1", clientIp().c_str());
@@ -39,13 +43,14 @@ void handleRouteBluetooth()
     else if (wm.server->method() != HTTP_GET) { wm.server->send(405); return; }
 
     bool saved = bleSavedEnabled();
-    bool restart = wm.server->method() == HTTP_POST && wm.server->arg("restart") == "true" && saved != bleEnabled;
+    bool restart = OPB_BLUETOOTH && wm.server->method() == HTTP_POST && wm.server->arg("restart") == "true" && saved != bleEnabled;
 
     StaticJsonDocument<192> json;
     if (wm.server->method() == HTTP_POST) json["result"] = restart ? "success - restarting" : "success";
-    json["enabled"] = saved;
+    json["available"] = OPB_BLUETOOTH != 0;   // false: built without Bluetooth (-DOPB_BLUETOOTH=0)
+    json["enabled"] = OPB_BLUETOOTH && saved;
     json["active"] = bleEnabled;
-    json["restartRequired"] = saved != bleEnabled;
+    json["restartRequired"] = OPB_BLUETOOTH && saved != bleEnabled;
     String out; serializeJson(json, out);
     wm.server->send(200, "application/json; charset=utf-8", out);
     if (restart) { delay(300); restartWith("Bluetooth setting changed"); }

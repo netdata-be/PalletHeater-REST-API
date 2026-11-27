@@ -64,7 +64,7 @@ The Home Assistant device carries the stove firmware as `hw_version` and the sto
 
 | Interface | Details |
 |---|---|
-| BLE | GATT server `OpenPelletBridge`, see [BLE_API.md](../BLE_API.md). Also supports firmware updates over BLE ([ble_ota.py](../ble_ota.py)). |
+| BLE | OpenPelletBridge board only (the DevKit firmware is built without Bluetooth). GATT server `OpenPelletBridge`, see [BLE_API.md](../BLE_API.md). Also supports firmware updates over BLE ([ble_ota.py](../ble_ota.py), env `opb-s3-ble-ota`). |
 | Telnet | Port 23 (IPv4 and IPv6), interactive menu for reading and writing values, see [Telnet menu](#telnet-menu) below. |
 | ArduinoOTA | Hostname `Pelletheater`, port 3232, password protected. Slow; prefer [`/api/update`](debugging.md#post-apiupdate). |
 | mDNS | `openpelletbridge.local`, service `_http._tcp`. |

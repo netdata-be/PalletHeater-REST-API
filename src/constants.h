@@ -442,7 +442,19 @@ int roomFanIsRunning() { return pc::roomFanIsRunning(cachedRoomFanControl, cache
 int cachedFlameActual = -1;     // RAM 0x34, -1 = not read yet
 // Bluetooth (BLE) can be disabled to give WiFi the radio. Stored in NVS
 // ("ble"/"enabled"); bleEnabled is the state of the running firmware.
-bool bleEnabled = true;
+// Bluetooth in the firmware: build flag -DOPB_BLUETOOTH=0 leaves BLE (NimBLE) out, about
+// 0.25 MB less flash. The DevKit is built without it (platformio.ini [devkit]: the image no
+// longer fits its app slot with it); the S3 board keeps it. Off: the setting cannot be switched on.
+#ifndef OPB_BLUETOOTH
+#define OPB_BLUETOOTH 1
+#endif
+bool bleEnabled = OPB_BLUETOOTH != 0;
+// BLE advertising off during a firmware update (the radio for WiFi), on again after it
+#if OPB_BLUETOOTH
+#define OPB_BLE_ADV(on) do { if (bleEnabled) { if (on) NimBLEDevice::startAdvertising(); else NimBLEDevice::stopAdvertising(); } } while (0)
+#else
+#define OPB_BLE_ADV(on) do { } while (0)
+#endif
 volatile bool otaActive = false;   // set while an OTA firmware update is running (ota.h)
 // Only one TLS connection at a time fits in memory (~35 - 40 KB each): the HTTPS server
 // (https.h) and the GitHub update (fwUpdate.h) wait for each other with these two flags

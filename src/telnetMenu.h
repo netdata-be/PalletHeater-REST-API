@@ -1131,7 +1131,8 @@ static void tmSvcValue(int i, String& v)
     switch (i) {
     case 0: v = mqttCfg.enabled ? (mqtt.connected() ? "on, connected" : "on, not connected") : "off"; break;
     case 1: v = httpsEnabled ? (httpsListening ? "on" : "on, starting") : "off"; break;
-    case 2: { bool saved = bleSavedEnabled();
+    case 2: { if (!OPB_BLUETOOTH) { v = "not in this firmware"; break; }
+              bool saved = bleSavedEnabled();
               v = String(saved ? "on" : "off") + (saved != bleEnabled ? String(" (after a restart; now ") + (bleEnabled ? "on)" : "off)") : String(""));
               break; }
     case 3: v = apiKeyRequired ? "required" : "off"; break;
@@ -1143,7 +1144,8 @@ static void tmSvcOpen(int i)
     switch (i) {
     case 0: tmMenu(&TM_MQTT); break;
     case 1: tmMenu(&TM_HTTPS); break;
-    case 2: { bool on = !bleSavedEnabled(); bleSaveEnabled(on, tmSource());
+    case 2: { if (!OPB_BLUETOOTH) { tmMsgSet(false, "This firmware is built without Bluetooth (OPB_BLUETOOTH=0)."); break; }
+              bool on = !bleSavedEnabled(); bleSaveEnabled(on, tmSource());
               tmMsgSet(true, String("Bluetooth ") + (on ? "on" : "off") + " saved; it applies after a restart (Device > Restart controller).");
               break; }
     case 3: tmMenu(&TM_APIKEY); break;

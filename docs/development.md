@@ -13,7 +13,7 @@ Built with [PlatformIO](https://platformio.org/). Environments in [platformio.in
 | `esp32doit-devkit-v1-serial` | USB serial |
 | `esp32doit-devkit-v1-http` | WiFi over HTTP (`POST /api/update`), fastest; needs firmware that already has `/api/update` |
 | `esp32doit-devkit-v1-ota` | WiFi (ArduinoOTA) |
-| `esp32doit-devkit-v1-ble-ota` | Bluetooth LE ([scripts/ble_ota_upload.py](../scripts/ble_ota_upload.py)) |
+| `opb-s3-ble-ota` | Board only: Bluetooth LE ([scripts/ble_ota_upload.py](../scripts/ble_ota_upload.py)) |
 
 ```bash
 pio run -e esp32doit-devkit-v1-serial -t upload
@@ -29,7 +29,15 @@ pio run -e esp32doit-devkit-v1-http -t upload
 
 Building works without the key; only an upload stops and says the key is missing.
 
-Partitions: `min_spiffs.csv` (4 MB flash): two OTA slots of 1.9 MB, 128 KB SPIFFS (history, events), 64 KB core dump. The firmware uses about 91 % of a slot; a larger slot is only possible by dropping the core dump or shrinking SPIFFS, and needs a USB flash (an OTA update cannot change the partition table).
+Partitions: `min_spiffs.csv` (4 MB flash): two OTA slots of 1.9 MB, 128 KB SPIFFS (history, events), 64 KB core dump. The DevKit firmware (without Bluetooth) uses about 87 % of a slot; a larger slot is only possible by dropping the core dump or shrinking SPIFFS, and needs a USB flash (an OTA update cannot change the partition table).
+
+Build flags (in `build_flags` of an environment):
+
+| Flag | Default | Effect |
+|---|---|---|
+| `-DOPB_BLUETOOTH=0` | `1` | Leaves Bluetooth out (BLE app, BLE OTA): about 250 KB less flash. Set for every DevKit environment (`[devkit]` in `platformio.ini`, with `lib_ignore = NimBLE-Arduino`): with Bluetooth the DevKit image (1.97 MB) no longer fits an app slot (1.875 MB). The S3 board keeps Bluetooth. `/api/bluetooth` then answers `"available":false`. |
+
+Use one PlatformIO Core: two versions (e.g. the one of the IDE and one in the shell) clean each other's build folders, and a build that runs at that moment fails with missing files.
 
 ### OpenPelletBridge board (ESP32-S3)
 
@@ -53,7 +61,7 @@ Partitions: [partitions/opb_s3_8mb.csv](../partitions/opb_s3_8mb.csv): two OTA s
 
 ## CI and releases
 
-[.github/workflows/firmware.yml](../.github/workflows/firmware.yml) runs the unit tests, checks the web app ([scripts/check_webapp.mjs](../scripts/check_webapp.mjs): script syntax, every text in English and Dutch, no unknown text keys), validates the OpenAPI spec and builds the firmware of both boards (plus the BLE OTA environment) on every push to `master`, every pull request and on demand (*Run workflow*). Run the web app check locally with `node scripts/check_webapp.mjs`. The images are kept as workflow artifact `openpelletbridge-<version>` (Actions → run → *Artifacts*):
+[.github/workflows/firmware.yml](../.github/workflows/firmware.yml) runs the unit tests, checks the web app ([scripts/check_webapp.mjs](../scripts/check_webapp.mjs): script syntax, every text in English and Dutch, no unknown text keys), validates the OpenAPI spec and builds the firmware of both boards (plus the board's BLE OTA environment) on every push to `master`, every pull request and on demand (*Run workflow*). Run the web app check locally with `node scripts/check_webapp.mjs`. The images are kept as workflow artifact `openpelletbridge-<version>` (Actions → run → *Artifacts*):
 
 | ESP32 DevKit (`esp32doit-devkit-v1-http`) | OpenPelletBridge board, ESP32-S3 (`opb-s3`) | Use |
 |---|---|---|

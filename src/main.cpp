@@ -230,7 +230,7 @@ void setup()
     {
         Preferences prefs;
         prefs.begin("ble", true);
-        bleEnabled = prefs.getBool("enabled", true);
+        bleEnabled = OPB_BLUETOOTH && prefs.getBool("enabled", true);   // not in a build without Bluetooth
         prefs.end();
         prefs.begin("telnet", true);
         telnetEnabled = prefs.getBool("enabled", true);
