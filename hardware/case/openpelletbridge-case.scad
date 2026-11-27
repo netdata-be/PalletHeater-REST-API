@@ -10,12 +10,15 @@
 // open, push the hooks in through the windows with a small screwdriver and lift the lid.
 //
 // In the lid: two flexure buttons (BOOT, RESET) with a plunger onto the tactile switches,
-// light tubes above the four LEDs (SYS, STOVE, TX, RX; print the lid in a translucent
-// filament, or fill the holes with clear resin / a 2 mm light pipe), sound holes above the
-// buzzer and engraved labels. In the base: an opening for the USB-C plug and a notch for
+// light pipes above the four LEDs (SYS, STOVE, TX, RX): solid pillars for a lid printed in a
+// translucent material, or (solid_pipes = false) hollow tubes with a hole through the lid, sound holes above the
+// buzzer and the engraved button labels BOOT / RST. In the base: an opening for the USB-C plug and a notch for
 // the stove connector's cable plug.
 //
-// Print: base upright, lid upside down (top face on the bed), 0.2 mm layers, no supports.
+// Material: made in resin at JLCPCB (JLC3DP): base in 9600 Resin White with sanding, lid in
+// 8001 Resin Translucent with fine sanding. Resin is brittle, so the hook arms are thin (0.9 mm)
+// with a fillet at the root, and no wall is under 0.8 mm (JLC3DP warns below that). For FDM:
+// base upright, lid upside down (top face on the bed), 0.2 mm layers, no supports.
 // Plastic only near the antenna (top edge): do not add metal there.
 //
 // Board coordinates below come from hardware/tools/gen_pcb.py (x right, y down from the
@@ -43,18 +46,27 @@ peg_d      = 1.9;       // locating pegs in the board's 2.2 mm holes
 peg_h      = 1.3;       // shorter than the board (1.6 mm): the tubes press on the board, not on the pegs
 snap_y     = [12.0, 44.0];  // snap hooks on both long sides, board y (clear of the parts along the edges)
 snap_w     = 6.0;       // hook width
-snap_t     = 1.0;       // hook arm thickness
+snap_t     = 0.9;       // hook arm thickness (thin: resin is brittle, a stiff arm cracks)
 snap_len   = 6.5;       // arm length below the lid (ends 1.1 mm above the board, over its empty edge strip)
-snap_hook  = 0.7;       // hook depth (0.5 mm catch: 0.2 mm is the lip clearance)
+snap_hook  = 0.6;       // hook depth (0.4 mm catch: 0.2 mm is the lip clearance; ~1.3 % strain)
+snap_fillet = 0.6;      // fillet at the arm's root (no sharp corner where it bends)
+label_depth = 0.8;      // engraved text depth
+label_grow  = 0;        // > 0 widens the strokes, but narrows the plastic between them (thin-wall errors)
 tube_d     = 4.4;       // lid clamping tubes (copper-free ring on the board: 4.8 mm)
+solid_pipes = true;     // LED light pipes: solid pillars (translucent lid) or hollow tubes with a hole
+pipe_d     = 2.2;       // solid pillar diameter (SYS / STOVE are 3.2 mm apart: 1.0 mm gap between them)
+split_t    = 0.8;       // lid skin left above the slot that splits the SYS / STOVE light
+tube_wall  = 1.0;       // wall of the hollow tubes (print services refuse walls under 0.8 mm)
 ears       = true;      // mounting ears with a 4.2 mm hole on both long sides
 $fn = 48;
+base_color = [0.95, 0.95, 0.93];             // 9600 Resin White (renders only)
+lid_color  = [[0.86, 0.90, 0.93], 0.55];     // 8001 Resin Translucent, sanded: frosted
 
 /* [Parts on the board] */
-buttons = [[6.2, 7.6, "BOOT"], [32.7, 7.6, "RESET"]];
+buttons = [[6.2, 7.6, "BOOT"], [32.7, 7.6, "RST"]];
 button_top = 1.51;      // tactile switch top above the board
-leds = [[31.9, 20.1, 0.83, 2.0, "SYS", [-3.6, 0]], [35.1, 20.1, 0.83, 2.0, "STOVE", [0, -3.0]],
-        [7.4, 30.3, 1.10, 1.6, "TX", [0, -3.0]], [13.8, 30.3, 1.10, 1.6, "RX", [0, -3.0]]];   // x, y, top, hole, label, label offset
+leds = [[31.9, 20.1, 0.83, 2.0, "SYS", [-4.2, 0]], [35.1, 20.1, 0.83, 2.0, "STOVE", [-0.6, -3.6]],
+        [7.4, 30.3, 1.10, 1.6, "TX", [0, -3.4]], [13.8, 30.3, 1.10, 1.6, "RX", [0, -3.4]]];   // x, y, top, hole, label, label offset
 buzzer = [20.0, 28.6];
 usb_x = 29.5;  usb_z = 1.65;          // USB-C centre (x, height above the board top)
 usb_open = [13.0, 7.5];               // opening for the cable's overmould
@@ -122,41 +134,53 @@ module lid() {
                 mirror([sx, 0, 0]) snap_arm();
             // clamping tubes: press the board onto the standoffs
             for (h = holes) translate([bx(h[0]), by(h[1]), -above]) cylinder(d = tube_d, h = above + 0.01);
-            // light tubes down to just above the LEDs
-            for (l = leds) translate([bx(l[0]), by(l[1]), -(above - l[2] - 0.4)]) cylinder(d = l[3] + 1.0, h = above - l[2] - 0.4 + 0.01);   // SYS / STOVE are 3.2 mm apart
+            // the tubes only just touch the lip: fill the space between them over the lip's
+            // height, so there is no hairline wedge (thin-wall error at the print service)
+            // (0.3 mm short of the lip's outer face: coinciding faces give a non-manifold STL)
+            for (h = holes) let (left = h[0] < pcb_w / 2) translate([left ? -gap + fit + 0.3 : bx(h[0]), by(h[1]) - tube_d / 2, -lip])
+                cube([left ? bx(h[0]) + gap - fit - 0.3 : pcb_w + gap - fit - 0.3 - bx(h[0]), tube_d, lip + 0.01]);
+            // light pipes down to just above the LEDs. Solid: the translucent lid carries the
+            // light to the top, each pillar separate so SYS and STOVE do not mix. Hollow: the
+            // SYS / STOVE tubes merge into one block (the holes stay 1.2 mm apart).
+            for (l = leds) translate([bx(l[0]), by(l[1]), -(above - l[2] - 0.4)])
+                cylinder(d = solid_pipes ? pipe_d : l[3] + 2 * tube_wall, h = above - l[2] - 0.4 + 0.01);
             // button plungers (on the flexure tongues)
             for (b = buttons) translate([bx(b[0]), by(b[1]), -(above - button_top - 0.3)]) cylinder(d = 3, h = above - button_top - 0.3 + 0.01);
         }
-        // LED holes
-        for (l = leds) translate([bx(l[0]), by(l[1]), -above]) cylinder(d = l[3], h = above + lid_t + 1);
+        // solid pipes: the gap between SYS and STOVE goes on as a slot into the lid (from the
+        // underside, 0.8 mm skin left), so less light crosses over to the other spot. It stops
+        // 1.2 mm past the LEDs towards the RST tongue (1.8 mm of plastic left to its slot).
+        if (solid_pipes) translate([bx((leds[0][0] + leds[1][0]) / 2), by(leds[0][1]), -1])
+            translate([-(leds[1][0] - leds[0][0] - pipe_d) / 2, -2.5, 0]) cube([leds[1][0] - leds[0][0] - pipe_d, 3.7, 1 + lid_t - split_t]);
+        // LED holes (hollow tubes only)
+        if (!solid_pipes) for (l = leds) translate([bx(l[0]), by(l[1]), -above]) cylinder(d = l[3], h = above + lid_t + 1);
         // flexure tongues: U-shaped slot around each button, hinge towards the board centre
         for (b = buttons) translate([bx(b[0]), by(b[1]), -1]) linear_extrude(lid_t + 2) difference() {
             translate([-3.9, -9.5]) square([7.8, 12.9]);
             translate([-3.1, -9.6]) square([6.2, 12.2]);
         }
-        // buzzer sound holes
-        for (a = [0 : 60 : 359]) translate([bx(buzzer[0]) + 1.6 * cos(a), by(buzzer[1]) + 1.6 * sin(a), -1]) cylinder(d = 1.0, h = lid_t + 2);
+        // buzzer sound holes (ring radius 2 mm: 1 mm of plastic between the holes)
+        for (a = [0 : 60 : 359]) translate([bx(buzzer[0]) + 2.0 * cos(a), by(buzzer[1]) + 2.0 * sin(a), -1]) cylinder(d = 1.0, h = lid_t + 2);
         translate([bx(buzzer[0]), by(buzzer[1]), -1]) cylinder(d = 1.0, h = lid_t + 2);
         // stove connector: the notch goes through the lid as well, up to the header's front
         // (case y 0.5), so a cable plug of any height fits
         translate([bx(j2_x[0]), -gap - wall - 1, -lip - 1]) cube([j2_x[1] - j2_x[0], wall + gap + 1.9, lip + lid_t + 2]);
-        // engraved labels (0.5 mm deep)
-        translate([0, 0, lid_t - 0.5]) linear_extrude(1) {
-            for (b = buttons) translate([bx(b[0]), by(b[1]) + 5.4]) text(b[2], size = 2.2, halign = "center", valign = "center", font = "Liberation Sans:style=Bold");
-            for (l = leds) translate([bx(l[0]) + l[5][0], by(l[1]) + l[5][1]]) text(l[4], size = l[4] == "STOVE" ? 1.8 : 2.0, halign = "center", valign = "center", font = "Liberation Sans:style=Bold");
-            translate([bx(20), by(41.5)]) text("OpenPelletBridge", size = 3.2, halign = "center", valign = "center", font = "Liberation Sans:style=Bold");
-            translate([bx(20), by(46.5)]) text("Micronova serial", size = 2.2, halign = "center", valign = "center", font = "Liberation Sans");
-            translate([bx(12.65), by(54.0)]) text("STOVE", size = 2.0, halign = "center", valign = "center", font = "Liberation Sans:style=Bold");
-            translate([bx(usb_x), by(54.0)]) text("USB-C", size = 2.0, halign = "center", valign = "center", font = "Liberation Sans:style=Bold");
-        }
+        // engraved button labels only (BOOT, RST): 0.8 mm deep, as JLC3DP asks for text in
+        // resin; fewer labels, fewer thin bits of plastic between letters
+        translate([0, 0, lid_t - label_depth]) linear_extrude(label_depth + 1) offset(r = label_grow)
+            for (b = buttons) translate([bx(b[0]), by(b[1]) + 5.9]) label(b[2], 2.8);
     }
+}
+
+module label(t, size) {
+    text(t, size = size, spacing = 1.15, halign = "center", valign = "center", font = "Liberation Sans:style=Bold");   // wider letter gaps: label_grow narrows them
 }
 
 // snap arm, outer face at x = 0 (towards the wall), hanging down from the lid's underside
 module snap_arm() {
     translate([0, -snap_w / 2, 0]) rotate([90, 0, 0]) mirror([0, 0, 1]) linear_extrude(snap_w)
-        polygon([[0, 0.01], [snap_t, 0.01], [snap_t, -snap_len], [0, -snap_len],
-                 [-snap_hook, -snap_len + 0.8], [-snap_hook, -snap_len + 1.4], [0, -snap_len + 1.4]]);
+        polygon([[0, 0.01], [snap_t + snap_fillet, 0.01], [snap_t, -snap_fillet], [snap_t, -snap_len], [0, -snap_len],
+                 [-snap_hook, -snap_len + 0.6], [-snap_hook, -snap_len + 1.4], [0, -snap_len + 1.4]]);
 }
 
 module board() {
@@ -168,7 +192,7 @@ module board() {
 if (part == "base") base();
 else if (part == "lid") rotate([180, 0, 0]) translate([0, 0, -wall_h - lid_t]) lid();   // top face on the bed
 else {
-    color("SlateGray") base();
-    color("WhiteSmoke", 0.6) lid();
+    color(base_color) base();
+    color(lid_color[0], lid_color[1]) lid();
     color("DarkGreen") board();
 }
