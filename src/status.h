@@ -202,6 +202,7 @@ void getStatus()
     obj_serial["linkUp"]      = !stove.linkDown;     // false: the stove does not answer, bus commands fail at once
     obj_serial["skipped"]     = stove.skipped;       // commands refused while the link was down
     obj_serial["transactions"] = stove.transactions;
+    obj_serial["writesUnchanged"] = stove.writesUnchanged;   // EEPROM writes left out: the value was already there
 
     JsonObject obj_uptime = json.createNestedObject("uptime");
     obj_uptime["seconds"] = millis() / 1000;

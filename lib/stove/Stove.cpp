@@ -21,6 +21,7 @@ static void appendDebugLog(const String& line)
 StoveMonitorFn Stove::monitor = nullptr;
 StoveLogFn     Stove::logger  = nullptr;
 StoveWriteFn   Stove::writeHook = nullptr;
+StoveSkipFn    Stove::skipHook  = nullptr;
 void         (*Stove::beforeTx)() = nullptr;
 
 Stove::Stove(int uart_nr, int8_t rxPin, int8_t txPin, bool invert)
@@ -195,6 +196,11 @@ int Stove::readTx(byte type, byte address)
 bool Stove::write(byte type, byte address, byte value)
 {
     if (linkDown) { skipped++; return false; }
+    if (type == 0x20 && read(type, address) == value) {   // EEPROM already holds it: no write
+        writesUnchanged++;
+        if (skipHook) skipHook(type, address, value);
+        return true;
+    }
     if (beforeTx) beforeTx();
     const byte writeByte     = 0x80;
     uint8_t checksum_calc    = (writeByte + type + address + value) & 0xFF;

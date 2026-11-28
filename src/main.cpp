@@ -210,6 +210,10 @@ void setup()
     // frames of the telnet bus debug are debug
     // every write with its source (liveDebug.h); the read planner reads that register again at once
     Stove::writeHook = [](uint8_t type, uint8_t addr, uint8_t value, bool ok) { stoveWriteLogger(type, addr, value, ok); if (ok) planWritten(type, addr); };
+    // an EEPROM write left out: the register already held the value (Stove::write)
+    Stove::skipHook = [](uint8_t, uint8_t addr, uint8_t value) {
+        LOGD("stove", "EEPROM 0x%02X already %u: not written (%s)", addr, value, cmdSource[0] ? cmdSource : "firmware");
+    };
     Stove::logger = [](bool failed, const char* line) { if (failed && !stove.linkDown) LOGW("bus", "%s", line); else LOGD("bus", "%s", line); };
     
     spiffsMounted = SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED); // Mount SPIFFS

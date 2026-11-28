@@ -32,12 +32,15 @@ typedef void (*StoveLogFn)(bool error, const char* line);
 // Called after every write (ok or failed for good), also when the bus monitor is
 // off: logs who changed what (liveDebug.h).
 typedef void (*StoveWriteFn)(uint8_t type, uint8_t address, uint8_t value, bool ok);
+// Called when an EEPROM write is left out because the register already holds the value.
+typedef void (*StoveSkipFn)(uint8_t type, uint8_t address, uint8_t value);
 
 class Stove
 {
   public:
     static StoveMonitorFn monitor;   // nullptr = off
     static StoveWriteFn   writeHook; // nullptr = off
+    static StoveSkipFn    skipHook;  // nullptr = off
     static StoveLogFn     logger;    // nullptr = Serial
     // Called before every transaction (read, probe, write) when set: lets the background reader
     // hand the bus over to a waiting command first (src/stoveCache.h). May give and take the lock.
@@ -48,6 +51,10 @@ class Stove
     // When the link is down (LINK_DOWN_AFTER transactions in a row failed after
     // all attempts) read() returns -1 and write() false at once, without touching
     // the bus. Only probe() still talks to the stove; one answer brings the link up.
+    // EEPROM (type 0x20): the register is read first and not written when it already holds the
+    // value (returns true): an EEPROM cell wears with every write, and clients such as Loxone
+    // send their settings again and again. A failed read writes as before. RAM: always written
+    // (commands such as the stove state).
     bool write(byte type, byte address, byte value);
     // Returns the register value (0-255), or -1 on timeout / checksum error.
     int read(byte type, byte address);
@@ -63,6 +70,7 @@ class Stove
     volatile uint32_t writeErrors = 0;  // writes that failed after all retries
     volatile uint32_t retries     = 0;  // individual retry attempts
     volatile uint32_t transactions = 0; // reads + writes (not counting retries)
+    volatile uint32_t writesUnchanged = 0; // EEPROM writes left out: the value was already there
   private:
     HardwareSerial* StoveSerial;
     void drainRx();

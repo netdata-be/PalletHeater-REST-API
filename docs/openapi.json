@@ -5899,6 +5899,10 @@
               },
               "transactions": {
                 "type": "integer"
+              },
+              "writesUnchanged": {
+                "type": "integer",
+                "description": "EEPROM writes left out: the register already held the value"
               }
             }
           },
