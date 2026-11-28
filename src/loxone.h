@@ -39,7 +39,7 @@ enum LoxIdx {
     LX_ROOM, LX_SETP, LX_FUME, LX_TSTOVE, LX_TREMOTE,
     LX_FLAME, LX_FLAMEACT, LX_FAN, LX_FANRUN, LX_ESON, LX_ESSTOP, LX_ESSTART, LX_AUGER,
     LX_KG, LX_HNOW, LX_HAVG, LX_ALARMMIN, LX_KGTODAY, LX_KGDAY, LX_EURMONTH, LX_BAGS,
-    LX_LOWPEL, LX_RESMIN, LX_RESOFF, LX_BRZMIN, LX_SVCH, LX_RUNH, LX_STARTS, LX_RSSI,
+    LX_LOWPEL, LX_RESMIN, LX_RESOFF, LX_OFFMIN, LX_BRZMIN, LX_SVCH, LX_RUNH, LX_STARTS, LX_RSSI,
     LX_NUM,                                   // numbers above: in the line
     LX_STATETEXT = LX_NUM, LX_ERRTEXT, LX_WARNTEXT, LX_WARNSHORT,
     LX_TOTAL
@@ -83,6 +83,7 @@ static const LoxKey LOX_KEYS[LX_TOTAL] = {
     { "lowPel",   LXK_EVENT, 0, 0, 0 },     // low pellet alarm of the stove
     { "resMin",   LXK_EVENT, 0, 0, 0 },     // pellet reserve: minutes until the reserve alarm
     { "resOff",   LXK_EVENT, 0, 0, 0 },     // the stove switched itself off: pellets used up
+    { "offMin",   LXK_EVENT, 0, 0, 0 },     // pellet reserve phase 2: minutes until the stove switches itself off
     { "brzMin",   LXK_SLOW,  0, 1, 60 },    // minutes until the next brazier cleaning
     { "svcH",     LXK_EVENT, 0, 0, 0 },     // hours since the last service
     { "runH",     LXK_EVENT, 0, 0, 0 },     // working hours
@@ -244,12 +245,28 @@ static void loxBuild(LoxSnap& s)
     const bool nl = loxDutch();
     String rs = remoteSensorWarningText(nl);
     String wt, ws;   // the warnings in full and very short (a tile in the app)
-    if (rs.length()) ws = nl ? "Afstandsbed. niet gebruikt" : "Remote not used";
+    // pellets running low (the stove's level sensor, the pellet reserve): first, it needs action
+    if (slowOk && !pelletsEmptyOff() && !pc::reserveRefilling(cachedPelletSensor) && (cachedLowPallet || pc::reserveSensorLow(cachedPelletSensor))) {
+        char b[140];
+        if (cachedPelletShutdown >= 0) {
+            int m = (cachedPelletShutdown + 1) / 2;
+            snprintf(b, sizeof(b), nl ? "Pellets op: de kachel schakelt over %d min uit (pelletreserve) - vul de voorraadbak bij"
+                                      : "Pellets used up: the stove switches itself off in %d min (pellet reserve) - refill the hopper", m);
+            wt = b;
+            snprintf(b, sizeof(b), nl ? "Pellets: uit over %d min" : "Pellets: off in %d min", m); ws = b;
+        } else {
+            if (cachedPelletCounter > 0) snprintf(b, sizeof(b), nl ? "Pellets bijna op: pelletreserve-alarm over %d min - vul de voorraadbak bij"
+                                                                   : "Pellets running low: pellet reserve alarm in %d min - refill the hopper", cachedPelletCounter);
+            else snprintf(b, sizeof(b), "%s", nl ? "Pellets bijna op - vul de voorraadbak bij" : "Pellets running low - refill the hopper");
+            wt = b; ws = nl ? "Pellets laag" : "Pellets low";
+        }
+    }
+    if (rs.length()) { if (ws.length()) ws += " / "; ws += nl ? "Afstandsbed. niet gebruikt" : "Remote not used"; }
     {
         StaticJsonDocument<512> wd;
         JsonArray w = wd.to<JsonArray>();
         boardWarnings(w);   // e.g. chip temperature (boardInfo.h)
-        if (rs.length()) wt = rs;
+        if (rs.length()) { if (wt.length()) wt += " / "; wt += rs; }
         for (JsonObject o : w) {
             if (wt.length()) wt += " / ";
             if (ws.length()) ws += " / ";
@@ -272,6 +289,8 @@ static void loxBuild(LoxSnap& s)
         v[LX_LOWPEL] = cachedLowPallet != 0;
         v[LX_RESOFF] = pelletsEmptyOff() ? 1 : 0;
         if (pc::reserveSensorLow(cachedPelletSensor) && cachedPelletCounter >= 0) v[LX_RESMIN] = cachedPelletCounter;
+        // phase 2 of the pellet reserve (RAM 0x91, half minutes), as pelletReserve.shutdownMinutes in /api/state
+        if (cachedPelletShutdown >= 0 && !pelletsEmptyOff() && !pc::reserveRefilling(cachedPelletSensor)) v[LX_OFFMIN] = (cachedPelletShutdown + 1) / 2;
         v[LX_SVCH] = cachedHoursSinceLastService; v[LX_RUNH] = cachedTotalRuntime; v[LX_STARTS] = cachedNumberOfStarts;
     }
     if (fastOk) {
@@ -299,7 +318,7 @@ static void loxBuild(LoxSnap& s)
     s.txt[LX_WARNSHORT - LX_NUM] = ws.length() ? ws : String("OK");
     // digital values: unknown is 0, not -1 (a digital virtual input in Loxone sees anything but 0
     // as on: "Vuur: aan" while the stove does not answer); link = 0 tells it is unknown
-    for (int i : { LX_POWER, LX_BURN, LX_LINK, LX_WARN, LX_WREMOTE, LX_FANRUN, LX_ESON, LX_LOWPEL, LX_RESOFF })
+    for (int i : { LX_POWER, LX_BURN, LX_LINK, LX_WARN, LX_WREMOTE, LX_FANRUN, LX_ESON, LX_LOWPEL, LX_RESOFF })   // offMin stays -1
         if (v[i] < 0) v[i] = 0;
     v[LX_SEQ] = s.seq;
     s.valid = true;

@@ -2307,7 +2307,7 @@ const LOX_GROUPS = [
   [["Fouten en waarschuwingen", "Errors and warnings"], ["errId", "errText", "pendId", "pendSec", "memErr", "warn", "warnText", "warnShort", "wRemote"]],
   [["Temperaturen", "Temperatures"], ["room", "setp", "tStove", "tRemote", "fume"]],
   [["Werking", "Operation"], ["flame", "flameAct", "fan", "fanRun", "esOn", "esStop", "esStart", "auger", "brzMin"]],
-  [["Pellets", "Pellets"], ["kg", "hNow", "hAvg", "alarmMin", "lowPel", "resMin", "resOff", "kgToday", "kgDay", "eurMonth", "bags"]],
+  [["Pellets", "Pellets"], ["kg", "hNow", "hAvg", "alarmMin", "lowPel", "resMin", "offMin", "resOff", "kgToday", "kgDay", "eurMonth", "bags"]],
   [["Overige", "Other"], ["svcH", "runH", "starts", "rssi"]],
 ];
 const LOX_LABEL = {
@@ -2322,6 +2322,7 @@ const LOX_LABEL = {
   auger: ["Schroef (%)", "Auger (%)"], brzMin: ["Min. tot branderreiniging", "Min. to brazier cleaning"],
   kg: ["Pellets tot alarm (kg)", "Pellets until the alarm (kg)"], hNow: ["Uren tot alarm (huidig verbruik)", "Hours to the alarm (current use)"], hAvg: ["Uren tot alarm (gemiddeld)", "Hours to the alarm (average)"],
   alarmMin: ["Minuten tot verwacht alarm", "Minutes to the expected alarm"], lowPel: ["Pelletalarm van de kachel", "Low pellet alarm of the stove"], resMin: ["Reserve: min. tot alarm", "Reserve: min. to the alarm"],
+  offMin: ["Reserve: min. tot de kachel uitgaat", "Reserve: min. until the stove switches off"],
   resOff: ["Uitgeschakeld: pellets op", "Switched off: pellets used up"], kgToday: ["Verbruik vandaag (kg)", "Used today (kg)"], kgDay: ["Verbruik per dag (kg)", "Use per day (kg)"],
   eurMonth: ["Kost per maand (€)", "Cost per month (€)"], bags: ["Voorraad (zakken)", "Stock (bags)"],
   svcH: ["Uren sinds onderhoud", "Hours since service"], runH: ["Werkuren", "Working hours"], starts: ["Aantal starts", "Number of starts"], rssi: ["WiFi-signaal (dBm)", "WiFi signal (dBm)"],

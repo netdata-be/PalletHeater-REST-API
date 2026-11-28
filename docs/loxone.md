@@ -17,6 +17,7 @@ Command recognition per Virtual HTTP Input Command: `errId=\v`, `kg=\v`, `wRemot
 - Numbers only: true / false are `1` / `0`, unknown is `-1`. Digital values (`power`, `burn`, `link`, `fanRun`, `esOn`, `warn`, `wRemote`, `lowPel`, `resOff`) are `0` when unknown: a digital virtual input in Loxone sees anything but 0 as on. `link=0` tells that the stove does not answer.
 - No key ends with another key, so `errId=` never matches inside another key.
 - No timestamps: time left instead (`alarmMin`: minutes until the expected pellet alarm). Loxone counts in seconds since 2009 local time; converting a Unix time there is error-prone.
+- Pellets running low (the stove's level sensor, the pellet reserve) is a warning: `warn` = 1 and a text in `warnText` / `warnShort`, with the minutes until the reserve alarm or until the stove switches itself off (`offMin`).
 - `seq` goes up at every change of an event value and at least every heartbeat (default 60 s). A *Status* or *Monitor* block in Loxone can report when it stops changing.
 - `errId`: the confirmed error (0 none, the stove's error id, `-1` no answer from the stove, `-2` pellets used up). A status block turns it into text (E1, E9, …). `pendId` / `pendSec`: an error the stove reports and counts down before it acts on it.
 
@@ -27,7 +28,7 @@ Command recognition per Virtual HTTP Input Command: `errId=\v`, `kg=\v`, `wRemot
 | `burn` | fire (ignition, working, brazier cleaning) | `alarmMin` | minutes until the expected alarm |
 | `link` | serial link to the stove up | `lowPel` | low pellet alarm of the stove |
 | `age` | seconds since the last full read | `resMin` | pellet reserve: minutes until the reserve alarm |
-| `memErr` | entries in the error memory | `resOff` | the stove switched itself off: pellets used up |
+| `memErr` | entries in the error memory | `resOff` / `offMin` | the stove switched itself off: pellets used up / minutes until it does (pellet reserve phase 2) |
 | `warn` / `wRemote` | any warning / the remote control's sensor is not used | `kgToday` / `kgDay` | use today / per day (7 days) |
 | `room` `setp` `tStove` `tRemote` `fume` | temperatures | `eurMonth` / `bags` | cost per month / stock in bags |
 | `flame` / `flameAct` | flame power setting / actual | `brzMin` | minutes to the next brazier cleaning |
@@ -82,9 +83,9 @@ Authorization: Basic <base64 of user:password>
 | `pendId` | `Kachel_PendingError` | Virtual Input | error the stove reports before it counts (same ids), 0 none | at once | `/jdev/sps/io/Kachel_PendingError/32` |
 | `pendSec` | `Kachel_PendingSec` | Virtual Input | seconds until the stove acts on it (≈ 55 → 0), −1 none | at most every 5 s | `/jdev/sps/io/Kachel_PendingSec/41` |
 | `memErr` | `Kachel_ErrorMemory` | Virtual Input | entries in the error memory, 0 – 5 | at once | `/jdev/sps/io/Kachel_ErrorMemory/0` |
-| `warn` | `Kachel_Warning` | Virtual Input (digital) | 1 any warning, 0 none | at once | `/jdev/sps/io/Kachel_Warning/1` |
+| `warn` | `Kachel_Warning` | Virtual Input (digital) | 1 any warning (pellets running low, the remote control's sensor not used, controller too hot), 0 none | at once | `/jdev/sps/io/Kachel_Warning/1` |
 | `warnText` | `Kachel_WarningText` | Virtual Text Input | the warning(s) as text, `geen` / `none` | at once | `/jdev/sps/io/Kachel_WarningText/De%20draadloze%20sensor%20staat%20aan%2C%20…` |
-| `warnShort` | `Kachel_WarningShort` | Virtual Text Input | very short, for a tile: `Afstandsbed. niet gebruikt` / `Remote not used`, `Controller te warm` / `Controller too hot`, `OK` | at once | `/jdev/sps/io/Kachel_WarningShort/Afstandsbed.%20niet%20gebruikt` |
+| `warnShort` | `Kachel_WarningShort` | Virtual Text Input | very short, for a tile: `Pellets laag` / `Pellets low`, `Pellets: uit over 17 min` / `Pellets: off in 17 min`, `Afstandsbed. niet gebruikt` / `Remote not used`, `Controller te warm` / `Controller too hot`, `OK` | at once | `/jdev/sps/io/Kachel_WarningShort/Afstandsbed.%20niet%20gebruikt` |
 | `wRemote` | `Kachel_RemoteSensor` | Virtual Input (digital) | 1 the stove does not use the remote control's sensor | at once | `/jdev/sps/io/Kachel_RemoteSensor/1` |
 | `room` | `Kachel_Room` | Virtual Input | °C, 1 decimal (the sensor the stove regulates on) | ≥ 60 s and ≥ 0.5 °C | `/jdev/sps/io/Kachel_Room/20.5` |
 | `setp` | `Kachel_Setpoint` | Virtual Input | °C, whole degrees, 7 – 30 | at once | `/jdev/sps/io/Kachel_Setpoint/20` |
@@ -106,6 +107,7 @@ Authorization: Basic <base64 of user:password>
 | `alarmMin` | `Kachel_AlarmMin` | Virtual Input | minutes until the expected pellet alarm, −1 unknown | ≥ 60 s and ≥ 10 min | `/jdev/sps/io/Kachel_AlarmMin/1633` |
 | `lowPel` | `Kachel_LowPellets` | Virtual Input (digital) | 1 low pellet alarm of the stove | at once | `/jdev/sps/io/Kachel_LowPellets/0` |
 | `resMin` | `Kachel_ReserveMin` | Virtual Input | pellet reserve: minutes until the reserve alarm (20 → 0), −1 not in the reserve | at once | `/jdev/sps/io/Kachel_ReserveMin/12` |
+| `offMin` | `Kachel_OffMin` | Virtual Input | pellet reserve phase 2: minutes until the stove switches itself off (30 → 0), −1 not in that phase | at once | `/jdev/sps/io/Kachel_OffMin/17` |
 | `resOff` | `Kachel_PelletsEmpty` | Virtual Input (digital) | 1 the stove switched itself off: pellets used up (switching on is refused) | at once | `/jdev/sps/io/Kachel_PelletsEmpty/0` |
 | `kgToday` | `Kachel_KgToday` | Virtual Input | kg burnt today, 1 decimal | ≥ 60 s and ≥ 0.1 kg | `/jdev/sps/io/Kachel_KgToday/2.6` |
 | `kgDay` | `Kachel_KgPerDay` | Virtual Input | kg per day (7 days), 1 decimal | ≥ 60 s and ≥ 0.1 kg | `/jdev/sps/io/Kachel_KgPerDay/7.6` |
