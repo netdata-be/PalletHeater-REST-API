@@ -444,12 +444,33 @@ static int loxGet(const LoxoneConfig& c, const String& path, int& llCode, String
 // one value to a virtual input: LXP_OK, LXP_REFUSED (the Miniserver answered, but not this
 // input: only this one is retried later) or LXP_DOWN (no connection / login refused: stop the round)
 enum { LXP_OK, LXP_REFUSED, LXP_DOWN };
+// A passing failure (no connection, refused connection, time-out, HTTP 5xx / 429 such as the 503
+// the Miniserver gives now and then) is tried again at once: at most LOX_TRIES attempts, the
+// pauses growing (250 ms .. 2 s). A login refused (401 / 403) or an input the Miniserver does not
+// know (its code in the answer) is not: trying again does not change it.
+static const int LOX_TRIES = 5;
+static const uint16_t LOX_BACKOFF_MS[LOX_TRIES - 1] = { 250, 500, 1000, 2000 };
+static uint32_t loxRetries = 0;
 static int loxPushOne(const LoxoneConfig& c, const String& target, const String& value, String& err)
 {
-    int ll; err = "";
+    int ll = -1, code = 0, attempt = 1;
     String path = "/jdev/sps/io/" + loxUrlEncode(target) + "/" + loxUrlEncode(value);
-    int code = loxGet(c, path, ll, nullptr, err);
-    if (code == 200 && (ll < 0 || ll == 200)) { loxPushes++; loxLastOkMs = millis(); loxSetOk(); LOGD("loxone", "push %s = %s", target.c_str(), value.c_str()); return LXP_OK; }
+    for (;; attempt++) {
+        err = "";
+        code = loxGet(c, path, ll, nullptr, err);
+        if (code == 200 && (ll < 0 || ll == 200)) {
+            loxPushes++; loxLastOkMs = millis(); loxSetOk();
+            if (attempt > 1) LOGI("loxone", "push %s = %s: accepted at attempt %d", target.c_str(), value.c_str(), attempt);
+            else LOGD("loxone", "push %s = %s", target.c_str(), value.c_str());
+            return LXP_OK;
+        }
+        bool passing = code <= 0 || code == 429 || (code >= 500 && code != 501);
+        if (!passing || attempt >= LOX_TRIES || WiFi.status() != WL_CONNECTED) break;
+        LOGD("loxone", "push %s = %s: %s - attempt %d of %d in %u ms", target.c_str(), value.c_str(), err.c_str(), attempt + 1, LOX_TRIES, LOX_BACKOFF_MS[attempt - 1]);
+        loxRetries++;
+        vTaskDelay(pdMS_TO_TICKS(LOX_BACKOFF_MS[attempt - 1]));
+    }
+    if (attempt > 1) err += String(" (") + attempt + " attempts)";
     loxPushFail++; if (!err.length()) err = "no answer";
     bool down = code <= 0 || code == 401 || code == 403;
     loxSetError("push " + target + " = " + value + ": " + err, down);
@@ -800,6 +821,7 @@ void handleRouteLoxoneConfig()
     JsonObject st = json.createNestedObject("status");
     st["seq"] = s.seq;
     st["pushes"] = loxPushes; st["pushFailed"] = loxPushFail;
+    st["retries"] = loxRetries;   // extra attempts after a passing failure (pushFailed: still failed after all)
     uint32_t now = millis();
     if (loxLastOkMs) st["lastOkSecondsAgo"] = (now - loxLastOkMs) / 1000; else st["lastOkSecondsAgo"] = nullptr;
     if (lastErr.length()) { st["lastError"] = lastErr; st["lastErrorSecondsAgo"] = (now - loxLastErrMs) / 1000; }

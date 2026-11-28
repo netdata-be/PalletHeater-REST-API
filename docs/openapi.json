@@ -6387,6 +6387,10 @@
               "pushFailed": {
                 "type": "integer"
               },
+              "retries": {
+                "type": "integer",
+                "description": "Extra attempts after a passing failure (up to 5 attempts per push)"
+              },
               "lastOkSecondsAgo": {
                 "type": "integer",
                 "nullable": true
