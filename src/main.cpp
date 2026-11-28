@@ -100,9 +100,15 @@ static std::function<void()> withStoveLock(void (*fn)())
         }
         {
             // writes done by this request are logged with where they came from
+            // Loxone: from the Miniserver set in /api/loxone/config, or with the header X-Source: loxone
+            // (shown too: then its changes are not pushed back, loxone.h)
             char src[96];
-            snprintf(src, sizeof(src), "web/API %s (%s %s)", clientIp().c_str(),
-                     wm.server->method() == HTTP_GET ? "GET" : wm.server->method() == HTTP_POST ? "POST" : "other", wm.server->uri().c_str());
+            String ip = clientIp();
+            bool xs = loxFromLoxone();
+            bool lox = xs || (loxCfg.host.length() && ip == loxCfg.host);
+            snprintf(src, sizeof(src), "%s %s (%s %s)%s", lox ? "Loxone" : "web/API", ip.c_str(),
+                     wm.server->method() == HTTP_GET ? "GET" : wm.server->method() == HTTP_POST ? "POST" : "other", wm.server->uri().c_str(),
+                     xs ? " X-Source" : "");
             CmdSource cs(src);
             fn();
         }
