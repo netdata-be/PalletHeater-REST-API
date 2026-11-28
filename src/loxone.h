@@ -389,10 +389,26 @@ static int loxGet(const LoxoneConfig& c, const String& path, int& llCode, String
     http.setReuse(false);
     if (!http.begin(net, c.host, c.port, path)) { err = "invalid address " + c.host; return -1; }
     if (c.user.length()) http.setAuthorization(c.user.c_str(), c.pass.c_str());
+    static const char* hdrs[] = { "Retry-After", "Server" };
+    http.collectHeaders(hdrs, 2);
+    uint32_t t0 = millis();
     int code = http.GET();
-    if (code <= 0) { err = String("Miniserver ") + c.host + ":" + c.port + " not reachable (" + http.errorToString(code) + ")"; http.end(); return code; }
+    uint32_t ms = millis() - t0;
+    if (code <= 0) { err = String("Miniserver ") + c.host + ":" + c.port + " not reachable (" + http.errorToString(code) + ", after " + ms + " ms)"; http.end(); return code; }
     String body = http.getSize() > 4096 ? String("") : http.getString();   // the LL answer is small
+    String retryAfter = http.header("Retry-After");
     http.end();
+    if (code != 200) {
+        // the Miniserver explains an error in its HTML answer: <errorcode>..</errorcode> <errordetail>..</errordetail>
+        String detail;
+        int a = body.indexOf("<errordetail>"), b = body.indexOf("</errordetail>");
+        if (a >= 0 && b > a) detail = body.substring(a + 13, b);
+        else { detail = body; detail.replace("\n", " "); detail.replace("\r", ""); if (detail.length() > 120) detail = detail.substring(0, 120) + "..."; }
+        detail.trim();
+        LOGD("loxone", "HTTP %d after %lu ms for %s: %s", code, (unsigned long)ms, path.c_str(), body.substring(0, 300).c_str());
+        err = String("Miniserver answered HTTP ") + code + (detail.length() ? ": " + detail : String("")) + (retryAfter.length() ? " (Retry-After " + retryAfter + " s)" : String(""))
+              + " after " + ms + " ms";
+    }
     StaticJsonDocument<128> f; f["LL"]["Code"] = true; f["LL"]["code"] = true; f["LL"]["value"] = true;
     StaticJsonDocument<512> d;
     if (!deserializeJson(d, body, DeserializationOption::Filter(f))) {
@@ -401,8 +417,7 @@ static int loxGet(const LoxoneConfig& c, const String& path, int& llCode, String
         if (value && !d["LL"]["value"].isNull()) *value = d["LL"]["value"].as<String>();
     }
     if (code == 401) err = "Miniserver refused: wrong user name or password (401)";
-    else if (code == 403) err = "Miniserver refused: the user has no rights for this (403)";
-    else if (code != 200) err = String("Miniserver answered HTTP ") + code;
+    else if (code == 403) err = "Miniserver refused: the user has no rights for this (403) - " + err;
     else if (llCode >= 0 && llCode != 200) err = String("Miniserver answered code ") + llCode + (llCode == 404 || llCode == 500 ? " (input not found? check the name / UUID)" : "");
     return code;
 }
