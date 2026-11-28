@@ -180,6 +180,7 @@ static void registerRoutes()
     wm.server->on("/api/log", authed(handleRouteLog));
     wm.server->on("/api/busmon", authed(handleRouteBusmon));
     wm.server->on("/api/loglevel", authed(handleRouteLogLevel));
+    wm.server->on("/api/audit", authed(handleRouteAudit));
     wm.server->on("/api/diag/reset", authed(handleRouteDiagReset));
     wm.server->on("/api/coredump", authed(handleRouteCoreDump));
     wm.server->on("/api/https", authed(handleRouteHttps));

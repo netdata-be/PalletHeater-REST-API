@@ -3649,6 +3649,85 @@
         ]
       }
     },
+    "/api/audit": {
+      "get": {
+        "summary": "Audit log: the last writes to the stove",
+        "description": "The last 60 writes since the start (in memory), newest first: who, the register, the value before and after (with their meaning) and whether the stove confirmed it. Writes of a value an EEPROM register already held are left out (counted in /api/state serial.writesUnchanged).",
+        "responses": {
+          "200": {
+            "description": "The log",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total": {
+                      "type": "integer",
+                      "description": "Writes since the start, also the ones no longer kept"
+                    },
+                    "size": {
+                      "type": "integer"
+                    },
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "t": {
+                            "type": "integer",
+                            "nullable": true,
+                            "description": "Unix time, null before NTP"
+                          },
+                          "secondsAgo": {
+                            "type": "integer"
+                          },
+                          "by": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "EEPROM",
+                              "RAM"
+                            ]
+                          },
+                          "address": {
+                            "type": "string",
+                            "example": "0x91"
+                          },
+                          "from": {
+                            "type": "integer",
+                            "nullable": true,
+                            "description": "Value before, null when it could not be read"
+                          },
+                          "fromText": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "to": {
+                            "type": "integer"
+                          },
+                          "toText": {
+                            "type": "string"
+                          },
+                          "ok": {
+                            "type": "boolean",
+                            "description": "The stove confirmed the write"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Diagnostics"
+        ]
+      }
+    },
     "/api/loxone": {
       "get": {
         "summary": "Stove values as one line of numbers (Loxone Virtual HTTP Input)",

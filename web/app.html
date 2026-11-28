@@ -732,6 +732,13 @@ button.mini{padding:1px 8px;font-size:11px;font-weight:550;border-radius:7px;mar
     </form>
   </section>
 
+  <!-- Audit log: the last writes to the stove (GET /api/audit, firmware liveDebug.h), expert -->
+  <section class="card wide x" id="auditCard">
+    <h2><span><span data-i="auditTitle"></span><span data-help="audit"></span></span><span class="keybtns"><button id="auditRefresh" data-i="auditRefresh"></button></span></h2>
+    <p class="muted" id="auditInfo" style="margin:0 0 8px;font-size:13px"></p>
+    <div class="hypwrap"><table class="hyp" id="auditTable"></table></div>
+  </section>
+
   <!-- Buzzer of the S3 board: GET /api/buzzer, shown only when the firmware answers 200 -->
   <section class="card" id="bzCard" hidden>
     <h2><span><span data-i="bzTitle"></span><span data-help="buzzer"></span></span><span class="keybtns"><label class="switch"><input type="checkbox" id="bzToggle"><span></span></label><button id="bzStop" data-i="bzStop"></button></span></h2>
@@ -898,6 +905,9 @@ const I18N = {
     rsEchoShort:"echo incomplete ({0} of {1} bytes): bus not connected?", rsNoAnswer:"echo OK, the stove did not answer ({0} of {1} bytes)", rsWrongConfirm:"the stove confirmed another address / value",
     mqttNeedHost:"Set the broker first", mqttOnToast:"MQTT on", mqttOffToast:"MQTT off",
     btNone:"Not in this firmware (built without Bluetooth)", loxLang:"Language of the texts", loxLangAuto:"As the remote control", loxLangNow:"Texts",
+    auditTitle:"Audit log", auditRefresh:"Refresh", auditInfo:"{0} writes since the start; the last {1} are kept (in memory, lost at a restart).", auditEmpty:"No writes to the stove since the start.",
+    auditWhen:"When", auditBy:"By", auditReg:"Register", auditChange:"Change", auditResult:"Result", auditOk:"written", auditFail:"failed", auditNone:"Not available (older firmware)",
+    h_audit:"Every write to the stove since the controller started (the last 60, kept in memory): when, who (web app or API with the client's address, Loxone, MQTT, telnet, Bluetooth, a timer of the controller), the register, its value before and after (with what it means) and whether the stove confirmed it. A write of a value the register already held is left out of the stove and of this log (counted in /api/state serial.writesUnchanged). GET /api/audit.",
     loxTest:"Test", loxPort:"Port (web service)", loxInterval:"Heartbeat (s)", loxPush:"Web service push",
     loxDiscover:"Read inputs from the Miniserver", loxDiscBusy:"Reading the structure file of the Miniserver…", loxDiscDone:"{0} controls read – type part of a name, room or type in a field to search", loxDiscTrunc:" (not all: no more space on the controller – type the names of the others)",
     loxSwitch:"Switch that follows on / off (name or UUID; empty = none)", loxMapNote:"Per value the virtual input that receives it: name or UUID (after reading the inputs: type to search and pick), empty = not sent. Use a Virtual Text Input for the text values. Events go at once, slow values (temperatures, kg, hours) at most every 60 s after a real difference, and everything again every 5 min.",
@@ -1094,6 +1104,9 @@ pelLeft:"Pellets in the hopper", pelLearning:"being measured: refill at the low 
     rsEchoShort:"echo onvolledig ({0} van {1} bytes): bus niet verbonden?", rsNoAnswer:"echo OK, de kachel antwoordde niet ({0} van {1} bytes)", rsWrongConfirm:"de kachel bevestigde een ander adres / andere waarde",
     mqttNeedHost:"Stel eerst de broker in", mqttOnToast:"MQTT aan", mqttOffToast:"MQTT uit",
     btNone:"Niet in deze firmware (gebouwd zonder Bluetooth)", loxLang:"Taal van de teksten", loxLangAuto:"Zoals de afstandsbediening", loxLangNow:"Teksten",
+    auditTitle:"Actielogboek", auditRefresh:"Vernieuwen", auditInfo:"{0} schrijfopdrachten sinds de start; de laatste {1} worden bijgehouden (in het geheugen, weg na een herstart).", auditEmpty:"Nog geen schrijfopdrachten naar de kachel sinds de start.",
+    auditWhen:"Wanneer", auditBy:"Door", auditReg:"Register", auditChange:"Wijziging", auditResult:"Resultaat", auditOk:"geschreven", auditFail:"mislukt", auditNone:"Niet beschikbaar (oudere firmware)",
+    h_audit:"Elke schrijfopdracht naar de kachel sinds de controller startte (de laatste 60, in het geheugen): wanneer, door wie (webapp of API met het adres van de client, Loxone, MQTT, telnet, Bluetooth, een timer van de controller), het register, de waarde ervoor en erna (met de betekenis) en of de kachel ze bevestigde. Een waarde die al in het register stond, wordt niet naar de kachel geschreven en staat niet in dit logboek (geteld in /api/state serial.writesUnchanged). GET /api/audit.",
     loxTest:"Test", loxPort:"Poort (webservice)", loxInterval:"Heartbeat (s)", loxPush:"Webservice-push",
     loxDiscover:"Ingangen ophalen uit de Miniserver", loxDiscBusy:"Structuurbestand van de Miniserver ophalen…", loxDiscDone:"{0} bedieningselementen gelezen – typ een deel van een naam, ruimte of type in een veld om te zoeken", loxDiscTrunc:" (niet alle: geen plaats meer op de controller – typ de namen van de andere)",
     loxSwitch:"Schakelaar die aan / uit volgt (naam of UUID; leeg = geen)", loxMapNote:"Per waarde de virtuele ingang die ze krijgt: naam of UUID (na het ophalen van de ingangen: typ om te zoeken en kies), leeg = niet versturen. Gebruik een virtuele tekstingang voor de tekstwaarden. Gebeurtenissen gaan meteen, trage waarden (temperaturen, kg, uren) hoogstens elke 60 s na een echt verschil, en alles opnieuw elke 5 min.",
@@ -1467,7 +1480,7 @@ function helpBtn(key) {
     ev.stopPropagation();
     if (popOwner === b) { hidePop(); return; }
     hidePop();
-    pop.textContent = t(key); if (!["h_par", "h_mqtt", "h_loxone", "h_wifi", "h_ghUpdate", "h_https", "h_buzzer"].includes(key)) pop.appendChild(el("span", "src", t("manualRef")));   // these texts are not from the manual
+    pop.textContent = t(key); if (!["h_par", "h_mqtt", "h_loxone", "h_audit", "h_wifi", "h_ghUpdate", "h_https", "h_buzzer"].includes(key)) pop.appendChild(el("span", "src", t("manualRef")));   // these texts are not from the manual
     pop.style.display = "block";
     const r = b.getBoundingClientRect(), w = Math.min(340, window.innerWidth - 24);
     pop.style.maxWidth = w + "px";
@@ -2480,6 +2493,33 @@ $("loxTest").onclick = async () => {
   } catch (e) { out.textContent = t("loxTestFail") + ": " + e.message; }
   finally { b.disabled = false; loadLox(); }
 };
+
+// ---------- Audit log (GET /api/audit, firmware liveDebug.h) ----------
+let audit = null;
+function renderAudit() {
+  const tb = $("auditTable"); tb.innerHTML = "";
+  if (!audit) { $("auditInfo").textContent = t("auditNone"); return; }
+  const rows = audit.entries || [];
+  $("auditInfo").textContent = rows.length ? t("auditInfo", audit.total ?? rows.length, audit.size ?? rows.length) : t("auditEmpty");
+  if (!rows.length) return;
+  const hr = el("tr"); for (const k of ["auditWhen", "auditBy", "auditReg", "auditChange", "auditResult"]) hr.appendChild(el("th", "", t(k))); tb.appendChild(hr);
+  const loc = lang === "nl" ? "nl-BE" : "en-GB";
+  for (const e of rows) {
+    const tr = el("tr");
+    const when = e.t ? new Date(e.t * 1000) : new Date(Date.now() - (e.secondsAgo || 0) * 1000);
+    const w = el("td", "", when.toLocaleDateString(loc, { day: "2-digit", month: "2-digit" }) + " " + when.toLocaleTimeString(loc)); w.style.whiteSpace = "nowrap";
+    const val = (v, txt) => v == null ? "?" : v + (txt ? " (" + txt + ")" : "");
+    tr.append(w, el("td", "", e.by || "–"), el("td", "", e.type + " " + e.address), el("td", "", val(e.from, e.fromText) + " → " + val(e.to, e.toText)));
+    const r = el("td"); r.appendChild(pill(t(e.ok ? "auditOk" : "auditFail"), e.ok ? "ok" : "err")); tr.appendChild(r);
+    tb.appendChild(tr);
+  }
+}
+async function loadAudit() {
+  if (!expert) return;
+  try { audit = (await api("GET", "/api/audit")).data; } catch (_) { audit = null; }
+  renderAudit();
+}
+$("auditRefresh").onclick = loadAudit;
 
 // ---------- Buzzer (S3 board; the DevKit answers 404 and the card stays hidden) ----------
 let bz = null;
@@ -3846,7 +3886,7 @@ function applyExpert() {
 }
 $("expertBtn").onclick = () => {
   expert = !expert; try { localStorage.setItem("expert", expert ? "1" : "0"); } catch (_) {}
-  applyExpert(); renderHistory(); renderMqtt(); renderLox(); renderWifi(); if (expert) loadPlan();
+  applyExpert(); renderHistory(); renderMqtt(); renderLox(); renderWifi(); if (expert) { loadPlan(); loadAudit(); }
 };
 $("debugBtn").onclick = () => {
   debug = !debug; try { localStorage.setItem("debug", debug ? "1" : "0"); } catch (_) {}
@@ -4621,8 +4661,8 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) { po
 
 applyStatic(); applyExpert(); renderTimers();
 // Read the remote first so the page starts in the right language
-pollRemote().finally(() => poll().then(() => { loadTimers(); loadHistory(); loadBt(); loadSecurity(); loadLeds(); loadMqtt(); loadLox(); loadWifi(); loadFw(); loadParams(); loadPelDbg(); loadUse(); loadBuzzer(); }));
-setInterval(() => { if (!document.hidden && !offline) { loadMqtt(); if ($("loxForm").hidden) loadLox(); loadWifi(); if (!fwInfo || !["checking", "downloading", "restarting"].includes(fwInfo.state)) loadFw(); } }, 30000);
+pollRemote().finally(() => poll().then(() => { loadTimers(); loadHistory(); loadBt(); loadSecurity(); loadLeds(); loadMqtt(); loadLox(); loadAudit(); loadWifi(); loadFw(); loadParams(); loadPelDbg(); loadUse(); loadBuzzer(); }));
+setInterval(() => { if (!document.hidden && !offline) { loadMqtt(); if ($("loxForm").hidden) loadLox(); loadAudit(); loadWifi(); if (!fwInfo || !["checking", "downloading", "restarting"].includes(fwInfo.state)) loadFw(); } }, 30000);
 </script>
 </body>
 </html>

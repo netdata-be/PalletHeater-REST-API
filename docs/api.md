@@ -86,6 +86,7 @@ scrape_configs:
 | `GET` `POST` | [`/api/loglevel`](debugging.md#live-debugging) | Log level per firmware module |
 | `POST` | [`/api/diag/reset`](debugging.md#live-debugging) | Reset the serial counters (`serial=true`) and / or the crash counter (`crashes=true`) |
 | `GET` | [`/api/events`](#get-apievents) | Log of stove state changes and errors with exact times |
+| `GET` | [`/api/audit`](#get-apiaudit) | Audit log: the last 60 writes to the stove, who changed what from what to what |
 | `GET` `POST` | [`/api/bluetooth`](#apibluetooth) | Enable / disable Bluetooth (BLE) |
 | `GET` `POST` | [`/api/mqtt`](#apimqtt) | MQTT settings and status |
 | `GET` | [`/api/loxone`](#apiloxone) | Stove values as one line of numbers (Loxone Virtual HTTP Input) |
@@ -604,6 +605,16 @@ Pellets and burning hours left until the low pellet alarm. The controller counts
 ```json
 {"kgPerUnit": 0.000061239, "pricePerKg": 0.363,
  "days": [{"d": "2026-11-22", "units": 102240, "kg": 6.26, "cost": 2.27}, {"d": "2026-11-23", "units": 63000, "kg": 3.86, "cost": 1.40}]}
+```
+
+### `GET /api/audit`
+
+The last 60 writes to the stove since the start (in memory, lost at a restart), newest first: who (the source as in the firmware log: `web/API <client> (POST /api/…)`, `Loxone <ip> (…) X-Source`, `MQTT command …`, `telnet menu (…)`, `Bluetooth app`, or `the controller itself`), the register, its value before (read just before the write) and after, with what they mean, and whether the stove confirmed the write. A write of a value an EEPROM register already holds is left out (not written, not logged here; counted in `/api/state` `serial.writesUnchanged`). The web app shows it under *Device* (expert).
+
+```bash
+curl http://openpelletbridge.local/api/audit
+# {"total":3,"size":60,"entries":[{"t":1795830000,"secondsAgo":42,"by":"Loxone 192.168.50.30 (POST /api/energysaving) X-Source",
+#   "type":"EEPROM","address":"0x91","from":2,"fromText":"-2 °C (energy saving start offset)","to":1,"toText":"-1 °C (energy saving start offset)","ok":true}, ...]}
 ```
 
 ### `/api/bluetooth`

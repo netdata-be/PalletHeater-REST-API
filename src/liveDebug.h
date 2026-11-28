@@ -198,14 +198,75 @@ void handleRouteLogLevel()
     wm.server->send(err.length() ? 400 : 200, "application/json; charset=utf-8", out);
 }
 
+// ── Audit log: the last AUDIT_N writes to the stove, in RAM (lost at a restart) ──
+// Who changed which register from what to what, and whether the stove confirmed it. Writes left
+// out because the register already held the value are not in it (Stove::write; counted in
+// /api/state serial.writesUnchanged): Loxone sends its settings every few minutes and would push
+// the real changes out. GET /api/audit, the web app (Device, expert).
+struct AuditEntry { uint32_t t; uint32_t ms; uint8_t type, addr, value; int16_t before; bool ok; char src[64]; };
+static const int AUDIT_N = 60;
+static AuditEntry auditLog[AUDIT_N];
+static int auditHead = 0, auditCount = 0;
+static uint32_t auditTotal = 0;
+static portMUX_TYPE auditMux = portMUX_INITIALIZER_UNLOCKED;
+static void auditAdd(uint8_t type, uint8_t addr, uint8_t value, int before, bool ok, const char* src)
+{
+    AuditEntry e;
+    time_t now = time(nullptr);
+    e.t = now > 1700000000 ? (uint32_t)now : 0; e.ms = millis();
+    e.type = type; e.addr = addr; e.value = value; e.before = before; e.ok = ok;
+    strncpy(e.src, src, sizeof(e.src) - 1); e.src[sizeof(e.src) - 1] = 0;
+    portENTER_CRITICAL(&auditMux);
+    auditLog[auditHead] = e; auditHead = (auditHead + 1) % AUDIT_N;
+    if (auditCount < AUDIT_N) auditCount++;
+    auditTotal++;
+    portEXIT_CRITICAL(&auditMux);
+}
+
+// GET /api/audit -> {"total":n,"size":60,"entries":[{t, secondsAgo, by, type, address, from, fromText, to, toText, ok}, ...]} newest first
+void handleRouteAudit()
+{
+    if (wm.server->method() != HTTP_GET) { wm.server->send(405); return; }
+    static AuditEntry copy[AUDIT_N];
+    int n, head; uint32_t total;
+    portENTER_CRITICAL(&auditMux);
+    memcpy(copy, auditLog, sizeof(copy)); n = auditCount; head = auditHead; total = auditTotal;
+    portEXIT_CRITICAL(&auditMux);
+    DynamicJsonDocument json(2048 + n * 320);
+    json["total"] = total;   // writes since the start (also the ones that fell out)
+    json["size"] = AUDIT_N;
+    JsonArray a = json.createNestedArray("entries");
+    uint32_t nowMs = millis();
+    for (int i = 0; i < n; i++) {
+        const AuditEntry& e = copy[(head - 1 - i + AUDIT_N) % AUDIT_N];
+        bool ee = e.type == eeprom;
+        JsonObject o = a.createNestedObject();
+        if (e.t) o["t"] = e.t; else o["t"] = nullptr;
+        o["secondsAgo"] = (nowMs - e.ms) / 1000;
+        o["by"] = e.src;
+        o["type"] = ee ? "EEPROM" : "RAM";
+        char ad[6]; snprintf(ad, sizeof(ad), "0x%02X", e.addr); o["address"] = ad;
+        if (e.before >= 0) { o["from"] = e.before; o["fromText"] = ee ? getEepromValueTxt(e.addr, e.before) : getRamValueTxt(e.addr, e.before); }
+        else { o["from"] = nullptr; o["fromText"] = nullptr; }
+        o["to"] = e.value;
+        o["toText"] = ee ? getEepromValueTxt(e.addr, e.value) : getRamValueTxt(e.addr, e.value);
+        o["ok"] = e.ok;
+    }
+    if (json.overflowed()) LOGE("http", "audit: JSON document too small");
+    sendJson(200, json);
+}
+
 // ── Who changed what: every write to the stove, with its source ───────
 static void stoveWriteLogger(uint8_t type, uint8_t addr, uint8_t value, bool ok)
 {
     bool ee = type == eeprom;
     String txt = ee ? getEepromValueTxt(addr, value) : getRamValueTxt(addr, value);
     const char* src = cmdSource[0] ? cmdSource : "the controller itself";
-    if (ok) LOGI("stove", "write %s 0x%02X = %u%s%s%s by %s", ee ? "EEPROM" : "RAM", addr, value,
-                 txt.length() ? " (" : "", txt.c_str(), txt.length() ? ")" : "", src);
+    auditAdd(type, addr, value, stove.lastBefore, ok, src);
+    char was[16] = "";
+    if (stove.lastBefore >= 0) snprintf(was, sizeof(was), ", was %d", stove.lastBefore);
+    if (ok) LOGI("stove", "write %s 0x%02X = %u%s%s%s%s by %s", ee ? "EEPROM" : "RAM", addr, value,
+                 txt.length() ? " (" : "", txt.c_str(), txt.length() ? ")" : "", was, src);
     else    LOGE("stove", "write %s 0x%02X = %u FAILED (not confirmed by the stove), by %s", ee ? "EEPROM" : "RAM", addr, value, src);
     if (ok && !ee && addr == stoveStateAddr) {
         lastStateWriteMs = millis(); lastStateWriteVal = value;

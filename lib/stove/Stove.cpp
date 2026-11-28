@@ -196,7 +196,8 @@ int Stove::readTx(byte type, byte address)
 bool Stove::write(byte type, byte address, byte value)
 {
     if (linkDown) { skipped++; return false; }
-    if (type == 0x20 && read(type, address) == value) {   // EEPROM already holds it: no write
+    lastBefore = read(type, address);
+    if (type == 0x20 && lastBefore == value) {   // EEPROM already holds it: no write
         writesUnchanged++;
         if (skipHook) skipHook(type, address, value);
         return true;
